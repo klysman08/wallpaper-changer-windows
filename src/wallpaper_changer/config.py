@@ -8,8 +8,14 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib  # type: ignore[no-redef]
 
-# Raiz do projeto: config.py -> wallpaper_changer -> src -> raiz
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Raiz do projeto:
+#   - Desenvolvimento:  config.py -> wallpaper_changer -> src -> raiz
+#   - Executavel (.exe): sys.executable fica dentro da pasta de distribuicao
+if getattr(sys, "frozen", False):
+    # PyInstaller --onedir: o .exe esta na raiz do pacote distribuido
+    PROJECT_ROOT = Path(sys.executable).resolve().parent
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "settings.toml"
 
 

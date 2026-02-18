@@ -13,6 +13,11 @@ dependencies = [
     "customtkinter>=5.2.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0",
+]
+
 [project.scripts]
 wallpaper-changer     = "wallpaper_changer.cli:main"
 wallpaper-changer-gui = "wallpaper_changer.gui:run"
