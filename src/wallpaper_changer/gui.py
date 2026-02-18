@@ -26,12 +26,13 @@ _TEXT_DIM   = ("gray60", "gray55")
 
 # Dados dos modos de imagem
 _MODE_INFO: dict[str, tuple[str, str, str]] = {
-    "clone":  ("Duplicar",  "x2",  "Mesma imagem (adaptada) em todos os monitores"),
-    "split1": ("1 Imagem",  "[ ]", "Uma imagem cobre todo o desktop virtual"),
-    "split2": ("2 Imagens", "[|]", "Imagem diferente nos 2 primeiros monitores"),
-    "split3": ("3 Imagens", "[3]", "Imagem diferente nos 3 primeiros monitores"),
-    "split4": ("4 Imagens", "[4]", "Imagem diferente nos 4 primeiros monitores"),
-    "quad":   ("4x Monitor", "[#]", "Cada monitor dividido em 4 quadrantes — 4 imagens diferentes por tela"),
+    "clone":   ("Duplicar",   "x2",  "Mesma imagem (adaptada) em todos os monitores"),
+    "split1":  ("1 Imagem",   "[ ]", "Uma imagem cobre todo o desktop virtual"),
+    "split2":  ("2 Imagens",  "[|]", "Imagem diferente nos 2 primeiros monitores"),
+    "split3":  ("3 Imagens",  "[3]", "Imagem diferente nos 3 primeiros monitores"),
+    "split4":  ("4 Imagens",  "[4]", "Imagem diferente nos 4 primeiros monitores"),
+    "quad":    ("4x Monitor", "[#]", "Cada monitor dividido em 4 quadrantes — 4 imagens por tela"),
+    "collage": ("Collage",    "[N]", "Grade personalizada: voce escolhe quantas imagens por monitor (2 a 9)"),
 }
 
 # Dados dos modos de ajuste
@@ -75,8 +76,11 @@ class WallpaperChangerApp(ctk.CTk):
         self._sel_var      = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
 
-        self._mode_btns: dict[str, ctk.CTkButton] = {}
-        self._fit_btns:  dict[str, ctk.CTkButton] = {}
+        self._mode_btns:    dict[str, ctk.CTkButton] = {}
+        self._fit_btns:     dict[str, ctk.CTkButton] = {}
+        self._collage_btns: dict[int,  ctk.CTkButton] = {}
+        self._collage_count_var = tk.IntVar(
+            value=self._cfg["general"].get("collage_count", 4))
 
         self._build_header()
         self._build_monitor_panel()
@@ -180,6 +184,26 @@ class WallpaperChangerApp(ctk.CTk):
         self._mode_desc.grid(row=row, column=0, sticky="w", padx=16, pady=(0, 6))
         row += 1
 
+        # Picker de quantidade do collage (visivel apenas quando mode == "collage")
+        self._collage_row = ctk.CTkFrame(tab, fg_color=("gray85", "#1e1e30"), corner_radius=8)
+        self._collage_row.grid(row=row, column=0, sticky="ew", padx=12, pady=(0, 8))
+        row += 1
+        ctk.CTkLabel(self._collage_row, text="Imagens por monitor:",
+                     font=ctk.CTkFont(size=12), anchor="w",
+                     ).grid(row=0, column=0, padx=(14, 12), pady=10)
+        for _i, _n in enumerate(range(2, 10)):
+            _btn = ctk.CTkButton(
+                self._collage_row,
+                text=str(_n),
+                font=ctk.CTkFont(size=12, weight="bold"),
+                width=36, height=32, corner_radius=7,
+                fg_color=_BTN_OFF, hover_color=_HOV_OFF,
+                text_color=_TEXT_DIM[1], border_width=2, border_color=_BDR_OFF,
+                command=lambda k=_n: self._select_collage_count(k),
+            )
+            _btn.grid(row=0, column=_i + 1, padx=3, pady=10)
+            self._collage_btns[_n] = _btn
+
         self._select_mode(self._mode_var.get())
 
         # Secao: Selecao de Imagens ──────────────────────────────────────────
@@ -265,6 +289,22 @@ class WallpaperChangerApp(ctk.CTk):
             )
         self._mode_desc.configure(
             text="    " + _MODE_INFO.get(key, ("", "", ""))[2])
+        # Mostra/oculta o picker de quantidade do collage
+        if key == "collage":
+            self._collage_row.grid()
+            self._select_collage_count(self._collage_count_var.get())
+        else:
+            self._collage_row.grid_remove()
+
+    def _select_collage_count(self, n: int) -> None:
+        self._collage_count_var.set(n)
+        for k, btn in self._collage_btns.items():
+            on = k == n
+            btn.configure(
+                fg_color=_BTN_ON if on else _BTN_OFF,
+                text_color="white" if on else _TEXT_DIM[1],
+                border_color=_BDR_ON if on else _BDR_OFF,
+            )
 
     def _select_fit(self, key: str) -> None:
         self._fit_var.set(key)
@@ -455,9 +495,10 @@ class WallpaperChangerApp(ctk.CTk):
         return {
             "_config_path": self._cfg.get("_config_path", ""),
             "general": {
-                "mode":      self._mode_var.get(),
-                "selection": self._sel_var.get(),
-                "interval":  interval,
+                "mode":          self._mode_var.get(),
+                "selection":     self._sel_var.get(),
+                "interval":      interval,
+                "collage_count": int(self._collage_count_var.get()),
             },
             "paths": {
                 "wallpapers_folder": self._folder_var.get(),

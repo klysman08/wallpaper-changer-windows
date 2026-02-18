@@ -1,7 +1,8 @@
 [general]
-mode      = "split1"
-selection = "random"
-interval  = 300
+mode          = "split1"
+selection     = "random"
+interval      = 300
+collage_count = 4
 
 [paths]
 wallpapers_folder = "assets/wallpapers"

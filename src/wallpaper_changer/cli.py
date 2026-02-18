@@ -13,10 +13,11 @@ def main() -> None:
     """WallpaperChanger - Controle de papel de parede para Windows 11."""
 
 @main.command("apply")
-@click.option("--mode",      default=None, help=f"Modos: {', '.join(MODES)}")
-@click.option("--selection", default=None, help="random | sequential")
-@click.option("--config",    default=None, help="Caminho para settings.toml")
-def apply_cmd(mode, selection, config):
+@click.option("--mode",          default=None,           help=f"Modos: {', '.join(MODES)}")
+@click.option("--selection",     default=None,           help="random | sequential")
+@click.option("--collage-count", default=None, type=int, help="Imagens por monitor no modo collage (2-9)")
+@click.option("--config",        default=None,           help="Caminho para settings.toml")
+def apply_cmd(mode, selection, collage_count, config):
     """Aplica o wallpaper imediatamente."""
     cfg      = load_config(Path(config) if config else None)
     monitors = get_monitors()
@@ -27,6 +28,8 @@ def apply_cmd(mode, selection, config):
         cfg["general"]["mode"] = mode
     if selection:
         cfg["general"]["selection"] = selection
+    if collage_count:
+        cfg["general"]["collage_count"] = collage_count
 
     active_mode = cfg["general"]["mode"]
     active_sel  = cfg["general"].get("selection", "random")
