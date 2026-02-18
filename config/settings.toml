@@ -1,0 +1,17 @@
+[general]
+mode = "split4"
+interval = 1
+output_quality = 90
+
+[paths]
+random_folder  = "assets/wallpapers/random"
+monitor_1      = "assets/wallpapers/monitor_1"
+monitor_2      = "assets/wallpapers/monitor_2"
+monitor_3      = "assets/wallpapers/monitor_3"
+monitor_4      = "assets/wallpapers/monitor_4"
+output_folder  = "assets/output"
+
+[display]
+total_width  = 0
+total_height = 0
+fit_mode = "fill"

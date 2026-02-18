@@ -1,0 +1,23 @@
+[project]
+name = "wallpaper-changer"
+version = "0.1.0"
+description = "Wallpaper changer for Windows 11 with split-screen and random modes"
+requires-python = ">=3.11"
+dependencies = [
+    "Pillow>=10.0.0",
+    "pywin32>=306",
+    "pystray>=0.19.5",
+    "schedule>=1.2.1",
+    "click>=8.1.7",
+    "screeninfo>=0.8.1",
+]
+
+[project.scripts]
+wallpaper-changer = "wallpaper_changer.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wallpaper_changer"]

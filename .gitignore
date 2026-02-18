@@ -1,0 +1,9 @@
+﻿.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+assets/output/*.bmp
+assets/output/*.jpg
+.python-version
