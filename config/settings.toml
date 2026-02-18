@@ -1,14 +1,11 @@
 [general]
-mode = "split4"
-interval = 300
+mode      = "split1"
+selection = "random"
+interval  = 300
 
 [paths]
-random_folder  = "assets/wallpapers/random"
-monitor_1      = "assets/wallpapers/monitor_1"
-monitor_2      = "assets/wallpapers/monitor_2"
-monitor_3      = "assets/wallpapers/monitor_3"
-monitor_4      = "assets/wallpapers/monitor_4"
-output_folder  = "assets/output"
+wallpapers_folder = "assets/wallpapers"
+output_folder     = "assets/output"
 
 [display]
 fit_mode = "fill"

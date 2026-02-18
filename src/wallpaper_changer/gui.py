@@ -1,295 +1,387 @@
-"""Interface grafica (GUI) do WallpaperChanger – CustomTkinter."""
+"""Interface grafica (GUI) do WallpaperChanger - CustomTkinter."""
 from __future__ import annotations
 
 import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 import customtkinter as ctk
 import schedule
 
 from .config import load_config, save_config, resolve_path
 from .monitor import Monitor, get_monitors
-from .wallpaper import apply_random, apply_split
+from .wallpaper import apply_wallpaper, MODES
 
-# ── Tema global ──────────────────────────────────────────────────────────────
+# ── Tema ──────────────────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-_MODES     = ["random", "split2", "split4"]
-_FIT_MODES = ["fill", "fit", "stretch", "center"]
+# Paleta
+_MON_COLORS = ["#3a7bd5", "#e05252", "#3dba5a", "#d4a027", "#9b59b6"]
+_BG_CANVAS  = "#12121e"
+_ACCENT     = "#3a7bd5"
+_TEXT_DIM   = ("gray60", "gray55")
 
-_MODE_LABELS = {
-    "random": "Aleatório (1 imagem)",
-    "split2": "Split 2 – dois monitores",
-    "split4": "Split 4 – quatro monitores",
-}
-_FIT_LABELS = {
-    "fill":    "Fill (preenche, corta)",
-    "fit":     "Fit (sem corte, barras)",
-    "stretch": "Stretch (distorce)",
-    "center":  "Center (sem redimensionar)",
+# Dados dos modos de imagem
+_MODE_INFO: dict[str, tuple[str, str, str]] = {
+    "clone":  ("Duplicar",  "x2",  "Mesma imagem (adaptada) em todos os monitores"),
+    "split1": ("1 Imagem",  "[ ]", "Uma imagem cobre todo o desktop virtual"),
+    "split2": ("2 Imagens", "[|]", "Imagem diferente nos 2 primeiros monitores"),
+    "split3": ("3 Imagens", "[3]", "Imagem diferente nos 3 primeiros monitores"),
+    "split4": ("4 Imagens", "[4]", "Imagem diferente nos 4 primeiros monitores"),
+    "quad":   ("4x Monitor", "[#]", "Cada monitor dividido em 4 quadrantes — 4 imagens diferentes por tela"),
 }
 
-_MON_COLORS = ["#2D6BE4", "#E44B2D", "#2DBA4E", "#D4A027"]
-_BG_CANVAS  = "#1a1a2e"
+# Dados dos modos de ajuste
+_FIT_INFO: dict[str, tuple[str, str]] = {
+    "fill":    ("Preencher",   "Expande para cobrir, corta o excesso"),
+    "fit":     ("Ajustar",     "Encaixa sem cortar, adiciona barras pretas"),
+    "stretch": ("Ampliar",     "Distorce para preencher exatamente"),
+    "center":  ("Centralizar", "Sem redimensionar, centraliza na tela"),
+    "span":    ("Estender",    "Imagem distribuida por todo o espaco"),
+}
+
+_SEL_LABELS = {"random": "Aleatorio", "sequential": "Sequencial (recente -> antigo)"}
+
+# Cores de card selecionado / padrao
+_BTN_ON  = ("#1e3a6e", "#162858")
+_BTN_OFF = ("#252535", "#1a1a2a")
+_HOV_OFF = ("#303050", "#222240")
+_BDR_ON  = _ACCENT
+_BDR_OFF = ("#252535", "#1a1a2a")
 
 
 # ── App principal ─────────────────────────────────────────────────────────────
+
 class WallpaperChangerApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-
         self.title("WallpaperChanger")
-        self.geometry("740x860")
-        self.minsize(680, 780)
+        self.geometry("760x920")
+        self.minsize(680, 820)
+        self.resizable(True, True)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
-        self._cfg      = load_config()
+        self._cfg = load_config()
         self._monitors: list[Monitor] = []
         self._watching  = False
         self._watch_thr: threading.Thread | None = None
 
+        self._mode_var     = tk.StringVar(value=self._cfg["general"]["mode"])
+        self._fit_var      = tk.StringVar(value=self._cfg["display"]["fit_mode"])
+        self._sel_var      = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
+        self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
+
+        self._mode_btns: dict[str, ctk.CTkButton] = {}
+        self._fit_btns:  dict[str, ctk.CTkButton] = {}
+
         self._build_header()
         self._build_monitor_panel()
-        self._build_settings_tabs()
+        self._build_tabs()
         self._build_action_bar()
         self._build_status_bar()
 
         self._refresh_monitors()
+        self.after(200, self._draw_monitors)
 
     # ── Header ────────────────────────────────────────────────────────────────
     def _build_header(self) -> None:
-        hdr = ctk.CTkFrame(self, corner_radius=12, fg_color=("#1f3a6e", "#0d1b40"))
+        hdr = ctk.CTkFrame(self, corner_radius=12, fg_color=("#0f2044", "#09152e"))
         hdr.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 6))
         hdr.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(
-            hdr, text="🖼", font=ctk.CTkFont(size=36),
-        ).grid(row=0, column=0, rowspan=2, padx=(18, 12), pady=12)
+        ctk.CTkLabel(hdr, text="WP", font=ctk.CTkFont(size=24, weight="bold"),
+                     text_color=_ACCENT,
+                     ).grid(row=0, column=0, rowspan=2, padx=(18, 12), pady=14)
 
-        ctk.CTkLabel(
-            hdr, text="WallpaperChanger",
-            font=ctk.CTkFont(size=22, weight="bold"),
-            anchor="w",
-        ).grid(row=0, column=1, sticky="w", pady=(12, 0))
+        ctk.CTkLabel(hdr, text="WallpaperChanger",
+                     font=ctk.CTkFont(size=21, weight="bold"), anchor="w",
+                     ).grid(row=0, column=1, sticky="w", pady=(14, 0))
 
-        ctk.CTkLabel(
-            hdr, text="Painel de controle para Windows 11",
-            font=ctk.CTkFont(size=12),
-            text_color=("gray60", "gray70"),
-            anchor="w",
-        ).grid(row=1, column=1, sticky="w", pady=(0, 12))
+        ctk.CTkLabel(hdr, text="Painel de controle  |  Windows 11",
+                     font=ctk.CTkFont(size=11), text_color=_TEXT_DIM, anchor="w",
+                     ).grid(row=1, column=1, sticky="w", pady=(0, 14))
 
         self._lbl_mon_count = ctk.CTkLabel(
-            hdr, text="", font=ctk.CTkFont(size=12),
-            text_color=("gray60", "gray70"),
-        )
-        self._lbl_mon_count.grid(row=0, column=2, rowspan=2, padx=18, pady=12)
+            hdr, text="detectando...", font=ctk.CTkFont(size=11), text_color=_TEXT_DIM)
+        self._lbl_mon_count.grid(row=0, column=2, rowspan=2, padx=18)
 
-    # ── Monitor preview panel ─────────────────────────────────────────────────
+    # ── Monitor preview ───────────────────────────────────────────────────────
     def _build_monitor_panel(self) -> None:
         frame = ctk.CTkFrame(self, corner_radius=10)
         frame.grid(row=1, column=0, sticky="ew", padx=16, pady=6)
         frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
-            frame, text="  Disposição dos Monitores",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            anchor="w",
-        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
-
-        self._canvas = tk.Canvas(
-            frame, height=160, bg=_BG_CANVAS,
-            highlightthickness=0, bd=0,
-        )
-        self._canvas.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
-        self._canvas.bind("<Configure>", lambda _e: self._draw_monitors())
-
-        self._refresh_btn = ctk.CTkButton(
-            frame, text="↻ Detectar Monitores", width=160, height=28,
-            font=ctk.CTkFont(size=12),
-            corner_radius=6,
-            command=self._refresh_monitors,
-        )
-        self._refresh_btn.grid(row=0, column=0, sticky="e", padx=12, pady=(10, 4))
-
-    # ── Tabs de configuração ──────────────────────────────────────────────────
-    def _build_settings_tabs(self) -> None:
-        self._tabview = ctk.CTkTabview(self, corner_radius=10)
-        self._tabview.grid(row=2, column=0, sticky="nsew", padx=16, pady=6)
-        self._tabview.add("  Geral  ")
-        self._tabview.add("  Pastas  ")
-        self._tabview.set("  Geral  ")
-
-        self._build_tab_general()
-        self._build_tab_paths()
-
-    # ── Tab: Geral ────────────────────────────────────────────────────────────
-    def _build_tab_general(self) -> None:
-        tab = self._tabview.tab("  Geral  ")
-        tab.grid_columnconfigure(1, weight=1)
-
-        # Modo
-        ctk.CTkLabel(tab, text="Modo de exibição:", anchor="w",
-                     font=ctk.CTkFont(size=13)).grid(
-            row=0, column=0, sticky="w", padx=(16, 8), pady=(20, 10))
-
-        current_mode = self._cfg["general"]["mode"]
-        self._mode_var = ctk.StringVar(value=_MODE_LABELS.get(current_mode, current_mode))
-        mode_menu = ctk.CTkOptionMenu(
-            tab,
-            values=list(_MODE_LABELS.values()),
-            variable=self._mode_var,
-            width=240,
-            font=ctk.CTkFont(size=12),
-            command=self._on_mode_change,
-        )
-        mode_menu.grid(row=0, column=1, sticky="w", padx=(0, 16), pady=(20, 10))
-
-        # Fit mode
-        ctk.CTkLabel(tab, text="Ajuste de imagem:", anchor="w",
-                     font=ctk.CTkFont(size=13)).grid(
-            row=1, column=0, sticky="w", padx=(16, 8), pady=10)
-
-        current_fit = self._cfg["display"]["fit_mode"]
-        self._fit_var = ctk.StringVar(value=_FIT_LABELS.get(current_fit, current_fit))
-        ctk.CTkOptionMenu(
-            tab,
-            values=list(_FIT_LABELS.values()),
-            variable=self._fit_var,
-            width=240,
-            font=ctk.CTkFont(size=12),
-        ).grid(row=1, column=1, sticky="w", padx=(0, 16), pady=10)
-
-        # Intervalo
-        ctk.CTkLabel(tab, text="Intervalo de rotação:", anchor="w",
-                     font=ctk.CTkFont(size=13)).grid(
-            row=2, column=0, sticky="w", padx=(16, 8), pady=10)
-
-        interval_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        interval_frame.grid(row=2, column=1, sticky="w", padx=(0, 16), pady=10)
-
-        self._interval_var = ctk.StringVar(value=str(self._cfg["general"]["interval"]))
-        ctk.CTkEntry(
-            interval_frame,
-            textvariable=self._interval_var,
-            width=80,
-            font=ctk.CTkFont(size=12),
-            justify="center",
-        ).pack(side="left")
-        ctk.CTkLabel(interval_frame, text=" segundos",
-                     font=ctk.CTkFont(size=12)).pack(side="left")
-
-        # Descrição dos modos
-        self._mode_desc = ctk.CTkLabel(
-            tab, text="",
-            font=ctk.CTkFont(size=11, slant="italic"),
-            text_color=("gray55", "gray65"),
-            wraplength=460,
-            justify="left",
-        )
-        self._mode_desc.grid(row=3, column=0, columnspan=2,
-                             sticky="w", padx=16, pady=(8, 20))
-        self._on_mode_change(self._mode_var.get())
-
-    # ── Tab: Pastas ───────────────────────────────────────────────────────────
-    def _build_tab_paths(self) -> None:
-        tab = self._tabview.tab("  Pastas  ")
-        tab.grid_columnconfigure(1, weight=1)
-
-        headers = [
-            ("Monitor 1",  "monitor_1"),
-            ("Monitor 2",  "monitor_2"),
-            ("Monitor 3",  "monitor_3"),
-            ("Monitor 4",  "monitor_4"),
-            ("Aleatório",  "random_folder"),
-        ]
-
-        self._path_vars: dict[str, ctk.StringVar] = {}
-
-        for row_idx, (label, key) in enumerate(headers):
-            ctk.CTkLabel(tab, text=f"{label}:", anchor="w",
-                         font=ctk.CTkFont(size=13)).grid(
-                row=row_idx, column=0, sticky="w", padx=(16, 8),
-                pady=(16 if row_idx == 0 else 8, 8),
-            )
-
-            raw = self._cfg["paths"][key]
-            resolved = str(resolve_path(raw))
-            var = ctk.StringVar(value=resolved)
-            self._path_vars[key] = var
-
-            entry = ctk.CTkEntry(
-                tab, textvariable=var,
-                font=ctk.CTkFont(size=11),
-            )
-            entry.grid(row=row_idx, column=1, sticky="ew",
-                       padx=(0, 6), pady=(16 if row_idx == 0 else 8, 8))
-
-            btn = ctk.CTkButton(
-                tab, text="📁", width=36, height=32,
-                font=ctk.CTkFont(size=14),
-                fg_color="transparent",
-                hover_color=("gray75", "gray30"),
-                corner_radius=6,
-                command=lambda v=var: self._browse_folder(v),
-            )
-            btn.grid(row=row_idx, column=2, padx=(0, 16),
-                     pady=(16 if row_idx == 0 else 8, 8))
-
-    # ── Barra de ações ────────────────────────────────────────────────────────
-    def _build_action_bar(self) -> None:
-        bar = ctk.CTkFrame(self, corner_radius=10)
-        bar.grid(row=3, column=0, sticky="ew", padx=16, pady=6)
-        bar.grid_columnconfigure((0, 1, 2), weight=1)
-
-        self._apply_btn = ctk.CTkButton(
-            bar, text="▶  Aplicar Agora",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            height=40, corner_radius=8,
-            command=self._apply_now,
-        )
-        self._apply_btn.grid(row=0, column=0, padx=(16, 6), pady=12, sticky="ew")
-
-        ctk.CTkButton(
-            bar, text="💾  Salvar Config",
-            font=ctk.CTkFont(size=13),
-            height=40, corner_radius=8,
-            fg_color=("gray70", "gray30"),
-            hover_color=("gray60", "gray25"),
-            command=self._save_config,
-        ).grid(row=0, column=1, padx=6, pady=12, sticky="ew")
-
-        self._watch_btn = ctk.CTkButton(
-            bar, text="⏱  Iniciar Watch",
-            font=ctk.CTkFont(size=13),
-            height=40, corner_radius=8,
-            fg_color=("#1a6b1a", "#1a4d1a"),
-            hover_color=("#145214", "#123a12"),
-            command=self._toggle_watch,
-        )
-        self._watch_btn.grid(row=0, column=2, padx=(6, 16), pady=12, sticky="ew")
-
-    # ── Barra de status ───────────────────────────────────────────────────────
-    def _build_status_bar(self) -> None:
-        bar = ctk.CTkFrame(self, height=32, corner_radius=0,
-                           fg_color=("gray88", "gray17"))
-        bar.grid(row=4, column=0, sticky="ew", padx=0, pady=(6, 0))
+        bar = ctk.CTkFrame(frame, fg_color="transparent")
+        bar.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 4))
         bar.grid_columnconfigure(0, weight=1)
 
-        self._status_lbl = ctk.CTkLabel(
-            bar, text="  Pronto.",
-            font=ctk.CTkFont(size=11),
-            text_color=("gray40", "gray70"),
-            anchor="w",
-        )
-        self._status_lbl.grid(row=0, column=0, sticky="w", padx=12)
+        ctk.CTkLabel(bar, text="  Disposicao dos Monitores",
+                     font=ctk.CTkFont(size=13, weight="bold"), anchor="w",
+                     ).grid(row=0, column=0, sticky="w")
 
-    # ── Monitor preview ───────────────────────────────────────────────────────
+        ctk.CTkButton(bar, text="Detectar", width=100, height=26,
+                      font=ctk.CTkFont(size=11), corner_radius=6,
+                      command=self._refresh_monitors,
+                      ).grid(row=0, column=1)
+
+        self._mon_canvas = tk.Canvas(
+            frame, height=148, bg=_BG_CANVAS, highlightthickness=0, bd=0)
+        self._mon_canvas.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
+        self._mon_canvas.bind("<Configure>", lambda _e: self._draw_monitors())
+
+    # ── Tabs ──────────────────────────────────────────────────────────────────
+    def _build_tabs(self) -> None:
+        self._tabs = ctk.CTkTabview(self, corner_radius=10)
+        self._tabs.grid(row=2, column=0, sticky="nsew", padx=16, pady=6)
+        self._tabs.add("  Configurar  ")
+        self._tabs.add("  Pasta  ")
+        self._tabs.set("  Configurar  ")
+        self._build_tab_config()
+        self._build_tab_folder()
+
+    # ── Tab: Configurar ───────────────────────────────────────────────────────
+    def _build_tab_config(self) -> None:
+        tab = self._tabs.tab("  Configurar  ")
+        tab.grid_columnconfigure(0, weight=1)
+        row = 0
+
+        # Secao: Numero de Imagens ───────────────────────────────────────────
+        row = self._section(tab, row, "NUMERO DE IMAGENS NA TELA")
+
+        cards = ctk.CTkFrame(tab, fg_color="transparent")
+        cards.grid(row=row, column=0, sticky="ew", padx=12, pady=(6, 4))
+        for ci, (key, (title, icon, _desc)) in enumerate(_MODE_INFO.items()):
+            cards.grid_columnconfigure(ci, weight=1)
+            btn = ctk.CTkButton(
+                cards,
+                text=f"{icon}\n{title}",
+                font=ctk.CTkFont(size=11),
+                height=68,
+                corner_radius=10,
+                fg_color=_BTN_OFF,
+                hover_color=_HOV_OFF,
+                text_color=_TEXT_DIM[1],
+                border_width=2,
+                border_color=_BDR_OFF,
+                command=lambda k=key: self._select_mode(k),
+            )
+            btn.grid(row=0, column=ci, padx=4, pady=4, sticky="ew")
+            self._mode_btns[key] = btn
+        row += 1
+
+        self._mode_desc = ctk.CTkLabel(
+            tab, text="", font=ctk.CTkFont(size=11),
+            text_color=_TEXT_DIM, anchor="w",
+        )
+        self._mode_desc.grid(row=row, column=0, sticky="w", padx=16, pady=(0, 6))
+        row += 1
+
+        self._select_mode(self._mode_var.get())
+
+        # Secao: Selecao de Imagens ──────────────────────────────────────────
+        row = self._section(tab, row, "SELECAO DE IMAGENS")
+
+        sel_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        sel_frame.grid(row=row, column=0, sticky="w", padx=12, pady=(6, 14))
+        row += 1
+
+        self._sel_seg = ctk.CTkSegmentedButton(
+            sel_frame,
+            values=list(_SEL_LABELS.values()),
+            font=ctk.CTkFont(size=12),
+            command=self._on_sel_change,
+        )
+        self._sel_seg.pack()
+        self._sel_seg.set(_SEL_LABELS.get(self._sel_var.get(), "Aleatorio"))
+
+        # Secao: Ajuste na Tela ──────────────────────────────────────────────
+        row = self._section(tab, row, "AJUSTE NA TELA")
+
+        fit_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        fit_frame.grid(row=row, column=0, sticky="ew", padx=12, pady=(6, 4))
+        for ci, (fkey, (flabel, _fdesc)) in enumerate(_FIT_INFO.items()):
+            fit_frame.grid_columnconfigure(ci, weight=1)
+            btn = ctk.CTkButton(
+                fit_frame,
+                text=flabel,
+                font=ctk.CTkFont(size=11),
+                height=34,
+                corner_radius=8,
+                fg_color=_BTN_OFF,
+                hover_color=_HOV_OFF,
+                text_color=_TEXT_DIM[1],
+                border_width=2,
+                border_color=_BDR_OFF,
+                command=lambda k=fkey: self._select_fit(k),
+            )
+            btn.grid(row=0, column=ci, padx=3, pady=4, sticky="ew")
+            self._fit_btns[fkey] = btn
+        row += 1
+
+        self._fit_desc = ctk.CTkLabel(
+            tab, text="", font=ctk.CTkFont(size=11),
+            text_color=_TEXT_DIM, anchor="w",
+        )
+        self._fit_desc.grid(row=row, column=0, sticky="w", padx=16, pady=(0, 6))
+        row += 1
+
+        self._select_fit(self._fit_var.get())
+
+        # Secao: Rotacao Automatica ──────────────────────────────────────────
+        row = self._section(tab, row, "ROTACAO AUTOMATICA")
+
+        int_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        int_frame.grid(row=row, column=0, sticky="w", padx=12, pady=(6, 16))
+        ctk.CTkLabel(int_frame, text="Intervalo:", font=ctk.CTkFont(size=12)
+                     ).pack(side="left", padx=(0, 8))
+        ctk.CTkEntry(int_frame, textvariable=self._interval_var,
+                     width=76, font=ctk.CTkFont(size=12), justify="center"
+                     ).pack(side="left")
+        ctk.CTkLabel(int_frame, text=" segundos", font=ctk.CTkFont(size=12)
+                     ).pack(side="left")
+
+    def _section(self, parent, row: int, text: str) -> int:
+        """Insere divisor + rotulo de secao. Retorna proximo row disponivel."""
+        ctk.CTkFrame(parent, height=1, fg_color=("gray72", "gray25")
+                     ).grid(row=row, column=0, sticky="ew", padx=8, pady=(18, 0))
+        ctk.CTkLabel(parent, text=text,
+                     font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color=_TEXT_DIM, anchor="w",
+                     ).grid(row=row, column=0, sticky="w", padx=14, pady=(9, 0))
+        return row + 1
+
+    def _select_mode(self, key: str) -> None:
+        self._mode_var.set(key)
+        for k, btn in self._mode_btns.items():
+            on = k == key
+            btn.configure(
+                fg_color=_BTN_ON if on else _BTN_OFF,
+                text_color="white" if on else _TEXT_DIM[1],
+                border_color=_BDR_ON if on else _BDR_OFF,
+            )
+        self._mode_desc.configure(
+            text="    " + _MODE_INFO.get(key, ("", "", ""))[2])
+
+    def _select_fit(self, key: str) -> None:
+        self._fit_var.set(key)
+        for k, btn in self._fit_btns.items():
+            on = k == key
+            btn.configure(
+                fg_color=_BTN_ON if on else _BTN_OFF,
+                text_color="white" if on else _TEXT_DIM[1],
+                border_color=_BDR_ON if on else _BDR_OFF,
+            )
+        self._fit_desc.configure(
+            text="    " + _FIT_INFO.get(key, ("", ""))[1])
+
+    def _on_sel_change(self, label: str) -> None:
+        inv = {v: k for k, v in _SEL_LABELS.items()}
+        self._sel_var.set(inv.get(label, "random"))
+
+    # ── Tab: Pasta ────────────────────────────────────────────────────────────
+    def _build_tab_folder(self) -> None:
+        tab = self._tabs.tab("  Pasta  ")
+        tab.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(tab, text="Pasta de wallpapers",
+                     font=ctk.CTkFont(size=13, weight="bold"), anchor="w",
+                     ).grid(row=0, column=0, sticky="w", padx=16, pady=(18, 4))
+
+        ctk.CTkLabel(
+            tab,
+            text="Todas as imagens serao buscadas nesta pasta.\n"
+                 "Formatos suportados: jpg  jpeg  png  bmp  webp",
+            font=ctk.CTkFont(size=11), text_color=_TEXT_DIM,
+            anchor="w", justify="left",
+        ).grid(row=1, column=0, sticky="w", padx=16, pady=(0, 10))
+
+        picker = ctk.CTkFrame(tab, fg_color="transparent")
+        picker.grid(row=2, column=0, sticky="ew", padx=12, pady=4)
+        picker.grid_columnconfigure(0, weight=1)
+
+        raw = self._cfg["paths"]["wallpapers_folder"]
+        self._folder_var = ctk.StringVar(value=str(resolve_path(raw)))
+
+        entry = ctk.CTkEntry(picker, textvariable=self._folder_var,
+                             font=ctk.CTkFont(size=12), height=36)
+        entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        entry.bind("<FocusOut>", lambda _e: self._update_folder_info())
+
+        ctk.CTkButton(
+            picker, text="...", width=44, height=36,
+            font=ctk.CTkFont(size=13),
+            fg_color=("gray62", "gray30"), hover_color=("gray52", "gray22"),
+            corner_radius=8, command=self._browse_folder,
+        ).grid(row=0, column=1)
+
+        self._folder_info = ctk.CTkLabel(
+            tab, text="", font=ctk.CTkFont(size=11),
+            text_color=_TEXT_DIM, anchor="w", justify="left",
+        )
+        self._folder_info.grid(row=3, column=0, sticky="w", padx=16, pady=(8, 0))
+
+        ctk.CTkLabel(tab, text="Imagens encontradas:",
+                     font=ctk.CTkFont(size=12, weight="bold"), anchor="w",
+                     ).grid(row=4, column=0, sticky="w", padx=16, pady=(14, 4))
+
+        self._img_list = ctk.CTkScrollableFrame(tab, height=140, corner_radius=8)
+        self._img_list.grid(row=5, column=0, sticky="ew", padx=12, pady=(0, 16))
+        self._img_list.grid_columnconfigure(0, weight=1)
+
+        self._update_folder_info()
+
+    def _browse_folder(self) -> None:
+        current = Path(self._folder_var.get())
+        initial = str(current) if current.exists() else str(Path.home())
+        chosen  = filedialog.askdirectory(title="Selecione a pasta de wallpapers",
+                                          initialdir=initial)
+        if chosen:
+            self._folder_var.set(chosen)
+            self._update_folder_info()
+
+    def _update_folder_info(self) -> None:
+        from .image_utils import list_images_sorted_by_date
+
+        for w in self._img_list.winfo_children():
+            w.destroy()
+
+        folder = Path(self._folder_var.get())
+        if not folder.exists():
+            self._folder_info.configure(
+                text="Pasta nao encontrada.",
+                text_color=("#c0392b", "#e74c3c"))
+            return
+
+        images = list_images_sorted_by_date(folder)
+        count  = len(images)
+        self._folder_info.configure(
+            text=f"{count} imagem{'ns' if count != 1 else ''} encontrada{'s' if count != 1 else ''}",
+            text_color=_TEXT_DIM,
+        )
+
+        for i, img_path in enumerate(images[:80]):
+            rf = ctk.CTkFrame(self._img_list, fg_color="transparent")
+            rf.grid(row=i, column=0, sticky="ew", pady=1)
+            rf.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(rf, text=f"{i + 1:03d}",
+                         font=ctk.CTkFont(size=10), text_color=_TEXT_DIM,
+                         width=28, anchor="e",
+                         ).grid(row=0, column=0, padx=(4, 6))
+            ctk.CTkLabel(rf, text=img_path.name,
+                         font=ctk.CTkFont(size=11), anchor="w",
+                         ).grid(row=0, column=1, sticky="w")
+
+        if count > 80:
+            ctk.CTkLabel(self._img_list,
+                         text=f"... e mais {count - 80} imagens",
+                         font=ctk.CTkFont(size=10), text_color=_TEXT_DIM,
+                         ).grid(row=80, column=0, sticky="w", pady=(4, 0))
+
+    # ── Monitor preview draw ──────────────────────────────────────────────────
     def _refresh_monitors(self) -> None:
         try:
             self._monitors = get_monitors()
@@ -297,197 +389,181 @@ class WallpaperChangerApp(ctk.CTk):
             self._monitors = []
             self._set_status(f"Erro ao detectar monitores: {e}", error=True)
             return
-
-        count = len(self._monitors)
+        n = len(self._monitors)
         self._lbl_mon_count.configure(
-            text=f"{count} monitor{'es' if count != 1 else ''} detectado{'s' if count != 1 else ''}"
-        )
+            text=f"{n} monitor{'es' if n != 1 else ''} detectado{'s' if n != 1 else ''}")
         self._draw_monitors()
 
     def _draw_monitors(self) -> None:
-        c = self._canvas
-        c.delete("all")
-        if not self._monitors:
-            c.create_text(
-                c.winfo_width() // 2 or 340,
-                80,
-                text="Nenhum monitor detectado",
-                fill="#666",
-                font=("Segoe UI", 12),
-            )
+        c = self._mon_canvas
+        try:
+            c.delete("all")
+            cw = c.winfo_width()  or 720
+            ch = c.winfo_height() or 148
+            c.create_rectangle(0, 0, cw, ch, fill=_BG_CANVAS, outline="")
+        except tk.TclError:
             return
 
-        canvas_w = c.winfo_width() or 700
-        canvas_h = c.winfo_height() or 160
+        if not self._monitors:
+            c.create_text(cw // 2, ch // 2, text="Nenhum monitor detectado",
+                          fill="#555", font=("Segoe UI", 12))
+            return
 
-        # Bounds do virtual desktop
         min_x = min(m.x for m in self._monitors)
         min_y = min(m.y for m in self._monitors)
         max_x = max(m.x + m.width  for m in self._monitors)
         max_y = max(m.y + m.height for m in self._monitors)
         vd_w  = max_x - min_x or 1
         vd_h  = max_y - min_y or 1
-
-        pad    = 20
-        scale  = min((canvas_w - pad * 2) / vd_w, (canvas_h - pad * 2) / vd_h)
-        off_x  = pad + (canvas_w - pad * 2 - vd_w * scale) / 2
-        off_y  = pad + (canvas_h - pad * 2 - vd_h * scale) / 2
-
-        # Fundo
-        c.create_rectangle(0, 0, canvas_w, canvas_h,
-                           fill=_BG_CANVAS, outline="")
+        pad   = 16
+        scale = min((cw - pad * 2) / vd_w, (ch - pad * 2) / vd_h)
+        ox    = pad + (cw - pad * 2 - vd_w * scale) / 2
+        oy    = pad + (ch - pad * 2 - vd_h * scale) / 2
 
         for m in self._monitors:
-            color = _MON_COLORS[m.index % len(_MON_COLORS)]
-            rx1 = off_x + (m.x - min_x) * scale
-            ry1 = off_y + (m.y - min_y) * scale
-            rx2 = rx1 + m.width  * scale
-            ry2 = ry1 + m.height * scale
-
-            # Sombra
-            c.create_rectangle(rx1 + 3, ry1 + 3, rx2 + 3, ry2 + 3,
-                               fill="#000", outline="")
-
-            # Corpo
-            c.create_rectangle(rx1, ry1, rx2, ry2,
-                               fill=color, outline="#aaaaaa", width=1)
-
-            # Gradiente simulado com retangulo claro no topo
-            grad_h = (ry2 - ry1) * 0.35
-            # Clareia levemente a cor original para simular gradiente
-            r = int(color[1:3], 16)
-            g = int(color[3:5], 16)
-            b = int(color[5:7], 16)
+            col = _MON_COLORS[m.index % len(_MON_COLORS)]
+            x1  = ox + (m.x - min_x) * scale
+            y1  = oy + (m.y - min_y) * scale
+            x2  = x1 + m.width  * scale
+            y2  = y1 + m.height * scale
+            ri, gi, bi = int(col[1:3], 16), int(col[3:5], 16), int(col[5:7], 16)
             light = "#{:02x}{:02x}{:02x}".format(
-                min(255, r + 60), min(255, g + 60), min(255, b + 60)
-            )
-            c.create_rectangle(rx1, ry1, rx2, ry1 + grad_h,
+                min(255, ri + 55), min(255, gi + 55), min(255, bi + 55))
+
+            c.create_rectangle(x1 + 3, y1 + 3, x2 + 3, y2 + 3,
+                               fill="#000000", outline="")
+            c.create_rectangle(x1, y1, x2, y2,
+                               fill=col, outline="#888888", width=1)
+            c.create_rectangle(x1, y1, x2, y1 + (y2 - y1) * 0.35,
                                fill=light, outline="")
 
-            # Label
-            font_size = max(8, int((rx2 - rx1) * 0.14))
-            cx = (rx1 + rx2) / 2
-            cy = (ry1 + ry2) / 2
-            c.create_text(cx, cy - font_size * 0.7,
-                         text=f"M{m.index + 1}",
-                         fill="white",
-                         font=("Segoe UI", font_size, "bold"))
-            c.create_text(cx, cy + font_size * 0.7,
-                         text=f"{m.width}x{m.height}",
-                         fill="#cccccc",
-                         font=("Segoe UI", max(7, font_size - 2)))
+            fs   = max(8, int((x2 - x1) * 0.14))
+            cx_m = (x1 + x2) / 2
+            cy_m = (y1 + y2) / 2
+            c.create_text(cx_m, cy_m - fs, text=f"M{m.index + 1}",
+                          fill="white", font=("Segoe UI", fs, "bold"))
+            c.create_text(cx_m, cy_m + fs * 0.6, text=f"{m.width}x{m.height}",
+                          fill="#cccccc", font=("Segoe UI", max(7, fs - 2)))
 
-    # ── Callbacks ─────────────────────────────────────────────────────────────
-    def _on_mode_change(self, label: str) -> None:
-        descs = {
-            list(_MODE_LABELS.values())[0]:
-                "Uma única imagem aleatória é esticada por todos os monitores.",
-            list(_MODE_LABELS.values())[1]:
-                "Cada um dos dois primeiros monitores recebe uma imagem diferente.",
-            list(_MODE_LABELS.values())[2]:
-                "Os quatro primeiros monitores recebem imagens independentes.",
-        }
-        self._mode_desc.configure(text=descs.get(label, ""))
-
-    def _browse_folder(self, var: ctk.StringVar) -> None:
-        current = Path(var.get())
-        initial = str(current) if current.exists() else str(Path.home())
-        chosen = filedialog.askdirectory(title="Selecione a pasta de imagens",
-                                        initialdir=initial)
-        if chosen:
-            var.set(chosen)
-
-    # ── Aplicar wallpaper ─────────────────────────────────────────────────────
+    # ── Coleta de config da UI ────────────────────────────────────────────────
     def _collect_config(self) -> dict:
-        """Monta um dict de config atualizado com os valores da UI."""
-        cfg = dict(self._cfg)  # shallow copy
-
-        # Reverse-map label -> key
-        inv_mode = {v: k for k, v in _MODE_LABELS.items()}
-        inv_fit  = {v: k for k, v in _FIT_LABELS.items()}
-        mode = inv_mode.get(self._mode_var.get(), self._mode_var.get())
-        fit  = inv_fit.get(self._fit_var.get(),  self._fit_var.get())
-
         try:
-            interval = max(1, int(self._interval_var.get()))
+            interval = max(1, int(self._interval_var.get() or "300"))
         except ValueError:
             interval = 300
 
-        cfg["general"] = {**cfg.get("general", {}), "mode": mode, "interval": interval}
-        cfg["display"] = {**cfg.get("display", {}),  "fit_mode": fit}
+        return {
+            "_config_path": self._cfg.get("_config_path", ""),
+            "general": {
+                "mode":      self._mode_var.get(),
+                "selection": self._sel_var.get(),
+                "interval":  interval,
+            },
+            "paths": {
+                "wallpapers_folder": self._folder_var.get(),
+                "output_folder":     self._cfg["paths"].get("output_folder", "assets/output"),
+            },
+            "display": {
+                "fit_mode": self._fit_var.get(),
+            },
+        }
 
-        paths = dict(cfg.get("paths", {}))
-        for key, var in self._path_vars.items():
-            paths[key] = var.get()
-        cfg["paths"] = paths
+    # ── Barra de acoes ────────────────────────────────────────────────────────
+    def _build_action_bar(self) -> None:
+        bar = ctk.CTkFrame(self, corner_radius=10)
+        bar.grid(row=3, column=0, sticky="ew", padx=16, pady=6)
+        bar.grid_columnconfigure((0, 1, 2), weight=1)
 
-        return cfg
+        self._apply_btn = ctk.CTkButton(
+            bar, text="Aplicar Agora",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=44, corner_radius=8,
+            command=self._apply_now,
+        )
+        self._apply_btn.grid(row=0, column=0, padx=(16, 6), pady=12, sticky="ew")
 
+        ctk.CTkButton(
+            bar, text="Salvar Config",
+            font=ctk.CTkFont(size=13), height=44, corner_radius=8,
+            fg_color=("gray62", "gray26"),
+            hover_color=("gray52", "gray20"),
+            command=self._save_config,
+        ).grid(row=0, column=1, padx=6, pady=12, sticky="ew")
+
+        self._watch_btn = ctk.CTkButton(
+            bar, text="Iniciar Watch",
+            font=ctk.CTkFont(size=13), height=44, corner_radius=8,
+            fg_color=("#1a5830", "#144020"),
+            hover_color=("#14502a", "#0e3018"),
+            command=self._toggle_watch,
+        )
+        self._watch_btn.grid(row=0, column=2, padx=(6, 16), pady=12, sticky="ew")
+
+    # ── Barra de status ───────────────────────────────────────────────────────
+    def _build_status_bar(self) -> None:
+        bar = ctk.CTkFrame(self, height=30, corner_radius=0,
+                           fg_color=("gray85", "gray17"))
+        bar.grid(row=4, column=0, sticky="ew")
+        bar.grid_columnconfigure(0, weight=1)
+        self._status_lbl = ctk.CTkLabel(
+            bar, text="  Pronto.",
+            font=ctk.CTkFont(size=11), text_color=_TEXT_DIM, anchor="w",
+        )
+        self._status_lbl.grid(row=0, column=0, sticky="w", padx=12)
+
+    # ── Acoes ─────────────────────────────────────────────────────────────────
     def _apply_now(self) -> None:
         if not self._monitors:
-            self._set_status("Nenhum monitor detectado. Clique em '↻ Detectar Monitores'.",
-                             error=True)
+            self._set_status("Nenhum monitor. Clique em Detectar.", error=True)
             return
+        self._apply_btn.configure(state="disabled", text="Aplicando...")
+        self._set_status("Aplicando wallpaper...")
 
-        self._apply_btn.configure(state="disabled", text="Aplicando…")
-        self._set_status("Aplicando wallpaper…")
-
-        def _worker() -> None:
+        def _work() -> None:
             try:
                 cfg     = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                mode = cfg["general"]["mode"]
-
-                if mode == "random":
-                    out = apply_random(cfg, self._monitors, out_dir)
-                elif mode == "split2":
-                    out = apply_split(cfg, self._monitors, out_dir, splits=2)
-                elif mode == "split4":
-                    out = apply_split(cfg, self._monitors, out_dir, splits=4)
-                else:
-                    raise ValueError(f"Modo inválido: {mode}")
-
-                self.after(0, lambda: self._set_status(f"✔ Wallpaper aplicado → {Path(str(out)).name}"))
+                out = apply_wallpaper(cfg, self._monitors, out_dir)
+                self.after(0, lambda: self._set_status(
+                    f"Wallpaper aplicado: {Path(str(out)).name}"))
             except Exception as exc:
                 self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
             finally:
                 self.after(0, lambda: self._apply_btn.configure(
-                    state="normal", text="▶  Aplicar Agora"))
+                    state="normal", text="Aplicar Agora"))
 
-        threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_work, daemon=True).start()
 
-    # ── Salvar config ─────────────────────────────────────────────────────────
     def _save_config(self) -> None:
         try:
             cfg = self._collect_config()
             save_config(cfg)
             self._cfg = cfg
-            self._set_status("✔ Configurações salvas com sucesso.")
+            self._set_status("Configuracoes salvas.")
         except Exception as exc:
             self._set_status(f"Erro ao salvar: {exc}", error=True)
 
-    # ── Watch mode ────────────────────────────────────────────────────────────
     def _toggle_watch(self) -> None:
         if self._watching:
             self._watching = False
+            schedule.clear()
             self._watch_btn.configure(
-                text="⏱  Iniciar Watch",
-                fg_color=("#1a6b1a", "#1a4d1a"),
-                hover_color=("#145214", "#123a12"),
+                text="Iniciar Watch",
+                fg_color=("#1a5830", "#144020"),
+                hover_color=("#14502a", "#0e3018"),
             )
             self._set_status("Watch desativado.")
-            schedule.clear()
         else:
             cfg      = self._collect_config()
             interval = cfg["general"]["interval"]
             self._watching = True
             self._watch_btn.configure(
-                text="⏹  Parar Watch",
-                fg_color=("#8b1a1a", "#5a1010"),
-                hover_color=("#6b1212", "#480c0c"),
+                text="Parar Watch",
+                fg_color=("#7a1a1a", "#4e0e0e"),
+                hover_color=("#641414", "#3c0a0a"),
             )
-            self._set_status(f"Watch ativo — trocando a cada {interval}s.")
+            self._set_status(f"Watch ativo - trocando a cada {interval}s.")
             schedule.every(interval).seconds.do(self._apply_now)
 
             def _loop() -> None:
@@ -498,9 +574,8 @@ class WallpaperChangerApp(ctk.CTk):
             self._watch_thr = threading.Thread(target=_loop, daemon=True)
             self._watch_thr.start()
 
-    # ── Status bar helper ─────────────────────────────────────────────────────
     def _set_status(self, msg: str, error: bool = False) -> None:
-        color = ("#c0392b", "#e74c3c") if error else ("gray40", "gray70")
+        color = ("#c0392b", "#e74c3c") if error else _TEXT_DIM
         self._status_lbl.configure(text=f"  {msg}", text_color=color)
 
 

@@ -4,17 +4,19 @@ import ctypes
 import winreg
 from pathlib import Path
 from PIL import Image
-from .config import resolve_path
-from .image_utils import fit_image, pick_random, build_canvas
+from .config import resolve_path, get_project_root
+from .image_utils import fit_image, pick_images, build_canvas
 from .monitor import Monitor, get_monitors
 
 SPI_SETDESKWALLPAPER  = 0x0014
 SPIF_UPDATEINIFILE    = 0x0001
 SPIF_SENDWININICHANGE = 0x0002
 
-# Chaves de pasta dos monitores no config (1-based)
-MONITOR_PATH_KEYS = ["monitor_1", "monitor_2", "monitor_3", "monitor_4"]
+# Modos suportados
+MODES = ["clone", "split1", "split2", "split3", "split4", "quad"]
 
+
+# ── Utilitarios Windows ───────────────────────────────────────────────────────
 
 def get_virtual_desktop(monitors: list[Monitor]) -> tuple[int, int, int, int]:
     """Retorna (min_x, min_y, total_width, total_height) do desktop virtual."""
@@ -26,7 +28,7 @@ def get_virtual_desktop(monitors: list[Monitor]) -> tuple[int, int, int, int]:
 
 
 def set_wallpaper_style_span() -> None:
-    """Configura o Windows para exibir o wallpaper em modo 'span' (estendido)."""
+    """Configura o Windows para exibir o wallpaper em modo span (estendido)."""
     key = winreg.OpenKey(
         winreg.HKEY_CURRENT_USER,
         r"Control Panel\Desktop",
@@ -46,80 +48,193 @@ def set_wallpaper_win(path: str | Path) -> None:
         SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE,
     )
     if not result:
-        raise RuntimeError("Falha ao aplicar o wallpaper via SystemParametersInfoW")
+        raise RuntimeError("SystemParametersInfoW falhou ao aplicar o wallpaper")
 
 
-def _resolve_folder(cfg: dict, key: str) -> str:
-    """Retorna o caminho absoluto de uma pasta definida no config."""
-    return str(resolve_path(cfg["paths"][key]))
+# ── Resolucao de pasta e estado ───────────────────────────────────────────────
+
+def _get_folder(cfg: dict) -> Path:
+    return resolve_path(cfg["paths"]["wallpapers_folder"])
 
 
-def build_wallpaper_canvas(
+def _get_state_file(cfg: dict) -> Path:
+    return get_project_root() / "config" / "state.json"
+
+
+# ── Montagem do canvas ────────────────────────────────────────────────────────
+
+def _build_canvas_from_sections(
     monitors: list[Monitor],
-    sections: list[tuple[Monitor, str]],
-    fit_mode: str,
+    sections: list[tuple[Monitor, Image.Image]],
 ) -> Image.Image:
-    """
-    Monta o canvas no tamanho exato do desktop virtual.
-    Cada section (monitor, pasta) recebe uma imagem aleatoria da pasta,
-    ajustada e colada nas coordenadas reais do monitor.
-    Monitores nao presentes em sections recebem fundo preto.
-    """
+    """Cola os trechos de imagem no canvas do virtual desktop."""
     min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
     canvas = build_canvas(total_w, total_h)
-
-    for monitor, folder in sections:
-        try:
-            img_path = pick_random(folder)
-            img = Image.open(img_path).convert("RGB")
-            img = fit_image(img, monitor.width, monitor.height, fit_mode)
-            paste_x = monitor.x - min_x
-            paste_y = monitor.y - min_y
-            canvas.paste(img, (paste_x, paste_y))
-            print(f"  [+] Monitor {monitor.index + 1} ({monitor.width}x{monitor.height}) <- {img_path.name}")
-        except FileNotFoundError as e:
-            print(f"  [AVISO] {e}")
-
+    for monitor, img in sections:
+        paste_x = monitor.x - min_x
+        paste_y = monitor.y - min_y
+        canvas.paste(img, (paste_x, paste_y))
     return canvas
 
 
-def apply_random(cfg: dict, monitors: list[Monitor], output_dir: Path) -> Path:
-    """Uma unica imagem espalhada por todos os monitores (modo random)."""
-    _, _, total_w, total_h = get_virtual_desktop(monitors)
-    fit_mode = cfg["display"]["fit_mode"]
-    folder   = _resolve_folder(cfg, "random_folder")
-    img_path = pick_random(folder)
-    img      = Image.open(img_path).convert("RGB")
-    img      = fit_image(img, total_w, total_h, fit_mode)
-    print(f"  [+] Imagem: {img_path.name} -> canvas {total_w}x{total_h}")
-    out = output_dir / "wallpaper_random.bmp"
-    img.save(str(out), "BMP")
-    set_wallpaper_win(out)
-    return out
+# ── Modos ─────────────────────────────────────────────────────────────────────
 
-
-def apply_split(cfg: dict, monitors: list[Monitor], output_dir: Path, splits: int = 2) -> Path:
+def _apply_clone(
+    cfg: dict,
+    monitors: list[Monitor],
+    output_dir: Path,
+) -> Path:
     """
-    Atribui uma imagem diferente a cada monitor (split2 = 2 monitores,
-    split4 = ate 4 monitores).
-
-    Usa as posicoes reais dos monitores detectados. Se o numero de monitores
-    fisicos for menor que `splits`, apenas os monitores disponiveis recebem
-    imagem; os demais ficam com fundo preto no canvas final.
+    Clone: a mesma imagem e replicada em todos os monitores.
+    Cada monitor recebe a imagem adaptada ao seu tamanho individualmente.
     """
-    if not monitors:
-        raise ValueError("Nenhum monitor detectado para aplicar o wallpaper.")
+    folder    = _get_folder(cfg)
+    fit_mode  = cfg["display"]["fit_mode"]
+    selection = cfg["general"].get("selection", "random")
+    sf        = _get_state_file(cfg)
 
-    fit_mode     = cfg["display"]["fit_mode"]
-    num_sections = min(splits, len(monitors))
+    imgs = pick_images(str(folder), 1, selection, sf)
+    src  = Image.open(imgs[0]).convert("RGB")
+    print(f"  [clone] Imagem: {imgs[0].name}")
 
-    sections: list[tuple[Monitor, str]] = [
-        (monitors[i], _resolve_folder(cfg, MONITOR_PATH_KEYS[i]))
-        for i in range(num_sections)
-    ]
+    sections: list[tuple[Monitor, Image.Image]] = []
+    for mon in monitors:
+        sections.append((mon, fit_image(src.copy(), mon.width, mon.height, fit_mode)))
+        print(f"    -> Monitor {mon.index + 1} ({mon.width}x{mon.height})")
 
-    canvas = build_wallpaper_canvas(monitors, sections, fit_mode)
-    out    = output_dir / f"wallpaper_split{splits}.bmp"
+    canvas = _build_canvas_from_sections(monitors, sections)
+    out = output_dir / "wallpaper_clone.bmp"
     canvas.save(str(out), "BMP")
     set_wallpaper_win(out)
     return out
+
+
+def _apply_split(
+    cfg: dict,
+    monitors: list[Monitor],
+    output_dir: Path,
+    n: int,
+) -> Path:
+    """
+    Split-N: N imagens diferentes, uma por monitor.
+    - split1: 1 imagem que cobre todo o desktop virtual (efeito span).
+    - split2-4: imagem diferente em cada um dos N primeiros monitores.
+    """
+    folder    = _get_folder(cfg)
+    fit_mode  = cfg["display"]["fit_mode"]
+    selection = cfg["general"].get("selection", "random")
+    sf        = _get_state_file(cfg)
+
+    if n == 1:
+        # Imagem unica cobre todo o desktop virtual
+        _, _, total_w, total_h = get_virtual_desktop(monitors)
+        imgs = pick_images(str(folder), 1, selection, sf)
+        img  = Image.open(imgs[0]).convert("RGB")
+        img  = fit_image(img, total_w, total_h, fit_mode)
+        print(f"  [split1] {imgs[0].name} -> canvas {total_w}x{total_h}")
+        out = output_dir / "wallpaper_split1.bmp"
+        img.save(str(out), "BMP")
+        set_wallpaper_win(out)
+        return out
+
+    # split2 / split3 / split4
+    num_slots = min(n, len(monitors))
+    imgs      = pick_images(str(folder), num_slots, selection, sf)
+    sections: list[tuple[Monitor, Image.Image]] = []
+
+    for i, mon in enumerate(monitors[:num_slots]):
+        img = Image.open(imgs[i]).convert("RGB")
+        img = fit_image(img, mon.width, mon.height, fit_mode)
+        sections.append((mon, img))
+        print(f"  [split{n}] Monitor {mon.index + 1} ({mon.width}x{mon.height}) <- {imgs[i].name}")
+
+    canvas = _build_canvas_from_sections(monitors, sections)
+    out = output_dir / f"wallpaper_split{n}.bmp"
+    canvas.save(str(out), "BMP")
+    set_wallpaper_win(out)
+    return out
+
+
+def _apply_quad(
+    cfg: dict,
+    monitors: list[Monitor],
+    output_dir: Path,
+) -> Path:
+    """
+    Quad: cada monitor e dividido em 4 quadrantes iguais (2x2).
+    Cada quadrante recebe uma imagem diferente conforme o modo de selecao.
+    Para N monitores sao selecionadas N*4 imagens no total.
+    """
+    folder    = _get_folder(cfg)
+    fit_mode  = cfg["display"]["fit_mode"]
+    selection = cfg["general"].get("selection", "random")
+    sf        = _get_state_file(cfg)
+
+    total_imgs = 4 * len(monitors)
+    imgs       = pick_images(str(folder), total_imgs, selection, sf)
+
+    min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
+    canvas = build_canvas(total_w, total_h)
+
+    img_idx = 0
+    for mon in monitors:
+        qw = mon.width  // 2
+        qh = mon.height // 2
+        # ordem: cima-esquerda, cima-direita, baixo-esquerda, baixo-direita
+        offsets = [(0, 0), (qw, 0), (0, qh), (qw, qh)]
+        labels  = ["TL", "TR", "BL", "BR"]
+        for label, (qx, qy) in zip(labels, offsets):
+            img = Image.open(imgs[img_idx]).convert("RGB")
+            img = fit_image(img, qw, qh, fit_mode)
+            paste_x = (mon.x - min_x) + qx
+            paste_y = (mon.y - min_y) + qy
+            canvas.paste(img, (paste_x, paste_y))
+            print(f"  [quad] M{mon.index + 1}-{label} ({qw}x{qh}) <- {imgs[img_idx].name}")
+            img_idx += 1
+
+    out = output_dir / "wallpaper_quad.bmp"
+    canvas.save(str(out), "BMP")
+    set_wallpaper_win(out)
+    return out
+
+
+# ── Entrada principal ─────────────────────────────────────────────────────────
+
+def apply_wallpaper(cfg: dict, monitors: list[Monitor], output_dir: Path) -> Path:
+    """
+    Despacha para o modo correto com base em cfg['general']['mode'].
+    Modos: clone | split1 | split2 | split3 | split4 | quad
+    """
+    if not monitors:
+        raise ValueError("Nenhum monitor detectado.")
+
+    mode = cfg["general"]["mode"]
+
+    if mode == "clone":
+        return _apply_clone(cfg, monitors, output_dir)
+    elif mode == "split1":
+        return _apply_split(cfg, monitors, output_dir, 1)
+    elif mode == "split2":
+        return _apply_split(cfg, monitors, output_dir, 2)
+    elif mode == "split3":
+        return _apply_split(cfg, monitors, output_dir, 3)
+    elif mode == "split4":
+        return _apply_split(cfg, monitors, output_dir, 4)
+    elif mode == "quad":
+        return _apply_quad(cfg, monitors, output_dir)
+    else:
+        raise ValueError(f"Modo invalido: '{mode}'. Use: {MODES}")
+
+
+# ── Aliases de compatibilidade (CLI legado) ───────────────────────────────────
+
+def apply_random(cfg: dict, monitors: list[Monitor], output_dir: Path) -> Path:
+    """Compat: equivale a split1 com selection=random."""
+    cfg = {**cfg, "general": {**cfg["general"], "mode": "split1", "selection": "random"}}
+    return apply_wallpaper(cfg, monitors, output_dir)
+
+
+def apply_split(cfg: dict, monitors: list[Monitor], output_dir: Path, splits: int = 2) -> Path:
+    """Compat: encaminha para apply_wallpaper com split{splits}."""
+    cfg = {**cfg, "general": {**cfg["general"], "mode": f"split{splits}"}}
+    return apply_wallpaper(cfg, monitors, output_dir)

@@ -6,31 +6,33 @@ import click
 import schedule
 from .config import load_config, resolve_path
 from .monitor import get_monitors
-from .wallpaper import apply_random, apply_split
+from .wallpaper import apply_wallpaper, MODES
 
 @click.group()
 def main() -> None:
     """WallpaperChanger - Controle de papel de parede para Windows 11."""
 
 @main.command("apply")
-@click.option("--mode",   default=None, help="random | split2 | split4")
-@click.option("--config", default=None, help="Caminho para settings.toml")
-def apply_cmd(mode, config):
+@click.option("--mode",      default=None, help=f"Modos: {', '.join(MODES)}")
+@click.option("--selection", default=None, help="random | sequential")
+@click.option("--config",    default=None, help="Caminho para settings.toml")
+def apply_cmd(mode, selection, config):
     """Aplica o wallpaper imediatamente."""
     cfg      = load_config(Path(config) if config else None)
     monitors = get_monitors()
     out_dir  = resolve_path(cfg["paths"]["output_folder"])
     out_dir.mkdir(parents=True, exist_ok=True)
-    active_mode = mode or cfg["general"]["mode"]
-    click.echo(f"[INFO] Modo: {active_mode} | Monitores: {len(monitors)}")
-    if active_mode == "random":
-        out = apply_random(cfg, monitors, out_dir)
-    elif active_mode == "split2":
-        out = apply_split(cfg, monitors, out_dir, splits=2)
-    elif active_mode == "split4":
-        out = apply_split(cfg, monitors, out_dir, splits=4)
-    else:
-        raise click.BadParameter(f"Modo invalido: {active_mode}")
+
+    if mode:
+        cfg["general"]["mode"] = mode
+    if selection:
+        cfg["general"]["selection"] = selection
+
+    active_mode = cfg["general"]["mode"]
+    active_sel  = cfg["general"].get("selection", "random")
+    click.echo(f"[INFO] Modo: {active_mode} | Selecao: {active_sel} | Monitores: {len(monitors)}")
+
+    out = apply_wallpaper(cfg, monitors, out_dir)
     click.echo(f"[OK] Wallpaper aplicado -> {out}")
 
 @main.command("watch")
@@ -47,13 +49,7 @@ def watch_cmd(config):
         monitors = get_monitors()
         out_dir  = resolve_path(cfg["paths"]["output_folder"])
         out_dir.mkdir(parents=True, exist_ok=True)
-        mode = cfg["general"]["mode"]
-        if mode == "random":
-            apply_random(cfg, monitors, out_dir)
-        elif mode == "split2":
-            apply_split(cfg, monitors, out_dir, splits=2)
-        elif mode == "split4":
-            apply_split(cfg, monitors, out_dir, splits=4)
+        apply_wallpaper(cfg, monitors, out_dir)
         click.echo("[OK] Wallpaper atualizado.")
     job()
     schedule.every(interval).seconds.do(job)
