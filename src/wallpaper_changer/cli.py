@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 import click
 import schedule
-from .config import load_config
+from .config import load_config, resolve_path
 from .monitor import get_monitors
 from .wallpaper import apply_random, apply_split
 
@@ -19,7 +19,7 @@ def apply_cmd(mode, config):
     """Aplica o wallpaper imediatamente."""
     cfg      = load_config(Path(config) if config else None)
     monitors = get_monitors()
-    out_dir  = Path(cfg["paths"]["output_folder"])
+    out_dir  = resolve_path(cfg["paths"]["output_folder"])
     out_dir.mkdir(parents=True, exist_ok=True)
     active_mode = mode or cfg["general"]["mode"]
     click.echo(f"[INFO] Modo: {active_mode} | Monitores: {len(monitors)}")
@@ -45,7 +45,7 @@ def watch_cmd(config):
     click.echo(f"[INFO] Trocando wallpaper a cada {interval}s. Ctrl+C para sair.")
     def job():
         monitors = get_monitors()
-        out_dir  = Path(cfg["paths"]["output_folder"])
+        out_dir  = resolve_path(cfg["paths"]["output_folder"])
         out_dir.mkdir(parents=True, exist_ok=True)
         mode = cfg["general"]["mode"]
         if mode == "random":

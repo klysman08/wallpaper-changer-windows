@@ -10,10 +10,12 @@ dependencies = [
     "schedule>=1.2.1",
     "click>=8.1.7",
     "screeninfo>=0.8.1",
+    "customtkinter>=5.2.0",
 ]
 
 [project.scripts]
-wallpaper-changer = "wallpaper_changer.cli:main"
+wallpaper-changer     = "wallpaper_changer.cli:main"
+wallpaper-changer-gui = "wallpaper_changer.gui:run"
 
 [build-system]
 requires = ["hatchling"]

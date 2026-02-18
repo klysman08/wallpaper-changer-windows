@@ -1,7 +1,6 @@
 [general]
 mode = "split4"
-interval = 1
-output_quality = 90
+interval = 300
 
 [paths]
 random_folder  = "assets/wallpapers/random"
@@ -12,6 +11,4 @@ monitor_4      = "assets/wallpapers/monitor_4"
 output_folder  = "assets/output"
 
 [display]
-total_width  = 0
-total_height = 0
 fit_mode = "fill"
