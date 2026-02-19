@@ -8,7 +8,9 @@ from pathlib import Path
 from tkinter import filedialog
 
 import customtkinter as ctk
+import pystray
 import schedule
+from PIL import Image as PILImage
 
 from .config import load_config, save_config, resolve_path
 from .monitor import Monitor, get_monitors
@@ -24,15 +26,10 @@ _BG_CANVAS  = "#12121e"
 _ACCENT     = "#3a7bd5"
 _TEXT_DIM   = ("gray60", "gray55")
 
-# Dados dos modos de imagem
+# Dados dos modos de imagem  (somente 2 cards visiveis)
 _MODE_INFO: dict[str, tuple[str, str, str]] = {
-    "clone":   ("Duplicar",   "x2",  "Mesma imagem (adaptada) em todos os monitores"),
-    "split1":  ("1 Imagem",   "[ ]", "Uma imagem cobre todo o desktop virtual"),
-    "split2":  ("2 Imagens",  "[|]", "Imagem diferente nos 2 primeiros monitores"),
-    "split3":  ("3 Imagens",  "[3]", "Imagem diferente nos 3 primeiros monitores"),
-    "split4":  ("4 Imagens",  "[4]", "Imagem diferente nos 4 primeiros monitores"),
-    "quad":    ("4x Monitor", "[#]", "Cada monitor dividido em 4 quadrantes — 4 imagens por tela"),
-    "collage": ("Collage",    "[N]", "Grade personalizada: voce escolhe quantas imagens por monitor (2 a 9)"),
+    "split1":  ("1 Imagem",  "[ ]", "Uma imagem cobre todo o desktop virtual"),
+    "collage": ("Collage",   "[N]", "Grade personalizada: voce escolhe quantas imagens por monitor (1 a 8)"),
 }
 
 # Dados dos modos de ajuste
@@ -70,23 +67,33 @@ class WallpaperChangerApp(ctk.CTk):
         self._monitors: list[Monitor] = []
         self._watching  = False
         self._watch_thr: threading.Thread | None = None
+        self._tray_icon: pystray.Icon | None = None
 
-        self._mode_var     = tk.StringVar(value=self._cfg["general"]["mode"])
+        # Se o modo salvo nao existe mais nos cards visiveis, usa split1
+        _saved_mode = self._cfg["general"]["mode"]
+        if _saved_mode not in _MODE_INFO:
+            _saved_mode = "split1"
+
+        self._mode_var     = tk.StringVar(value=_saved_mode)
         self._fit_var      = tk.StringVar(value=self._cfg["display"]["fit_mode"])
         self._sel_var      = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
+        self._fade_in_var  = tk.BooleanVar(value=bool(self._cfg["general"].get("fade_in", False)))
 
         self._mode_btns:    dict[str, ctk.CTkButton] = {}
         self._fit_btns:     dict[str, ctk.CTkButton] = {}
         self._collage_btns: dict[int,  ctk.CTkButton] = {}
-        self._collage_count_var = tk.IntVar(
+        self._collage_count_var  = tk.IntVar(
             value=self._cfg["general"].get("collage_count", 4))
+        self._collage_same_var   = tk.BooleanVar(
+            value=bool(self._cfg["general"].get("collage_same_for_all", False)))
 
         self._build_header()
         self._build_monitor_panel()
         self._build_tabs()
         self._build_action_bar()
         self._build_status_bar()
+        self._setup_tray()
 
         self._refresh_monitors()
         self.after(200, self._draw_monitors)
@@ -191,7 +198,7 @@ class WallpaperChangerApp(ctk.CTk):
         ctk.CTkLabel(self._collage_row, text="Imagens por monitor:",
                      font=ctk.CTkFont(size=12), anchor="w",
                      ).grid(row=0, column=0, padx=(14, 12), pady=10)
-        for _i, _n in enumerate(range(2, 10)):
+        for _i, _n in enumerate(range(1, 9)):
             _btn = ctk.CTkButton(
                 self._collage_row,
                 text=str(_n),
@@ -203,6 +210,14 @@ class WallpaperChangerApp(ctk.CTk):
             )
             _btn.grid(row=0, column=_i + 1, padx=3, pady=10)
             self._collage_btns[_n] = _btn
+
+        # Checkbox: mesmas imagens em todos os monitores
+        ctk.CTkCheckBox(
+            self._collage_row,
+            text="Mesmas imagens em todos os monitores",
+            variable=self._collage_same_var,
+            font=ctk.CTkFont(size=12),
+        ).grid(row=1, column=0, columnspan=10, sticky="w", padx=14, pady=(0, 10))
 
         self._select_mode(self._mode_var.get())
 
@@ -267,6 +282,15 @@ class WallpaperChangerApp(ctk.CTk):
                      ).pack(side="left")
         ctk.CTkLabel(int_frame, text=" segundos", font=ctk.CTkFont(size=12)
                      ).pack(side="left")
+        row += 1
+
+        # Checkbox: fade-in ao trocar wallpaper
+        ctk.CTkCheckBox(
+            tab,
+            text="Efeito Fade-in ao trocar wallpaper",
+            variable=self._fade_in_var,
+            font=ctk.CTkFont(size=12),
+        ).grid(row=row, column=0, sticky="w", padx=16, pady=(6, 16))
 
     def _section(self, parent, row: int, text: str) -> int:
         """Insere divisor + rotulo de secao. Retorna proximo row disponivel."""
@@ -495,10 +519,12 @@ class WallpaperChangerApp(ctk.CTk):
         return {
             "_config_path": self._cfg.get("_config_path", ""),
             "general": {
-                "mode":          self._mode_var.get(),
-                "selection":     self._sel_var.get(),
-                "interval":      interval,
-                "collage_count": int(self._collage_count_var.get()),
+                "mode":                 self._mode_var.get(),
+                "selection":            self._sel_var.get(),
+                "interval":             interval,
+                "collage_count":        int(self._collage_count_var.get()),
+                "collage_same_for_all": bool(self._collage_same_var.get()),
+                "fade_in":              bool(self._fade_in_var.get()),
             },
             "paths": {
                 "wallpapers_folder": self._folder_var.get(),
@@ -514,6 +540,7 @@ class WallpaperChangerApp(ctk.CTk):
         bar = ctk.CTkFrame(self, corner_radius=10)
         bar.grid(row=3, column=0, sticky="ew", padx=16, pady=6)
         bar.grid_columnconfigure((0, 1, 2), weight=1)
+        bar.grid_columnconfigure(3, weight=0)
 
         self._apply_btn = ctk.CTkButton(
             bar, text="Aplicar Agora",
@@ -538,7 +565,15 @@ class WallpaperChangerApp(ctk.CTk):
             hover_color=("#14502a", "#0e3018"),
             command=self._toggle_watch,
         )
-        self._watch_btn.grid(row=0, column=2, padx=(6, 16), pady=12, sticky="ew")
+        self._watch_btn.grid(row=0, column=2, padx=6, pady=12, sticky="ew")
+
+        ctk.CTkButton(
+            bar, text="⬇ Bandeja",
+            font=ctk.CTkFont(size=12), height=44, corner_radius=8, width=110,
+            fg_color=("gray50", "#2a2a3e"),
+            hover_color=("gray40", "#22223a"),
+            command=self._minimize_to_tray,
+        ).grid(row=0, column=3, padx=(0, 16), pady=12)
 
     # ── Barra de status ───────────────────────────────────────────────────────
     def _build_status_bar(self) -> None:
@@ -618,6 +653,71 @@ class WallpaperChangerApp(ctk.CTk):
     def _set_status(self, msg: str, error: bool = False) -> None:
         color = ("#c0392b", "#e74c3c") if error else _TEXT_DIM
         self._status_lbl.configure(text=f"  {msg}", text_color=color)
+
+    # ── Bandeja do sistema (systray) ──────────────────────────────────────────
+    def _setup_tray(self) -> None:
+        """Configura protocolo de fechamento e minimizacao para bandeja."""
+        self.protocol("WM_DELETE_WINDOW", self._minimize_to_tray)
+        self.bind("<Unmap>", self._on_iconify)
+
+    def _on_iconify(self, event: tk.Event) -> None:
+        """Intercepta minimize da barra de titulo -> vai para bandeja."""
+        if event.widget is self and self.wm_state() == "iconic":
+            self._minimize_to_tray()
+
+    @staticmethod
+    def _make_tray_image() -> PILImage.Image:
+        """Cria icone simples para a bandeja do sistema."""
+        size = 64
+        img  = PILImage.new("RGB", (size, size), color="#3a7bd5")
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([4, 4, 60, 60], fill="#3a7bd5", outline="#ffffff", width=2)
+        draw.text((12, 18), "WP", fill="#ffffff")
+        return img
+
+    def _minimize_to_tray(self) -> None:
+        """Oculta a janela e exibe icone na bandeja do sistema."""
+        if self._tray_icon is not None:
+            # Ja esta na bandeja — apenas ocultar janela
+            self.withdraw()
+            return
+
+        self.withdraw()
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Mostrar",      lambda: self.after(0, self._show_from_tray), default=True),
+            pystray.MenuItem("Aplicar Agora", lambda: self.after(0, self._apply_now)),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Sair",         lambda: self.after(0, self._quit_app)),
+        )
+
+        self._tray_icon = pystray.Icon(
+            "WallpaperChanger",
+            self._make_tray_image(),
+            "WallpaperChanger",
+            menu,
+        )
+
+        threading.Thread(target=self._tray_icon.run, daemon=True).start()
+
+    def _show_from_tray(self) -> None:
+        """Restaura a janela a partir da bandeja."""
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        if self._tray_icon is not None:
+            self._tray_icon.stop()
+            self._tray_icon = None
+
+    def _quit_app(self) -> None:
+        """Encerra o aplicativo completamente."""
+        self._watching = False
+        schedule.clear()
+        if self._tray_icon is not None:
+            self._tray_icon.stop()
+            self._tray_icon = None
+        self.destroy()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

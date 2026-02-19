@@ -2,6 +2,7 @@
 from __future__ import annotations
 import ctypes
 import math
+import time as _time
 import winreg
 from pathlib import Path
 from PIL import Image
@@ -50,6 +51,64 @@ def set_wallpaper_win(path: str | Path) -> None:
     )
     if not result:
         raise RuntimeError("SystemParametersInfoW falhou ao aplicar o wallpaper")
+
+
+def _get_current_wallpaper() -> Path | None:
+    """Le o caminho do wallpaper atual a partir do registro do Windows."""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop")
+        val, _ = winreg.QueryValueEx(key, "Wallpaper")
+        winreg.CloseKey(key)
+        p = Path(val)
+        return p if p.exists() else None
+    except Exception:
+        return None
+
+
+def _apply_or_fade(canvas: Image.Image, out: Path, fade_in: bool) -> None:
+    """
+    Salva o canvas em `out` e aplica como wallpaper.
+    Se fade_in=True, gera frames intermediarios de transicao suave.
+    """
+    if not fade_in:
+        canvas.save(str(out), "BMP")
+        set_wallpaper_win(out)
+        return
+
+    old_path = _get_current_wallpaper()
+    if old_path is None:
+        canvas.save(str(out), "BMP")
+        set_wallpaper_win(out)
+        return
+
+    try:
+        old_img = Image.open(old_path).convert("RGB")
+        if old_img.size != canvas.size:
+            old_img = old_img.resize(canvas.size, Image.LANCZOS)
+    except Exception:
+        canvas.save(str(out), "BMP")
+        set_wallpaper_win(out)
+        return
+
+    fade_dir  = out.parent
+    n_frames  = 5
+    tmp_files: list[Path] = []
+    for i in range(1, n_frames):
+        alpha = i / n_frames
+        frame = Image.blend(old_img, canvas, alpha)
+        tmp   = fade_dir / f"_fade_tmp_{i}.bmp"
+        frame.save(str(tmp), "BMP")
+        tmp_files.append(tmp)
+        set_wallpaper_win(tmp)
+        _time.sleep(0.07)
+
+    canvas.save(str(out), "BMP")
+    set_wallpaper_win(out)
+    for f in tmp_files:
+        try:
+            f.unlink()
+        except Exception:
+            pass
 
 
 # ── Resolucao de pasta e estado ───────────────────────────────────────────────
@@ -130,10 +189,10 @@ def _apply_clone(
         sections.append((mon, fit_image(src.copy(), mon.width, mon.height, fit_mode)))
         print(f"    -> Monitor {mon.index + 1} ({mon.width}x{mon.height})")
 
-    canvas = _build_canvas_from_sections(monitors, sections)
-    out = output_dir / "wallpaper_clone.bmp"
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    canvas   = _build_canvas_from_sections(monitors, sections)
+    out      = output_dir / "wallpaper_clone.bmp"
+    fade_in  = bool(cfg.get("general", {}).get("fade_in", False))
+    _apply_or_fade(canvas, out, fade_in)
     return out
 
 
@@ -160,9 +219,9 @@ def _apply_split(
         img  = Image.open(imgs[0]).convert("RGB")
         img  = fit_image(img, total_w, total_h, fit_mode)
         print(f"  [split1] {imgs[0].name} -> canvas {total_w}x{total_h}")
-        out = output_dir / "wallpaper_split1.bmp"
-        img.save(str(out), "BMP")
-        set_wallpaper_win(out)
+        out     = output_dir / "wallpaper_split1.bmp"
+        fade_in = bool(cfg.get("general", {}).get("fade_in", False))
+        _apply_or_fade(img, out, fade_in)
         return out
 
     # split2 / split3 / split4
@@ -176,10 +235,10 @@ def _apply_split(
         sections.append((mon, img))
         print(f"  [split{n}] Monitor {mon.index + 1} ({mon.width}x{mon.height}) <- {imgs[i].name}")
 
-    canvas = _build_canvas_from_sections(monitors, sections)
-    out = output_dir / f"wallpaper_split{n}.bmp"
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    canvas   = _build_canvas_from_sections(monitors, sections)
+    out      = output_dir / f"wallpaper_split{n}.bmp"
+    fade_in  = bool(cfg.get("general", {}).get("fade_in", False))
+    _apply_or_fade(canvas, out, fade_in)
     return out
 
 
@@ -220,9 +279,9 @@ def _apply_quad(
             print(f"  [quad] M{mon.index + 1}-{label} ({qw}x{qh}) <- {imgs[img_idx].name}")
             img_idx += 1
 
-    out = output_dir / "wallpaper_quad.bmp"
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    out     = output_dir / "wallpaper_quad.bmp"
+    fade_in = bool(cfg.get("general", {}).get("fade_in", False))
+    _apply_or_fade(canvas, out, fade_in)
     return out
 
 
@@ -236,14 +295,20 @@ def _apply_collage(
     N = cfg['general']['collage_count'] (padrao 4, range 2-9).
     O layout e calculado por _compute_grid_layout().
     """
-    folder    = _get_folder(cfg)
-    fit_mode  = cfg["display"]["fit_mode"]
-    selection = cfg["general"].get("selection", "random")
-    sf        = _get_state_file(cfg)
-    count     = max(1, int(cfg["general"].get("collage_count", 4)))
+    folder        = _get_folder(cfg)
+    fit_mode      = cfg["display"]["fit_mode"]
+    selection     = cfg["general"].get("selection", "random")
+    sf            = _get_state_file(cfg)
+    count         = max(1, int(cfg["general"].get("collage_count", 4)))
+    same_for_all  = bool(cfg["general"].get("collage_same_for_all", False))
+    fade_in       = bool(cfg.get("general", {}).get("fade_in", False))
 
-    total_imgs = count * len(monitors)
-    imgs       = pick_images(str(folder), total_imgs, selection, sf)
+    # Quantidade de imagens a selecionar
+    if same_for_all:
+        # Mesmas N imagens em todos os monitores
+        imgs = pick_images(str(folder), count, selection, sf)
+    else:
+        imgs = pick_images(str(folder), count * len(monitors), selection, sf)
 
     min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
     canvas = build_canvas(total_w, total_h)
@@ -251,18 +316,19 @@ def _apply_collage(
     img_idx = 0
     for mon in monitors:
         cells = _compute_grid_layout(count, mon.width, mon.height)
-        for cell_x, cell_y, cell_w, cell_h in cells:
-            img = Image.open(imgs[img_idx]).convert("RGB")
+        for j, (cell_x, cell_y, cell_w, cell_h) in enumerate(cells):
+            src_idx = j if same_for_all else img_idx
+            img = Image.open(imgs[src_idx]).convert("RGB")
             img = fit_image(img, cell_w, cell_h, fit_mode)
             paste_x = (mon.x - min_x) + cell_x
             paste_y = (mon.y - min_y) + cell_y
             canvas.paste(img, (paste_x, paste_y))
-            print(f"  [collage] M{mon.index + 1} ({cell_w}x{cell_h}) <- {imgs[img_idx].name}")
-            img_idx += 1
+            print(f"  [collage] M{mon.index + 1} ({cell_w}x{cell_h}) <- {imgs[src_idx].name}")
+            if not same_for_all:
+                img_idx += 1
 
     out = output_dir / "wallpaper_collage.bmp"
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    _apply_or_fade(canvas, out, fade_in)
     return out
 
 

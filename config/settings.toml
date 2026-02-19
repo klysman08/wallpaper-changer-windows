@@ -1,11 +1,13 @@
 [general]
-mode          = "split1"
-selection     = "random"
-interval      = 300
-collage_count = 4
+mode                 = "split1"
+selection            = "random"
+interval             = 300
+collage_count        = 4
+collage_same_for_all = false
+fade_in              = false
 
 [paths]
-wallpapers_folder = "assets/wallpapers"
+wallpapers_folder = "C:\\Users\\Public\\Pictures"
 output_folder     = "assets/output"
 
 [display]
