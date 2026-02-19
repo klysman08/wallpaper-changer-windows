@@ -1,5 +1,5 @@
 [general]
-mode                 = "split1"
+mode                 = "collage"
 selection            = "random"
 interval             = 300
 collage_count        = 4

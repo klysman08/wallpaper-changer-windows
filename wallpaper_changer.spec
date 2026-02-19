@@ -4,24 +4,18 @@
 #   uv run pyinstaller wallpaper_changer.spec --noconfirm
 
 from pathlib import Path
-import customtkinter
 
-# ── Caminhos de dados a serem empacotados ─────────────────────────────────────
-HERE      = Path(SPECPATH)              # raiz do projeto
-SRC       = HERE / "src" / "wallpaper_changer"
-CTK_PATH  = Path(customtkinter.__file__).parent   # assets do CustomTkinter
+# ── Caminhos ──────────────────────────────────────────────────────────────────
+HERE = Path(SPECPATH)  # raiz do projeto
 
 datas = [
-    # Temas e icones do CustomTkinter (obrigatorio)
-    (str(CTK_PATH), "customtkinter"),
     # Configuracao padrao empacotada junto
     (str(HERE / "config" / "settings.toml"), "config"),
 ]
 
-# ── Imports que o PyInstaller nao detecta automaticamente ─────────────────────
+# ── Imports ocultos ───────────────────────────────────────────────────────────
 hidden = [
-    "customtkinter",
-    "darkdetect",
+    "ttkbootstrap",
     "PIL._tkinter_finder",
     "screeninfo",
     "screeninfo.enumerators",
@@ -46,8 +40,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter.test", "unittest", "email", "html", "http",
-              "xml", "xmlrpc", "logging.handlers", "distutils"],
+    excludes=[
+        "tkinter.test", "unittest", "email", "html", "http",
+        "xml", "xmlrpc", "logging.handlers", "distutils",
+    ],
     noarchive=False,
     optimize=1,
 )
@@ -65,7 +61,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,          # sem janela de terminal
+    console=False,  # sem janela de terminal
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
