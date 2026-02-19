@@ -1,6 +1,6 @@
 # WallpaperChanger
 
-> Gerenciador de papel de parede collage para Windows com suporte a múltiplos monitores, fade-in e bandeja do sistema.
+> Collage wallpaper manager for Windows with multi-monitor support, fade-in, and system tray.
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2011-0078D4?logo=windows)
@@ -8,95 +8,95 @@
 
 ---
 
-## Recursos
+## Features
 
-| Recurso | Descrição |
+| Feature | Description |
 |---|---|
-| **Collage** | Grade automática com 1 a 8 imagens por monitor |
-| **Mesmas imagens em todos os monitores** | Opção para replicar o mesmo conjunto em cada tela |
-| **Seleção aleatória ou sequencial** | Alterna entre imagens de forma aleatória ou em ordem |
-| **Ajuste de imagem** | Preencher, Ajustar, Ampliar, Centralizar ou Estender |
-| **Rotação automática** | Troca o wallpaper em intervalos configuráveis |
-| **Efeito Fade** | Transição suave ao aplicar o novo wallpaper |
-| **Iniciar com o Windows** | Opção para executar automaticamente ao ligar o PC |
-| **Minimizar para a bandeja** | O app continua rodando na área de notificação |
-| **Instalador Windows** | Setup.exe via Inno Setup para instalação fácil |
-| **CLI** | Controle via linha de comando |
+| **Collage** | Automatic grid with 1 to 8 images per monitor |
+| **Same images on all monitors** | Option to replicate the same set on each screen |
+| **Random or sequential selection** | Switch between images randomly or in order |
+| **Image adjustment** | Fill, Fit, Stretch, Center, or Span |
+| **Auto rotation** | Change wallpaper at configurable intervals |
+| **Fade Effect** | Smooth transition when applying new wallpaper |
+| **Start with Windows** | Option to run automatically on PC startup |
+| **Minimize to tray** | App continues running in the notification area |
+| **Windows Installer** | Setup.exe via Inno Setup for easy installation |
+| **CLI** | Command line control |
 
 ---
 
-## Pré-requisitos
+## Prerequisites
 
-| Ferramenta | Versão mínima | Link |
+| Tool | Min Version | Link |
 |---|---|---|
 | Windows | 10 / 11 | — |
 | Python | 3.11+ | https://python.org |
-| [uv](https://docs.astral.sh/uv/) | 0.4+ | https://docs.astral.sh/uv/ |
+| uv | 0.4+ | https://docs.astral.sh/uv/ |
 
 ---
 
-## Instalação (modo desenvolvimento)
+## Installation (dev mode)
 
 ```powershell
-# 1. Clone o repositório
+# 1. Clone the repository
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
 cd wallpaper-changer-windows/wallpaper-changer
 
-# 2. Crie o ambiente virtual e instale as dependências
+# 2. Create virtual environment and install dependencies
 uv sync
 
-# 3. Inicie a interface gráfica
+# 3. Start the GUI
 uv run python -c "from wallpaper_changer.gui import run; run()"
 ```
 
 ---
 
-## Instalação (via instalador)
+## Installation (via installer)
 
-1. Baixe o `WallpaperChanger_Setup.exe` da página de releases
-2. Execute o instalador e siga as instruções
-3. Opcionalmente marque "Iniciar com o Windows" durante a instalação
+1. Download `WallpaperChanger_Setup.exe` from the releases page
+2. Run the installer and follow the instructions
+3. Optionally check "Start with Windows" during installation
 
 ---
 
-## Interface Gráfica (GUI)
+## Graphical Interface (GUI)
 
 ### Collage
 
-Cada monitor é dividido em uma grade automática com **1 a 8 imagens**.
+Each monitor is divided into an automatic grid with **1 to 8 images**.
 
-- Escolha o número de imagens com os botões numéricos
-- Ative **"Mesmas imagens em todos os monitores"** para replicar o mesmo conjunto
+- Choose the number of images with the numeric buttons
+- Enable **"Same images on all monitors"** to replicate the same set
 
-### Configurações
+### Settings
 
-- **Seleção de imagens** — `Aleatório` ou `Sequencial`
-- **Ajuste na tela** — `Preencher`, `Ajustar`, `Ampliar`, `Centralizar`, `Estender`
-- **Rotação automática** — defina o intervalo em segundos e clique em **Iniciar Watch**
-- **Efeito Fade** — transição suave com 8 frames intermediários ao trocar o wallpaper
-- **Iniciar com o Windows** — registra o app para executar automaticamente no login
+- **Image selection** — `Random` or `Sequential`
+- **Screen fit** — `Fill`, `Fit`, `Stretch`, `Center`, `Span`
+- **Auto rotation** — set the interval in seconds and click **Start Watch**
+- **Fade Effect** — smooth transition with 8 intermediate frames when changing wallpaper
+- **Start with Windows** — registers the app to run automatically on login
 
-### Pasta de Wallpapers
+### Wallpapers Folder
 
-Defina a pasta de origem das imagens.
-Formatos suportados: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
+Define the source folder for images.
+Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
 
-### Bandeja do sistema
+### System Tray
 
-Fechar (✕) minimiza para a bandeja. Opções: **Mostrar**, **Aplicar Agora**, **Sair**.
+Close (✕) minimizes to tray. Options: **Show**, **Apply Now**, **Exit**.
 
 ---
 
 ## CLI
 
 ```powershell
-# Aplicar wallpaper imediatamente
+# Apply wallpaper immediately
 uv run wallpaper-changer apply
 
-# Aplicar com opções
+# Apply with options
 uv run wallpaper-changer apply --collage-count 6 --selection random
 
-# Modo watch (troca automática)
+# Watch mode (auto change)
 uv run wallpaper-changer watch
 ```
 
@@ -104,47 +104,47 @@ uv run wallpaper-changer watch
 
 ## Build
 
-### Executável portável (PyInstaller)
+### Portable executable (PyInstaller)
 
 ```powershell
 cd wallpaper-changer
 .\scripts\build_exe.ps1 -NoInstaller
 ```
 
-Resultado em `dist\WallpaperChanger\`.
+Result in `dist\WallpaperChanger\`.
 
-### Instalador Windows (Inno Setup)
+### Windows Installer (Inno Setup)
 
-Pré-requisito: [Inno Setup 6](https://jrsoftware.org/isdl.php) instalado.
+Prerequisite: Inno Setup 6 installed.
 
 ```powershell
 cd wallpaper-changer
 .\scripts\build_exe.ps1
 ```
 
-Resultado: `dist\WallpaperChanger_Setup.exe`.
+Result: `dist\WallpaperChanger_Setup.exe`.
 
 ---
 
-## Estrutura
+## Structure
 
 ```
 wallpaper-changer/
-├── main.py                  # Entry point PyInstaller
-├── pyproject.toml           # Dependências e metadados
-├── wallpaper_changer.spec   # Spec do PyInstaller
-├── installer.iss            # Script do Inno Setup
+├── main.py                  # PyInstaller Entry point
+├── pyproject.toml           # Dependencies and metadata
+├── wallpaper_changer.spec   # PyInstaller Spec
+├── installer.iss            # Inno Setup Script
 ├── config/
-│   └── settings.toml        # Configurações do app
+│   └── settings.toml        # App settings
 ├── scripts/
-│   └── build_exe.ps1        # Script de build
+│   └── build_exe.ps1        # Build script
 └── src/wallpaper_changer/
     ├── __init__.py
-    ├── cli.py               # Interface de linha de comando
-    ├── config.py            # Leitura/escrita de configurações
-    ├── gui.py               # Interface gráfica (ttkbootstrap)
-    ├── image_utils.py       # Seleção e redimensionamento de imagens
-    ├── monitor.py           # Detecção de monitores
-    ├── startup.py           # Inicialização com o Windows
-    └── wallpaper.py         # Montagem e aplicação do wallpaper
+    ├── cli.py               # Command line interface
+    ├── config.py            # Config read/write
+    ├── gui.py               # Graphical interface (ttkbootstrap)
+    ├── image_utils.py       # Image selection and resizing
+    ├── monitor.py           # Monitor detection
+    ├── startup.py           # Windows startup registration
+    └── wallpaper.py         # Wallpaper assembly and application
 ```
