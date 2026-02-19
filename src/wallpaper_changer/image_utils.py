@@ -68,14 +68,42 @@ def pick_images(
         state[folder_key] = (idx + count) % len(images)
         _save_state(sf, state)
         return result
-    else:  # random
+    else:  # random — sem repeticao entre ciclos, persistente
         images = list_images(folder)
         if not images:
             raise FileNotFoundError(f"Nenhuma imagem em: {folder}")
-        if count >= len(images):
-            # se tiver menos imagens que slots, permite repeticao
-            return [random.choice(images) for _ in range(count)]
-        return random.sample(images, count)
+
+        sf = state_file or (Path(folder).parent.parent / "config" / "state.json")
+        state = _load_state(sf)
+        folder_key = str(Path(folder).resolve())
+        history_key = folder_key + ":random_history"
+
+        # Historico de nomes de arquivo ja exibidos neste ciclo
+        shown: list[str] = state.get(history_key, [])
+        shown_set = set(shown)
+
+        # Imagens ainda nao exibidas neste ciclo
+        available = [p for p in images if p.name not in shown_set]
+
+        # Se nao ha suficientes, reinicia o ciclo
+        if len(available) < count:
+            shown = []
+            shown_set = set()
+            available = list(images)
+
+        if count >= len(available):
+            picked = list(available)
+            # Completa com aleatorias se necessario
+            while len(picked) < count:
+                picked.append(random.choice(images))
+        else:
+            picked = random.sample(available, count)
+
+        # Atualiza historico
+        shown.extend(p.name for p in picked)
+        state[history_key] = shown
+        _save_state(sf, state)
+        return picked
 
 
 # ── Compat: pick_random (mantido para nao quebrar imports antigos) ────────────

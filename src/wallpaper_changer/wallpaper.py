@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ctypes
 import math
-import time as _time
 import winreg
 from pathlib import Path
 
@@ -58,6 +57,23 @@ def set_wallpaper_win(path: str | Path) -> None:
         raise RuntimeError("SystemParametersInfoW falhou ao aplicar o wallpaper")
 
 
+def _set_wallpaper_fast(path: str | Path) -> None:
+    """
+    Aplica wallpaper SEM broadcast de WM_SETTINGCHANGE.
+
+    Muito mais rapido que set_wallpaper_win() porque nao espera que todas
+    as janelas do sistema confirmem a mudanca. Ideal para frames
+    intermediarios de fade onde velocidade e critica.
+    """
+    abs_path = str(Path(path).resolve())
+    ctypes.windll.user32.SystemParametersInfoW(
+        SPI_SETDESKWALLPAPER,
+        0,
+        abs_path,
+        SPIF_UPDATEINIFILE,  # apenas grava no registro, sem broadcast
+    )
+
+
 def _get_current_wallpaper() -> Path | None:
     """Le o caminho do wallpaper atual a partir do registro do Windows."""
     try:
@@ -70,13 +86,26 @@ def _get_current_wallpaper() -> Path | None:
         return None
 
 
+def _smoothstep(t: float) -> float:
+    """Ease-in-out (Hermite) — curva suave que desacelera no inicio e no fim."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+_FADE_FRAMES = 12
+_FADE_DELAY  = 0.035  # ~0.42 s total (12 × 0.035)
+
+
 def _apply_or_fade(canvas: Image.Image, out: Path, fade_in: bool) -> None:
     """
     Salva o canvas em *out* e aplica como wallpaper.
 
-    Se *fade_in* e True, gera frames intermediarios de transicao suave.
-    Usa dois nomes de arquivo alternados (_fade_a / _fade_b) para que o
-    Windows perceba um caminho diferente a cada frame e re-leia a imagem.
+    Se *fade_in* e True, gera uma transicao suave com:
+      - Curva ease-in-out (smoothstep) para alpha natural
+      - Frames pre-gerados em disco antes da animacao
+      - _set_wallpaper_fast() nos frames intermediarios (sem broadcast
+        WM_SETTINGCHANGE), eliminando o gargalo de ~100ms por frame
+      - Dois caminhos alternados para forcar o Windows a recarregar
     """
     if not fade_in:
         canvas.save(str(out), "BMP")
@@ -101,23 +130,33 @@ def _apply_or_fade(canvas: Image.Image, out: Path, fade_in: bool) -> None:
     fade_dir = out.parent
     tmp_a = fade_dir / "_fade_a.bmp"
     tmp_b = fade_dir / "_fade_b.bmp"
-    n_frames = 8
+    tmp_paths = (tmp_a, tmp_b)
 
-    for i in range(1, n_frames + 1):
-        alpha = i / n_frames
+    # ── Pre-gerar todos os frames em disco ─────────────────────────────
+    frame_files: list[Path] = []
+    for i in range(1, _FADE_FRAMES + 1):
+        t = i / _FADE_FRAMES
+        alpha = _smoothstep(t)
         frame = Image.blend(old_img, canvas, alpha)
-        # Alterna entre dois caminhos para forcar o Windows a recarregar
-        tmp = tmp_a if (i % 2 == 1) else tmp_b
-        frame.save(str(tmp), "BMP")
-        set_wallpaper_win(tmp)
-        _time.sleep(0.15)
+        dest = tmp_paths[i % 2]
+        frame.save(str(dest), "BMP")
+        frame_files.append(dest)
 
-    # Salva a imagem final no destino real
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    # ── Reproduzir animacao — apenas troca de caminho, sem I/O ─────────
+    # Configura o estilo span uma unica vez antes da animacao
+    set_wallpaper_style_span()
+    for idx, fpath in enumerate(frame_files):
+        is_last = idx == len(frame_files) - 1
+        if is_last:
+            # Ultimo frame: gravar imagem final no destino real
+            canvas.save(str(out), "BMP")
+            set_wallpaper_win(out)
+        else:
+            _set_wallpaper_fast(fpath)
+            _time.sleep(_FADE_DELAY)
 
-    # Limpeza dos arquivos temporarios
-    for f in (tmp_a, tmp_b):
+    # ── Limpeza dos arquivos temporarios ───────────────────────────────
+    for f in tmp_paths:
         try:
             f.unlink()
         except Exception:
@@ -196,7 +235,6 @@ def _apply_collage(
     sf = _get_state_file(cfg)
     count = max(1, int(cfg["general"].get("collage_count", 4)))
     same_for_all = bool(cfg["general"].get("collage_same_for_all", False))
-    fade_in = bool(cfg.get("general", {}).get("fade_in", False))
 
     # Quantidade de imagens a selecionar
     if same_for_all:
@@ -221,7 +259,8 @@ def _apply_collage(
                 img_idx += 1
 
     out = output_dir / "wallpaper_collage.bmp"
-    _apply_or_fade(canvas, out, fade_in)
+    canvas.save(str(out), "BMP")
+    set_wallpaper_win(out)
     return out
 
 

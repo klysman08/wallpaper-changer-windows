@@ -31,6 +31,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName={#MyAppName}
 SetupLogging=yes
+SetupIconFile=assets\icon\WallpaperChanger.ico
+UninstallDisplayIcon={app}\WallpaperChanger.ico
 
 [Languages]
 Name: "portuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -43,6 +45,7 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opcoes
 [Files]
 ; Copia toda a pasta gerada pelo PyInstaller
 Source: "dist\WallpaperChanger\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "assets\icon\WallpaperChanger.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 ; Pastas de runtime que o app precisa
@@ -51,8 +54,8 @@ Name: "{app}\assets\output"
 Name: "{app}\config"
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\WallpaperChanger.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\WallpaperChanger.ico"; Tasks: desktopicon
 
 [Registry]
 ; Inicio automatico com o Windows (apenas se o usuario marcar a opcao)

@@ -1,29 +1,25 @@
 # WallpaperChanger Improvement Plan
 
-## Analysis Summary
+## Phase 1 — Initial Rewrite (completed)
 
-**Current issues:**
-- GUI uses `customtkinter` — known for slow startup and sluggish rendering
-- 7 wallpaper modes exist but only Collage should remain
-- Fade effect sets wallpaper rapidly using same file path — Windows caches by path, so intermediate frames are ignored
-- No Windows installer (only PyInstaller --onedir loose folder)
-- No "start with system" option
+- [x] 1. **Codebase refactoring** — Removed dead modes (clone, split1-4, quad). Cleaned up MODES, `apply_wallpaper()`, GUI, CLI.
+- [x] 2. **Replace GUI framework** — Replaced `customtkinter` with `ttkbootstrap` (native ttk, dark theme, fast).
+- [x] 3. **Keep only Collage** — Removed mode selection UI. Collage-only.
+- [x] 4. **Create Windows installer** — Inno Setup `.iss` script + `build_exe.ps1` pipeline.
+- [x] 5. **Add start-with-system** — Registry `HKCU\...\Run` key. GUI checkbox. `startup.py` module.
 
-## Tasks
+## Phase 2 — Refinements (completed)
 
-- [x] 1. **Codebase refactoring** — Remove dead modes (clone, split1-4, quad). Clean up MODES, `apply_wallpaper()`, GUI cards, CLI commands. Simplify config defaults.
-- [x] 2. **Replace GUI framework** — Replace `customtkinter` with `ttkbootstrap` (native ttk widgets, modern dark theme, much faster rendering). Rewrite `gui.py`.
-- [x] 3. **Keep only Collage** — Remove mode selection UI. Always use collage mode. Simplify settings.
-- [x] 4. **Fix fade effect** — Use alternating file names so Windows sees new wallpaper each frame. Increase frame delay for visible transition.
-- [x] 5. **Create Windows installer** — Inno Setup `.iss` script + updated `build_exe.ps1` pipeline.
-- [x] 6. **Add start-with-system** — Registry key in `HKCU\...\Run`. GUI checkbox. `startup.py` module.
-- [x] 7. **Verify & test** — All modules import OK, GUI launches, PyInstaller build succeeds (4.6 MB exe).
+- [x] 6. **Improve GUI responsiveness** — Async folder scan (background thread), debounced monitor redraws, scoped mousewheel events, scroll frame width fix.
+- [x] 7. **Persist wallpaper sequence on restart** — Random mode now tracks shown images in `state.json` (`random_history` key). No repeats until full cycle. Survives restarts.
+- [x] 8. **Remove fade effect** — Removed all fade transition code (`_apply_or_fade`, `_set_wallpaper_fast`, `_smoothstep`, `_get_current_wallpaper`). Removed fade UI checkbox and `fade_in` config option. Wallpaper is now applied directly without animation.
 
 ## Key Decisions
 
 | Decision | Choice | Reason |
 |---|---|---|
-| GUI framework | `ttkbootstrap` | Native ttk = fast rendering, modern dark themes, lightweight, compatible with existing tk.Canvas code |
-| Installer | Inno Setup | Industry standard for Windows installers, free, scriptable |
-| Fade fix | Alternating filenames + longer delay | Windows caches wallpaper by path; different paths force re-read |
-| Start with system | Registry `Run` key | Standard Windows autostart mechanism, no admin rights needed |
+| GUI framework | `ttkbootstrap` | Native ttk = fast rendering, modern dark themes, lightweight |
+| Installer | Inno Setup | Industry standard for Windows, free, scriptable |
+| Start with system | Registry `Run` key | Standard Windows autostart, no admin rights needed |
+| Fade effect | Removed | Windows `SystemParametersInfoW` can't animate smoothly; removed to keep code clean |
+| Random persistence | `state.json` history | Tracks shown images per folder, resets when all shown |

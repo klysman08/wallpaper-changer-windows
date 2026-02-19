@@ -61,6 +61,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    icon=str(HERE / "assets" / "icon" / "WallpaperChanger.ico"),
     console=False,  # sem janela de terminal
     disable_windowed_traceback=False,
     argv_emulation=False,

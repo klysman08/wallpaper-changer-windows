@@ -28,3 +28,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wallpaper_changer"]
+
+[tool.ruff.lint]
+preview = true
+select = ['I', 'E', 'W', 'PL', 'PT']

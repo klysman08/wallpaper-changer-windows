@@ -55,7 +55,6 @@ class WallpaperChangerApp(ttk.Window):
         self._fit_var = tk.StringVar(value=self._cfg["display"]["fit_mode"])
         self._sel_var = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
-        self._fade_in_var = tk.BooleanVar(value=bool(self._cfg["general"].get("fade_in", False)))
         self._collage_count_var = tk.IntVar(
             value=self._cfg["general"].get("collage_count", 4)
         )
@@ -66,6 +65,7 @@ class WallpaperChangerApp(ttk.Window):
 
         self._fit_btns: dict[str, ttk.Button] = {}
         self._collage_btns: dict[int, ttk.Button] = {}
+        self._draw_after_id: str | None = None  # debounce for monitor redraw
 
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
@@ -91,17 +91,23 @@ class WallpaperChangerApp(ttk.Window):
             "<Configure>",
             lambda _: self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all")),
         )
-        self._scroll_canvas.create_window((0, 0), window=self._scroll_frame, anchor="nw")
+        self._scroll_win = self._scroll_canvas.create_window(
+            (0, 0), window=self._scroll_frame, anchor="nw",
+        )
         self._scroll_canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Keep inner frame width in sync with the canvas
+        self._scroll_canvas.bind(
+            "<Configure>",
+            self._on_canvas_configure,
+        )
 
         self._scroll_canvas.pack(side=LEFT, fill=BOTH, expand=True)
         scrollbar.pack(side=RIGHT, fill=Y)
 
-        # Mouse wheel scroll
-        self._scroll_canvas.bind_all(
-            "<MouseWheel>",
-            lambda e: self._scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"),
-        )
+        # Mouse wheel — only when hovering over the scroll canvas, not the treeview
+        self._scroll_canvas.bind("<Enter>", lambda _: self._bind_mousewheel(True))
+        self._scroll_canvas.bind("<Leave>", lambda _: self._bind_mousewheel(False))
 
         main = self._scroll_frame
         main.columnconfigure(0, weight=1)
@@ -115,6 +121,20 @@ class WallpaperChangerApp(ttk.Window):
         self._build_folder_section(main)
         self._build_action_bar(main)
         self._build_status_bar()
+
+    # ── Scroll helpers ────────────────────────────────────────────────────────
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        """Stretch the inner frame to fill the canvas width."""
+        self._scroll_canvas.itemconfigure(self._scroll_win, width=event.width)
+
+    def _bind_mousewheel(self, bind: bool) -> None:
+        if bind:
+            self._scroll_canvas.bind_all(
+                "<MouseWheel>",
+                lambda e: self._scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"),
+            )
+        else:
+            self._scroll_canvas.unbind_all("<MouseWheel>")
 
     # ── Header ────────────────────────────────────────────────────────────────
     def _build_header(self, parent: ttk.Frame) -> None:
@@ -161,7 +181,7 @@ class WallpaperChangerApp(ttk.Window):
             frame, height=130, bg=_BG_CANVAS, highlightthickness=0, bd=0,
         )
         self._mon_canvas.grid(row=1, column=0, sticky=EW, pady=(6, 0))
-        self._mon_canvas.bind("<Configure>", lambda _: self._draw_monitors())
+        self._mon_canvas.bind("<Configure>", lambda _: self._schedule_draw_monitors())
 
     # ── Collage Settings ──────────────────────────────────────────────────────
     def _build_collage_section(self, parent: ttk.Frame) -> None:
@@ -244,20 +264,13 @@ class WallpaperChangerApp(ttk.Window):
         ).pack(side=LEFT)
         ttk.Label(row1, text=" segundos").pack(side=LEFT)
 
-        # Fade option
-        ttk.Checkbutton(
-            frame, text="Efeito Fade ao trocar wallpaper",
-            variable=self._fade_in_var,
-            style="Roundtoggle.Toolbutton",
-        ).grid(row=1, column=0, sticky=W, pady=(8, 0))
-
         # Startup option
         ttk.Checkbutton(
             frame, text="Iniciar com o Windows",
             variable=self._startup_var,
             command=self._on_startup_toggle,
             style="Roundtoggle.Toolbutton",
-        ).grid(row=2, column=0, sticky=W, pady=(8, 0))
+        ).grid(row=1, column=0, sticky=W, pady=(8, 0))
 
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
@@ -384,9 +397,8 @@ class WallpaperChangerApp(ttk.Window):
             self._update_folder_info()
 
     def _update_folder_info(self) -> None:
-        from .image_utils import list_images_sorted_by_date
-
-        # Clear treeview
+        """Kick off a background scan of the wallpaper folder."""
+        # Clear treeview immediately for responsiveness
         for item in self._img_tree.get_children():
             self._img_tree.delete(item)
 
@@ -395,7 +407,21 @@ class WallpaperChangerApp(ttk.Window):
             self._folder_info.configure(text="Pasta nao encontrada.", foreground="#e74c3c")
             return
 
-        images = list_images_sorted_by_date(folder)
+        self._folder_info.configure(text="Escaneando...", foreground="gray")
+
+        def _scan() -> None:
+            from .image_utils import list_images_sorted_by_date
+            images = list_images_sorted_by_date(folder)
+            # Schedule UI update back on the main thread
+            self.after(0, lambda: self._populate_folder_tree(images))
+
+        threading.Thread(target=_scan, daemon=True).start()
+
+    def _populate_folder_tree(self, images: list[Path]) -> None:
+        """Populate the folder treeview with scan results (runs on main thread)."""
+        for item in self._img_tree.get_children():
+            self._img_tree.delete(item)
+
         count = len(images)
         plural = "s" if count != 1 else ""
         self._folder_info.configure(
@@ -409,6 +435,12 @@ class WallpaperChangerApp(ttk.Window):
             self._img_tree.insert("", END, values=(f"... e mais {count - 100} imagens",))
 
     # ── Monitor Preview ───────────────────────────────────────────────────────
+    def _schedule_draw_monitors(self) -> None:
+        """Debounce: delay the monitor redraw so rapid Configure events coalesce."""
+        if self._draw_after_id is not None:
+            self.after_cancel(self._draw_after_id)
+        self._draw_after_id = self.after(50, self._draw_monitors)
+
     def _refresh_monitors(self) -> None:
         try:
             self._monitors = get_monitors()
@@ -494,7 +526,6 @@ class WallpaperChangerApp(ttk.Window):
                 "interval": interval,
                 "collage_count": int(self._collage_count_var.get()),
                 "collage_same_for_all": bool(self._collage_same_var.get()),
-                "fade_in": bool(self._fade_in_var.get()),
             },
             "paths": {
                 "wallpapers_folder": self._folder_var.get(),
