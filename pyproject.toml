@@ -1,6 +1,6 @@
 [project]
 name = "wallpaper-changer"
-version = "0.1.0"
+version = "2.5.0"
 description = "Wallpaper changer for Windows 11 with split-screen and random modes"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,6 +11,7 @@ dependencies = [
     "click>=8.1.7",
     "screeninfo>=0.8.1",
     "ttkbootstrap>=1.20.1",
+    "keyboard>=0.13.5",
 ]
 
 [dependency-groups]

@@ -37,7 +37,7 @@ def apply_cmd(selection: str | None, collage_count: int | None, config: str | No
     count = cfg["general"].get("collage_count", 4)
     click.echo(f"[INFO] Collage {count} imgs | Selecao: {active_sel} | Monitores: {len(monitors)}")
 
-    out = apply_wallpaper(cfg, monitors, out_dir)
+    out, _imgs = apply_wallpaper(cfg, monitors, out_dir)
     click.echo(f"[OK] Wallpaper aplicado -> {out}")
 
 

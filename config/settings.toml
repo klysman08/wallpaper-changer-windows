@@ -8,6 +8,13 @@ collage_same_for_all = false
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
 output_folder     = "assets/output"
+default_wallpaper = ""
 
 [display]
 fit_mode = "fill"
+
+[hotkeys]
+next_wallpaper    = "ctrl+alt+right"
+prev_wallpaper    = "ctrl+alt+left"
+stop_watch        = "ctrl+alt+s"
+default_wallpaper = "ctrl+alt+d"

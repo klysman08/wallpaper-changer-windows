@@ -223,7 +223,8 @@ def _apply_collage(
     cfg: dict,
     monitors: list[Monitor],
     output_dir: Path,
-) -> Path:
+    preset_images: list[str] | None = None,
+) -> tuple[Path, list[str]]:
     """
     Collage: cada monitor e preenchido com N imagens em grade automatica.
     N = cfg['general']['collage_count'] (padrao 4, range 1-8).
@@ -237,7 +238,9 @@ def _apply_collage(
     same_for_all = bool(cfg["general"].get("collage_same_for_all", False))
 
     # Quantidade de imagens a selecionar
-    if same_for_all:
+    if preset_images:
+        imgs = [Path(p) for p in preset_images]
+    elif same_for_all:
         imgs = pick_images(str(folder), count, selection, sf)
     else:
         imgs = pick_images(str(folder), count * len(monitors), selection, sf)
@@ -261,13 +264,45 @@ def _apply_collage(
     out = output_dir / "wallpaper_collage.bmp"
     canvas.save(str(out), "BMP")
     set_wallpaper_win(out)
+    return out, [str(p) for p in imgs]
+
+
+# ── Wallpaper padrao (imagem unica) ──────────────────────────────────────────
+
+def apply_single_wallpaper(
+    image_path: str | Path,
+    monitors: list[Monitor],
+    output_dir: Path,
+    fit_mode: str = "fill",
+) -> Path:
+    """Apply a single image as wallpaper across all monitors."""
+    img = Image.open(str(image_path)).convert("RGB")
+    min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
+    canvas = build_canvas(total_w, total_h)
+    for mon in monitors:
+        fitted = fit_image(img, mon.width, mon.height, fit_mode)
+        paste_x = mon.x - min_x
+        paste_y = mon.y - min_y
+        canvas.paste(fitted, (paste_x, paste_y))
+    out = output_dir / "wallpaper_default.bmp"
+    canvas.save(str(out), "BMP")
+    set_wallpaper_win(out)
     return out
 
 
 # ── Entrada principal ─────────────────────────────────────────────────────────
 
-def apply_wallpaper(cfg: dict, monitors: list[Monitor], output_dir: Path) -> Path:
-    """Aplica o wallpaper no modo collage."""
+def apply_wallpaper(
+    cfg: dict,
+    monitors: list[Monitor],
+    output_dir: Path,
+    preset_images: list[str] | None = None,
+) -> tuple[Path, list[str]]:
+    """Aplica o wallpaper no modo collage.
+
+    Returns:
+        (output_path, list_of_image_paths_used)
+    """
     if not monitors:
         raise ValueError("Nenhum monitor detectado.")
-    return _apply_collage(cfg, monitors, output_dir)
+    return _apply_collage(cfg, monitors, output_dir, preset_images)

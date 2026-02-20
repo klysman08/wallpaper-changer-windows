@@ -1,11 +1,12 @@
 """Interface grafica (GUI) do WallpaperChanger - ttkbootstrap."""
 from __future__ import annotations
 
+import ctypes
 import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import pystray
 import schedule
@@ -14,9 +15,10 @@ from PIL import Image as PILImage, ImageDraw
 from ttkbootstrap.constants import *
 
 from .config import load_config, save_config, resolve_path
+from .hotkeys import HotkeyManager, read_hotkey, is_available as hotkeys_available
 from .monitor import Monitor, get_monitors
 from .startup import is_startup_enabled, set_startup_enabled
-from .wallpaper import apply_wallpaper
+from .wallpaper import apply_wallpaper, apply_single_wallpaper
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 _MON_COLORS = ["#3a7bd5", "#e05252", "#3dba5a", "#d4a027", "#9b59b6"]
@@ -33,6 +35,22 @@ _FIT_INFO: dict[str, tuple[str, str]] = {
 }
 
 _SEL_LABELS = {"random": "Aleatorio", "sequential": "Sequencial"}
+
+
+# ── Single Instance ───────────────────────────────────────────────────────────
+_single_instance_mutex = None
+
+
+def _acquire_single_instance() -> bool:
+    """Try to acquire a system-wide named mutex.
+
+    Returns True if this is the only running instance.
+    """
+    global _single_instance_mutex
+    _single_instance_mutex = ctypes.windll.kernel32.CreateMutexW(
+        None, False, "WallpaperChangerSingleInstance",
+    )
+    return ctypes.windll.kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
 
 
 class WallpaperChangerApp(ttk.Window):
@@ -67,11 +85,29 @@ class WallpaperChangerApp(ttk.Window):
         self._collage_btns: dict[int, ttk.Button] = {}
         self._draw_after_id: str | None = None  # debounce for monitor redraw
 
+        # ── Hotkey variables ──────────────────────────────────────────────────
+        hk = self._cfg.get("hotkeys", {})
+        self._hk_next_var = tk.StringVar(value=hk.get("next_wallpaper", "ctrl+alt+right"))
+        self._hk_prev_var = tk.StringVar(value=hk.get("prev_wallpaper", "ctrl+alt+left"))
+        self._hk_stop_var = tk.StringVar(value=hk.get("stop_watch", "ctrl+alt+s"))
+        self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
+        self._default_wp_var = tk.StringVar(
+            value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
+        )
+
+        # ── Wallpaper history (in-session) ────────────────────────────────────
+        self._wp_history: list[list[str]] = []
+        self._wp_hist_idx: int = -1
+
+        # ── Hotkey manager ────────────────────────────────────────────────────
+        self._hk_manager = HotkeyManager()
+
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
         self._setup_tray()
         self._refresh_monitors()
         self.after(200, self._draw_monitors)
+        self._register_hotkeys()
 
     # ══════════════════════════════════════════════════════════════════════════
     #   UI Construction
@@ -118,6 +154,8 @@ class WallpaperChangerApp(ttk.Window):
         self._build_selection_section(main)
         self._build_fit_section(main)
         self._build_rotation_section(main)
+        self._build_hotkeys_section(main)
+        self._build_default_wp_section(main)
         self._build_folder_section(main)
         self._build_action_bar(main)
         self._build_status_bar()
@@ -272,10 +310,64 @@ class WallpaperChangerApp(ttk.Window):
             style="Roundtoggle.Toolbutton",
         ).grid(row=1, column=0, sticky=W, pady=(8, 0))
 
+    # ── Hotkeys Section ───────────────────────────────────────────────────────
+    def _build_hotkeys_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text="Atalhos Globais", padding=10)
+        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
+        frame.columnconfigure(1, weight=1)
+
+        labels = [
+            ("Proximo wallpaper:", self._hk_next_var),
+            ("Wallpaper anterior:", self._hk_prev_var),
+            ("Parar/Iniciar Watch:", self._hk_stop_var),
+            ("Wallpaper padrao:", self._hk_default_var),
+        ]
+
+        self._hk_record_btns: list[ttk.Button] = []
+        for i, (text, var) in enumerate(labels):
+            ttk.Label(frame, text=text).grid(
+                row=i, column=0, sticky=W, padx=(0, 8), pady=2,
+            )
+            entry = ttk.Entry(frame, textvariable=var, width=24)
+            entry.grid(row=i, column=1, sticky=EW, padx=(0, 4), pady=2)
+            btn = ttk.Button(
+                frame, text="Gravar", width=8, style="Outline.TButton",
+                command=lambda v=var, b_idx=i: self._record_hotkey(v, b_idx),
+            )
+            btn.grid(row=i, column=2, pady=2)
+            self._hk_record_btns.append(btn)
+
+        if not hotkeys_available():
+            ttk.Label(
+                frame,
+                text="\u26a0 Biblioteca 'keyboard' nao instalada. Atalhos desativados.",
+                font=("Segoe UI", 9), foreground="#e74c3c",
+            ).grid(row=len(labels), column=0, columnspan=3, sticky=W, pady=(6, 0))
+
+    # ── Default Wallpaper Section ─────────────────────────────────────────────
+    def _build_default_wp_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text="Wallpaper Padrao", padding=10)
+        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            frame,
+            text="Imagem aplicada pelo atalho 'Wallpaper padrao'.",
+            font=("Segoe UI", 9), foreground="gray",
+        ).grid(row=0, column=0, columnspan=2, sticky=W, pady=(0, 6))
+
+        entry = ttk.Entry(frame, textvariable=self._default_wp_var)
+        entry.grid(row=1, column=0, sticky=EW, padx=(0, 6))
+
+        ttk.Button(
+            frame, text="...", width=4, style="Outline.TButton",
+            command=self._browse_default_wp,
+        ).grid(row=1, column=1)
+
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text="Pasta de Wallpapers", padding=10)
-        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -319,7 +411,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=7, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=9, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -530,9 +622,16 @@ class WallpaperChangerApp(ttk.Window):
             "paths": {
                 "wallpapers_folder": self._folder_var.get(),
                 "output_folder": self._cfg["paths"].get("output_folder", "assets/output"),
+                "default_wallpaper": self._default_wp_var.get(),
             },
             "display": {
                 "fit_mode": self._fit_var.get(),
+            },
+            "hotkeys": {
+                "next_wallpaper": self._hk_next_var.get(),
+                "prev_wallpaper": self._hk_prev_var.get(),
+                "stop_watch": self._hk_stop_var.get(),
+                "default_wallpaper": self._hk_default_var.get(),
             },
         }
 
@@ -549,7 +648,12 @@ class WallpaperChangerApp(ttk.Window):
                 cfg = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                out = apply_wallpaper(cfg, self._monitors, out_dir)
+                out, images_used = apply_wallpaper(cfg, self._monitors, out_dir)
+                # Track history
+                if self._wp_hist_idx < len(self._wp_history) - 1:
+                    self._wp_history = self._wp_history[: self._wp_hist_idx + 1]
+                self._wp_history.append(images_used)
+                self._wp_hist_idx = len(self._wp_history) - 1
                 self.after(0, lambda: self._set_status(
                     f"Wallpaper aplicado: {Path(str(out)).name}",
                 ))
@@ -567,6 +671,7 @@ class WallpaperChangerApp(ttk.Window):
             cfg = self._collect_config()
             save_config(cfg)
             self._cfg = cfg
+            self._register_hotkeys()
             self._set_status("Configuracoes salvas.")
         except Exception as exc:
             self._set_status(f"Erro ao salvar: {exc}", error=True)
@@ -592,6 +697,109 @@ class WallpaperChangerApp(ttk.Window):
 
             self._watch_thr = threading.Thread(target=_loop, daemon=True)
             self._watch_thr.start()
+
+    # ── Hotkey actions ────────────────────────────────────────────────────────
+
+    def _hotkey_next(self) -> None:
+        """Hotkey: apply next wallpaper."""
+        self._apply_now()
+
+    def _hotkey_prev(self) -> None:
+        """Hotkey: go back to the previous wallpaper."""
+        if self._wp_hist_idx <= 0:
+            self._set_status("Nenhum wallpaper anterior no historico.")
+            return
+        self._wp_hist_idx -= 1
+        images = self._wp_history[self._wp_hist_idx]
+
+        def _work() -> None:
+            try:
+                cfg = self._collect_config()
+                out_dir = resolve_path(cfg["paths"]["output_folder"])
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out, _ = apply_wallpaper(cfg, self._monitors, out_dir, preset_images=images)
+                self.after(0, lambda: self._set_status(
+                    f"Wallpaper anterior aplicado: {Path(str(out)).name}",
+                ))
+            except Exception as exc:
+                self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _hotkey_default(self) -> None:
+        """Hotkey: apply the configured default wallpaper."""
+        path = self._default_wp_var.get()
+        if not path or not Path(path).exists():
+            self._set_status(
+                "Wallpaper padrao nao configurado ou arquivo nao encontrado.",
+                error=True,
+            )
+            return
+        if not self._monitors:
+            self._set_status("Nenhum monitor detectado.", error=True)
+            return
+
+        def _work() -> None:
+            try:
+                cfg = self._collect_config()
+                out_dir = resolve_path(cfg["paths"]["output_folder"])
+                out_dir.mkdir(parents=True, exist_ok=True)
+                fit = cfg["display"]["fit_mode"]
+                out = apply_single_wallpaper(path, self._monitors, out_dir, fit)
+                self.after(0, lambda: self._set_status(
+                    f"Wallpaper padrao aplicado: {Path(str(out)).name}",
+                ))
+            except Exception as exc:
+                self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    # ── Hotkey helpers ────────────────────────────────────────────────────────
+
+    def _register_hotkeys(self) -> None:
+        """Register (or re-register) all global hotkeys."""
+        self._hk_manager.update({
+            self._hk_next_var.get(): lambda: self.after(0, self._hotkey_next),
+            self._hk_prev_var.get(): lambda: self.after(0, self._hotkey_prev),
+            self._hk_stop_var.get(): lambda: self.after(0, self._toggle_watch),
+            self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
+        })
+
+    def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
+        """Start recording a hotkey combo in a background thread."""
+        if not hotkeys_available():
+            self._set_status("Biblioteca 'keyboard' nao disponivel.", error=True)
+            return
+        btn = self._hk_record_btns[btn_idx]
+        btn.configure(text="...", state=DISABLED)
+        old_val = var.get()
+        var.set("Pressione...")
+
+        def _do_record() -> None:
+            try:
+                combo = read_hotkey()
+            except Exception:
+                combo = old_val
+            self.after(0, lambda: self._finish_record(var, btn, combo))
+
+        threading.Thread(target=_do_record, daemon=True).start()
+
+    def _finish_record(self, var: tk.StringVar, btn: ttk.Button, combo: str) -> None:
+        var.set(combo)
+        btn.configure(text="Gravar", state=NORMAL)
+        self._register_hotkeys()
+
+    def _browse_default_wp(self) -> None:
+        """Open a file dialog to select the default wallpaper image."""
+        current = self._default_wp_var.get()
+        initial = str(Path(current).parent) if current and Path(current).exists() else str(Path.home())
+        chosen = filedialog.askopenfilename(
+            title="Selecione o wallpaper padrao",
+            initialdir=initial,
+            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.bmp *.webp"), ("Todos", "*.*")],
+        )
+        if chosen:
+            self._default_wp_var.set(chosen)
 
     def _set_status(self, msg: str, error: bool = False) -> None:
         color = "#e74c3c" if error else "gray"
@@ -646,6 +854,7 @@ class WallpaperChangerApp(ttk.Window):
     def _quit_app(self) -> None:
         self._watching = False
         schedule.clear()
+        self._hk_manager.unregister_all()
         if self._tray_icon is not None:
             self._tray_icon.stop()
             self._tray_icon = None
@@ -656,6 +865,15 @@ class WallpaperChangerApp(ttk.Window):
 
 def run() -> None:
     """Inicia a interface grafica."""
+    if not _acquire_single_instance():
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showwarning(
+            "WallpaperChanger",
+            "O aplicativo ja esta em execucao.",
+        )
+        root.destroy()
+        return
     app = WallpaperChangerApp()
     app.mainloop()
 
