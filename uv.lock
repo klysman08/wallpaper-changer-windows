@@ -3111,7 +3111,7 @@ wheels = [
 
 [[package]]
 name = "wallpaper-changer"
-version = "0.1.0"
+version = "2.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

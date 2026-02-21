@@ -16,8 +16,9 @@ from ttkbootstrap.constants import *
 
 from .config import load_config, save_config, resolve_path
 from .hotkeys import HotkeyManager, read_hotkey, is_available as hotkeys_available
+from .i18n import t, set_language, get_language, SUPPORTED_LANGUAGES
 from .monitor import Monitor, get_monitors
-from .startup import is_startup_enabled, set_startup_enabled
+from .startup import is_startup_enabled, is_startup_launch, set_startup_enabled
 from .wallpaper import apply_wallpaper, apply_single_wallpaper
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
@@ -25,16 +26,20 @@ _MON_COLORS = ["#3a7bd5", "#e05252", "#3dba5a", "#d4a027", "#9b59b6"]
 _BG_CANVAS  = "#1a1a2e"
 _ACCENT     = "#3a7bd5"
 
-# Dados dos modos de ajuste
-_FIT_INFO: dict[str, tuple[str, str]] = {
-    "fill":    ("Preencher",   "Expande para cobrir, corta o excesso"),
-    "fit":     ("Ajustar",     "Encaixa sem cortar, adiciona barras pretas"),
-    "stretch": ("Ampliar",     "Distorce para preencher exatamente"),
-    "center":  ("Centralizar", "Sem redimensionar, centraliza na tela"),
-    "span":    ("Estender",    "Imagem distribuida por todo o espaco"),
-}
+# Fit mode keys — labels are resolved via i18n at build time
+_FIT_KEYS = ["fill", "fit", "stretch", "center", "span"]
 
-_SEL_LABELS = {"random": "Aleatorio", "sequential": "Sequencial"}
+
+def _fit_label(key: str) -> str:
+    return t(f"fit_{key}")
+
+
+def _fit_desc(key: str) -> str:
+    return t(f"fit_{key}_desc")
+
+
+def _sel_labels() -> dict[str, str]:
+    return {"random": t("sel_random"), "sequential": t("sel_sequential")}
 
 
 # ── Single Instance ───────────────────────────────────────────────────────────
@@ -64,10 +69,16 @@ class WallpaperChangerApp(ttk.Window):
         )
 
         self._cfg = load_config()
+
+        # ── Initialise i18n from saved config ─────────────────────────────────
+        saved_lang = self._cfg["general"].get("language", "en")
+        set_language(saved_lang)
+
         self._monitors: list[Monitor] = []
         self._watching = False
         self._watch_thr: threading.Thread | None = None
         self._tray_icon: pystray.Icon | None = None
+        self._startup_launch = is_startup_launch()
 
         # ── Variaveis de estado ───────────────────────────────────────────────
         self._fit_var = tk.StringVar(value=self._cfg["display"]["fit_mode"])
@@ -80,6 +91,7 @@ class WallpaperChangerApp(ttk.Window):
             value=bool(self._cfg["general"].get("collage_same_for_all", False))
         )
         self._startup_var = tk.BooleanVar(value=is_startup_enabled())
+        self._lang_var = tk.StringVar(value=saved_lang)
 
         self._fit_btns: dict[str, ttk.Button] = {}
         self._collage_btns: dict[int, ttk.Button] = {}
@@ -108,6 +120,10 @@ class WallpaperChangerApp(ttk.Window):
         self._refresh_monitors()
         self.after(200, self._draw_monitors)
         self._register_hotkeys()
+
+        # ── Startup-to-tray: minimise + auto-watch ───────────────────────────
+        if self._startup_launch:
+            self.after(300, self._startup_to_tray)
 
     # ══════════════════════════════════════════════════════════════════════════
     #   UI Construction
@@ -157,6 +173,7 @@ class WallpaperChangerApp(ttk.Window):
         self._build_hotkeys_section(main)
         self._build_default_wp_section(main)
         self._build_folder_section(main)
+        self._build_language_section(main)
         self._build_action_bar(main)
         self._build_status_bar()
 
@@ -191,18 +208,18 @@ class WallpaperChangerApp(ttk.Window):
         ).grid(row=0, column=1, sticky=W)
 
         ttk.Label(
-            hdr, text="Painel de controle  |  Windows",
+            hdr, text=t("header_subtitle"),
             font=("Segoe UI", 10), foreground="gray", anchor=W,
         ).grid(row=1, column=1, sticky=W)
 
         self._lbl_mon_count = ttk.Label(
-            hdr, text="detectando...", font=("Segoe UI", 10), foreground="gray",
+            hdr, text=t("detecting"), font=("Segoe UI", 10), foreground="gray",
         )
         self._lbl_mon_count.grid(row=0, column=2, rowspan=2, padx=(12, 0))
 
     # ── Monitor Preview ───────────────────────────────────────────────────────
     def _build_monitor_panel(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Monitores", padding=8)
+        frame = ttk.Labelframe(parent, text=t("monitors"), padding=8)
         frame.grid(row=1, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
@@ -211,7 +228,7 @@ class WallpaperChangerApp(ttk.Window):
         bar.columnconfigure(0, weight=1)
 
         ttk.Button(
-            bar, text="Detectar", style="Outline.TButton",
+            bar, text=t("detect"), style="Outline.TButton",
             command=self._refresh_monitors, width=12,
         ).grid(row=0, column=1, padx=4)
 
@@ -251,14 +268,14 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Image Selection ───────────────────────────────────────────────────────
     def _build_selection_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Selecao de Imagens", padding=10)
+        frame = ttk.Labelframe(parent, text=t("selection_title"), padding=10)
         frame.grid(row=3, column=0, sticky=EW, padx=12, pady=4)
 
         btn_row = ttk.Frame(frame)
         btn_row.grid(row=0, column=0, sticky=W)
 
         self._sel_btns: dict[str, ttk.Radiobutton] = {}
-        for key, label in _SEL_LABELS.items():
+        for key, label in _sel_labels().items():
             rb = ttk.Radiobutton(
                 btn_row, text=label, variable=self._sel_var, value=key,
                 style="Toolbutton",
@@ -268,13 +285,13 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Fit Mode ──────────────────────────────────────────────────────────────
     def _build_fit_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Ajuste na Tela", padding=10)
+        frame = ttk.Labelframe(parent, text=t("fit_title"), padding=10)
         frame.grid(row=4, column=0, sticky=EW, padx=12, pady=4)
-        frame.columnconfigure(tuple(range(len(_FIT_INFO))), weight=1)
+        frame.columnconfigure(tuple(range(len(_FIT_KEYS))), weight=1)
 
-        for ci, (fkey, (flabel, _)) in enumerate(_FIT_INFO.items()):
+        for ci, fkey in enumerate(_FIT_KEYS):
             btn = ttk.Button(
-                frame, text=flabel, style="Outline.TButton",
+                frame, text=_fit_label(fkey), style="Outline.TButton",
                 command=lambda k=fkey: self._select_fit(k),
             )
             btn.grid(row=0, column=ci, padx=2, pady=2, sticky=EW)
@@ -283,28 +300,28 @@ class WallpaperChangerApp(ttk.Window):
         self._fit_desc = ttk.Label(
             frame, text="", font=("Segoe UI", 9), foreground="gray",
         )
-        self._fit_desc.grid(row=1, column=0, columnspan=len(_FIT_INFO), sticky=W, pady=(6, 0))
+        self._fit_desc.grid(row=1, column=0, columnspan=len(_FIT_KEYS), sticky=W, pady=(6, 0))
 
         self._select_fit(self._fit_var.get())
 
     # ── Rotation / Timer ──────────────────────────────────────────────────────
     def _build_rotation_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Rotacao Automatica", padding=10)
+        frame = ttk.Labelframe(parent, text=t("rotation_title"), padding=10)
         frame.grid(row=5, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         row1 = ttk.Frame(frame)
         row1.grid(row=0, column=0, sticky=W)
 
-        ttk.Label(row1, text="Intervalo:").pack(side=LEFT, padx=(0, 6))
+        ttk.Label(row1, text=t("interval_label")).pack(side=LEFT, padx=(0, 6))
         ttk.Entry(
             row1, textvariable=self._interval_var, width=8, justify=CENTER,
         ).pack(side=LEFT)
-        ttk.Label(row1, text=" segundos").pack(side=LEFT)
+        ttk.Label(row1, text=" " + t("seconds")).pack(side=LEFT)
 
         # Startup option
         ttk.Checkbutton(
-            frame, text="Iniciar com o Windows",
+            frame, text=t("start_with_windows"),
             variable=self._startup_var,
             command=self._on_startup_toggle,
             style="Roundtoggle.Toolbutton",
@@ -312,15 +329,15 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Hotkeys Section ───────────────────────────────────────────────────────
     def _build_hotkeys_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Atalhos Globais", padding=10)
+        frame = ttk.Labelframe(parent, text=t("hotkeys_title"), padding=10)
         frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         labels = [
-            ("Proximo wallpaper:", self._hk_next_var),
-            ("Wallpaper anterior:", self._hk_prev_var),
-            ("Parar/Iniciar Watch:", self._hk_stop_var),
-            ("Wallpaper padrao:", self._hk_default_var),
+            (t("hk_next"), self._hk_next_var),
+            (t("hk_prev"), self._hk_prev_var),
+            (t("hk_stop"), self._hk_stop_var),
+            (t("hk_default"), self._hk_default_var),
         ]
 
         self._hk_record_btns: list[ttk.Button] = []
@@ -331,7 +348,7 @@ class WallpaperChangerApp(ttk.Window):
             entry = ttk.Entry(frame, textvariable=var, width=24)
             entry.grid(row=i, column=1, sticky=EW, padx=(0, 4), pady=2)
             btn = ttk.Button(
-                frame, text="Gravar", width=8, style="Outline.TButton",
+                frame, text=t("hk_record"), width=8, style="Outline.TButton",
                 command=lambda v=var, b_idx=i: self._record_hotkey(v, b_idx),
             )
             btn.grid(row=i, column=2, pady=2)
@@ -340,19 +357,19 @@ class WallpaperChangerApp(ttk.Window):
         if not hotkeys_available():
             ttk.Label(
                 frame,
-                text="\u26a0 Biblioteca 'keyboard' nao instalada. Atalhos desativados.",
+                text=t("hk_disabled_warning"),
                 font=("Segoe UI", 9), foreground="#e74c3c",
             ).grid(row=len(labels), column=0, columnspan=3, sticky=W, pady=(6, 0))
 
     # ── Default Wallpaper Section ─────────────────────────────────────────────
     def _build_default_wp_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Wallpaper Padrao", padding=10)
+        frame = ttk.Labelframe(parent, text=t("default_wp_title"), padding=10)
         frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
             frame,
-            text="Imagem aplicada pelo atalho 'Wallpaper padrao'.",
+            text=t("default_wp_desc"),
             font=("Segoe UI", 9), foreground="gray",
         ).grid(row=0, column=0, columnspan=2, sticky=W, pady=(0, 6))
 
@@ -366,13 +383,13 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Pasta de Wallpapers", padding=10)
+        frame = ttk.Labelframe(parent, text=t("folder_title"), padding=10)
         frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
             frame,
-            text="Formatos suportados: jpg  jpeg  png  bmp  webp",
+            text=t("folder_formats"),
             font=("Segoe UI", 9), foreground="gray",
         ).grid(row=0, column=0, columnspan=2, sticky=W, pady=(0, 6))
 
@@ -398,7 +415,7 @@ class WallpaperChangerApp(ttk.Window):
             frame, columns=("name",), show="headings", height=5,
             selectmode="none",
         )
-        self._img_tree.heading("name", text="Imagens encontradas", anchor=W)
+        self._img_tree.heading("name", text=t("images_found_header"), anchor=W)
         self._img_tree.column("name", anchor=W)
         self._img_tree.grid(row=3, column=0, columnspan=2, sticky=EW, pady=(6, 0))
 
@@ -408,31 +425,68 @@ class WallpaperChangerApp(ttk.Window):
 
         self._update_folder_info()
 
+    # ── Language Section ──────────────────────────────────────────────────────
+    def _build_language_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text=t("language_title"), padding=10)
+        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
+        frame.columnconfigure(1, weight=1)
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=0, column=0, columnspan=2, sticky=W)
+
+        self._lang_btns: dict[str, ttk.Radiobutton] = {}
+        for code, label in SUPPORTED_LANGUAGES.items():
+            rb = ttk.Radiobutton(
+                btn_row, text=label, variable=self._lang_var, value=code,
+                style="Toolbutton",
+                command=self._on_language_change,
+            )
+            rb.pack(side=LEFT, padx=(0, 8))
+            self._lang_btns[code] = rb
+
+        self._lang_note = ttk.Label(
+            frame, text="", font=("Segoe UI", 9), foreground="gray",
+        )
+        self._lang_note.grid(row=1, column=0, columnspan=2, sticky=W, pady=(6, 0))
+
+    def _on_language_change(self) -> None:
+        """Save the new language preference and notify user about restart."""
+        new_lang = self._lang_var.get()
+        set_language(new_lang)
+        # Persist immediately
+        try:
+            cfg = self._collect_config()
+            save_config(cfg)
+            self._cfg = cfg
+        except Exception:
+            pass
+        self._lang_note.configure(text=t("language_restart_note"))
+
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=9, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=10, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
-            bar, text="Aplicar Agora", style="success.TButton",
+            bar, text=t("apply_now"), style="success.TButton",
             command=self._apply_now,
         )
         self._apply_btn.grid(row=0, column=0, padx=4, sticky=EW)
 
         ttk.Button(
-            bar, text="Salvar Config", style="secondary.TButton",
+            bar, text=t("save_config"), style="secondary.TButton",
             command=self._save_config,
         ).grid(row=0, column=1, padx=4, sticky=EW)
 
         self._watch_btn = ttk.Button(
-            bar, text="Iniciar Watch", style="info.TButton",
+            bar, text=t("start_watch"), style="info.TButton",
             command=self._toggle_watch,
         )
         self._watch_btn.grid(row=0, column=2, padx=4, sticky=EW)
 
         ttk.Button(
-            bar, text="Bandeja", style="dark.TButton",
+            bar, text=t("tray_btn"), style="dark.TButton",
             command=self._minimize_to_tray, width=10,
         ).grid(row=0, column=3, padx=(4, 0))
 
@@ -442,7 +496,7 @@ class WallpaperChangerApp(ttk.Window):
         bar.pack(side=BOTTOM, fill=X)
 
         self._status_lbl = ttk.Label(
-            bar, text="Pronto.", font=("Segoe UI", 9), foreground="gray",
+            bar, text=t("ready"), font=("Segoe UI", 9), foreground="gray",
         )
         self._status_lbl.pack(side=LEFT)
 
@@ -465,16 +519,18 @@ class WallpaperChangerApp(ttk.Window):
                 btn.configure(style="primary.TButton")
             else:
                 btn.configure(style="Outline.TButton")
-        desc = _FIT_INFO.get(key, ("", ""))[1]
+        desc = _fit_desc(key)
         self._fit_desc.configure(text=desc)
 
     def _on_startup_toggle(self) -> None:
         try:
             set_startup_enabled(self._startup_var.get())
-            state = "ativado" if self._startup_var.get() else "desativado"
-            self._set_status(f"Inicio automatico {state}.")
+            if self._startup_var.get():
+                self._set_status(t("startup_enabled"))
+            else:
+                self._set_status(t("startup_disabled"))
         except Exception as exc:
-            self._set_status(f"Erro ao configurar inicio automatico: {exc}", error=True)
+            self._set_status(t("startup_error", msg=exc), error=True)
             self._startup_var.set(not self._startup_var.get())
 
     # ── Folder ────────────────────────────────────────────────────────────────
@@ -482,7 +538,7 @@ class WallpaperChangerApp(ttk.Window):
         current = Path(self._folder_var.get())
         initial = str(current) if current.exists() else str(Path.home())
         chosen = filedialog.askdirectory(
-            title="Selecione a pasta de wallpapers", initialdir=initial,
+            title=t("select_folder"), initialdir=initial,
         )
         if chosen:
             self._folder_var.set(chosen)
@@ -496,10 +552,10 @@ class WallpaperChangerApp(ttk.Window):
 
         folder = Path(self._folder_var.get())
         if not folder.exists():
-            self._folder_info.configure(text="Pasta nao encontrada.", foreground="#e74c3c")
+            self._folder_info.configure(text=t("folder_not_found"), foreground="#e74c3c")
             return
 
-        self._folder_info.configure(text="Escaneando...", foreground="gray")
+        self._folder_info.configure(text=t("folder_scanning"), foreground="gray")
 
         def _scan() -> None:
             from .image_utils import list_images_sorted_by_date
@@ -515,16 +571,15 @@ class WallpaperChangerApp(ttk.Window):
             self._img_tree.delete(item)
 
         count = len(images)
-        plural = "s" if count != 1 else ""
         self._folder_info.configure(
-            text=f"{count} imagem{plural} encontrada{plural}", foreground="gray",
+            text=t("folder_images_found", n=count), foreground="gray",
         )
 
         for i, img_path in enumerate(images[:100]):
             self._img_tree.insert("", END, values=(f"{i+1:03d}  {img_path.name}",))
 
         if count > 100:
-            self._img_tree.insert("", END, values=(f"... e mais {count - 100} imagens",))
+            self._img_tree.insert("", END, values=(t("folder_more_images", n=count - 100),))
 
     # ── Monitor Preview ───────────────────────────────────────────────────────
     def _schedule_draw_monitors(self) -> None:
@@ -538,11 +593,10 @@ class WallpaperChangerApp(ttk.Window):
             self._monitors = get_monitors()
         except Exception as e:
             self._monitors = []
-            self._set_status(f"Erro ao detectar monitores: {e}", error=True)
+            self._set_status(t("error_prefix", msg=e), error=True)
             return
         n = len(self._monitors)
-        plural = "es" if n != 1 else ""
-        self._lbl_mon_count.configure(text=f"{n} monitor{plural}")
+        self._lbl_mon_count.configure(text=t("monitors_count", n=n))
         self._draw_monitors()
 
     def _draw_monitors(self) -> None:
@@ -557,7 +611,7 @@ class WallpaperChangerApp(ttk.Window):
 
         if not self._monitors:
             c.create_text(
-                cw // 2, ch // 2, text="Nenhum monitor detectado",
+                cw // 2, ch // 2, text=t("no_monitor_detected"),
                 fill="#555", font=("Segoe UI", 11),
             )
             return
@@ -618,6 +672,7 @@ class WallpaperChangerApp(ttk.Window):
                 "interval": interval,
                 "collage_count": int(self._collage_count_var.get()),
                 "collage_same_for_all": bool(self._collage_same_var.get()),
+                "language": self._lang_var.get(),
             },
             "paths": {
                 "wallpapers_folder": self._folder_var.get(),
@@ -638,10 +693,10 @@ class WallpaperChangerApp(ttk.Window):
     # ── Actions ───────────────────────────────────────────────────────────────
     def _apply_now(self) -> None:
         if not self._monitors:
-            self._set_status("Nenhum monitor. Clique em Detectar.", error=True)
+            self._set_status(t("no_monitor_action"), error=True)
             return
-        self._apply_btn.configure(state=DISABLED, text="Aplicando...")
-        self._set_status("Aplicando wallpaper...")
+        self._apply_btn.configure(state=DISABLED, text=t("applying"))
+        self._set_status(t("applying"))
 
         def _work() -> None:
             try:
@@ -655,13 +710,13 @@ class WallpaperChangerApp(ttk.Window):
                 self._wp_history.append(images_used)
                 self._wp_hist_idx = len(self._wp_history) - 1
                 self.after(0, lambda: self._set_status(
-                    f"Wallpaper aplicado: {Path(str(out)).name}",
+                    t("wallpaper_applied", name=Path(str(out)).name),
                 ))
             except Exception as exc:
-                self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
+                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
             finally:
                 self.after(0, lambda: self._apply_btn.configure(
-                    state=NORMAL, text="Aplicar Agora",
+                    state=NORMAL, text=t("apply_now"),
                 ))
 
         threading.Thread(target=_work, daemon=True).start()
@@ -672,22 +727,22 @@ class WallpaperChangerApp(ttk.Window):
             save_config(cfg)
             self._cfg = cfg
             self._register_hotkeys()
-            self._set_status("Configuracoes salvas.")
+            self._set_status(t("config_saved"))
         except Exception as exc:
-            self._set_status(f"Erro ao salvar: {exc}", error=True)
+            self._set_status(t("save_error", msg=exc), error=True)
 
     def _toggle_watch(self) -> None:
         if self._watching:
             self._watching = False
             schedule.clear()
-            self._watch_btn.configure(text="Iniciar Watch", style="info.TButton")
-            self._set_status("Watch desativado.")
+            self._watch_btn.configure(text=t("start_watch"), style="info.TButton")
+            self._set_status(t("watch_disabled"))
         else:
             cfg = self._collect_config()
             interval = cfg["general"]["interval"]
             self._watching = True
-            self._watch_btn.configure(text="Parar Watch", style="danger.TButton")
-            self._set_status(f"Watch ativo — trocando a cada {interval}s.")
+            self._watch_btn.configure(text=t("stop_watch"), style="danger.TButton")
+            self._set_status(t("watch_active", n=interval))
             schedule.every(interval).seconds.do(self._apply_now)
 
             def _loop() -> None:
@@ -707,7 +762,7 @@ class WallpaperChangerApp(ttk.Window):
     def _hotkey_prev(self) -> None:
         """Hotkey: go back to the previous wallpaper."""
         if self._wp_hist_idx <= 0:
-            self._set_status("Nenhum wallpaper anterior no historico.")
+            self._set_status(t("no_prev_wallpaper"))
             return
         self._wp_hist_idx -= 1
         images = self._wp_history[self._wp_hist_idx]
@@ -719,10 +774,10 @@ class WallpaperChangerApp(ttk.Window):
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, _ = apply_wallpaper(cfg, self._monitors, out_dir, preset_images=images)
                 self.after(0, lambda: self._set_status(
-                    f"Wallpaper anterior aplicado: {Path(str(out)).name}",
+                    t("prev_applied", name=Path(str(out)).name),
                 ))
             except Exception as exc:
-                self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
+                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -730,13 +785,10 @@ class WallpaperChangerApp(ttk.Window):
         """Hotkey: apply the configured default wallpaper."""
         path = self._default_wp_var.get()
         if not path or not Path(path).exists():
-            self._set_status(
-                "Wallpaper padrao nao configurado ou arquivo nao encontrado.",
-                error=True,
-            )
+            self._set_status(t("default_wp_not_found"), error=True)
             return
         if not self._monitors:
-            self._set_status("Nenhum monitor detectado.", error=True)
+            self._set_status(t("no_monitor_error"), error=True)
             return
 
         def _work() -> None:
@@ -747,10 +799,10 @@ class WallpaperChangerApp(ttk.Window):
                 fit = cfg["display"]["fit_mode"]
                 out = apply_single_wallpaper(path, self._monitors, out_dir, fit)
                 self.after(0, lambda: self._set_status(
-                    f"Wallpaper padrao aplicado: {Path(str(out)).name}",
+                    t("default_wp_applied", name=Path(str(out)).name),
                 ))
             except Exception as exc:
-                self.after(0, lambda: self._set_status(f"Erro: {exc}", error=True))
+                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -768,12 +820,12 @@ class WallpaperChangerApp(ttk.Window):
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
         """Start recording a hotkey combo in a background thread."""
         if not hotkeys_available():
-            self._set_status("Biblioteca 'keyboard' nao disponivel.", error=True)
+            self._set_status(t("hk_lib_unavailable"), error=True)
             return
         btn = self._hk_record_btns[btn_idx]
         btn.configure(text="...", state=DISABLED)
         old_val = var.get()
-        var.set("Pressione...")
+        var.set(t("hk_recording"))
 
         def _do_record() -> None:
             try:
@@ -786,7 +838,7 @@ class WallpaperChangerApp(ttk.Window):
 
     def _finish_record(self, var: tk.StringVar, btn: ttk.Button, combo: str) -> None:
         var.set(combo)
-        btn.configure(text="Gravar", state=NORMAL)
+        btn.configure(text=t("hk_record"), state=NORMAL)
         self._register_hotkeys()
 
     def _browse_default_wp(self) -> None:
@@ -794,9 +846,9 @@ class WallpaperChangerApp(ttk.Window):
         current = self._default_wp_var.get()
         initial = str(Path(current).parent) if current and Path(current).exists() else str(Path.home())
         chosen = filedialog.askopenfilename(
-            title="Selecione o wallpaper padrao",
+            title=t("select_default_wp"),
             initialdir=initial,
-            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.bmp *.webp"), ("Todos", "*.*")],
+            filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.webp"), ("All", "*.*")],
         )
         if chosen:
             self._default_wp_var.set(chosen)
@@ -831,10 +883,10 @@ class WallpaperChangerApp(ttk.Window):
         self.withdraw()
 
         menu = pystray.Menu(
-            pystray.MenuItem("Mostrar", lambda: self.after(0, self._show_from_tray), default=True),
-            pystray.MenuItem("Aplicar Agora", lambda: self.after(0, self._apply_now)),
+            pystray.MenuItem(t("tray_show"), lambda: self.after(0, self._show_from_tray), default=True),
+            pystray.MenuItem(t("tray_apply"), lambda: self.after(0, self._apply_now)),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Sair", lambda: self.after(0, self._quit_app)),
+            pystray.MenuItem(t("tray_quit"), lambda: self.after(0, self._quit_app)),
         )
 
         self._tray_icon = pystray.Icon(
@@ -860,17 +912,34 @@ class WallpaperChangerApp(ttk.Window):
             self._tray_icon = None
         self.destroy()
 
+    # ── Startup-to-tray ──────────────────────────────────────────────────────
+    def _startup_to_tray(self) -> None:
+        """Minimise to tray and auto-start watch when launched via Windows startup."""
+        self._minimize_to_tray()
+        # Auto-start watch if interval > 0
+        cfg = self._collect_config()
+        interval = cfg["general"]["interval"]
+        if interval > 0 and not self._watching:
+            self._toggle_watch()
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def run() -> None:
     """Inicia a interface grafica."""
+    # Load language early so even the "already running" message is translated
+    try:
+        cfg = load_config()
+        set_language(cfg["general"].get("language", "en"))
+    except Exception:
+        pass
+
     if not _acquire_single_instance():
         root = tk.Tk()
         root.withdraw()
         messagebox.showwarning(
             "WallpaperChanger",
-            "O aplicativo ja esta em execucao.",
+            t("already_running"),
         )
         root.destroy()
         return

@@ -4,6 +4,7 @@ selection            = "random"
 interval             = 300
 collage_count        = 4
 collage_same_for_all = false
+language             = "en"
 
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"

@@ -58,7 +58,9 @@ def save_config(cfg: dict, path: Path | None = None) -> None:
         if isinstance(v, bool):
             return "true" if v else "false"
         if isinstance(v, str):
-            return f'"{v}"'
+            # Escape backslashes and double-quotes for valid TOML
+            escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
         return str(v)
 
     for section, values in cfg.items():

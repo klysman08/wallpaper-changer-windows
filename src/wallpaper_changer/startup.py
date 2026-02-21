@@ -7,14 +7,21 @@ from pathlib import Path
 
 _APP_NAME = "WallpaperChanger"
 _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_STARTUP_FLAG = "--startup"
 
 
 def _get_exe_path() -> str:
-    """Retorna o caminho do executavel atual."""
+    """Retorna o caminho do executavel atual (com flag --startup)."""
     if getattr(sys, "frozen", False):
-        return str(Path(sys.executable).resolve())
+        exe = str(Path(sys.executable).resolve())
+        return f'"{exe}" {_STARTUP_FLAG}'
     # Modo desenvolvimento: usa o interpretador Python + modulo
-    return f'"{sys.executable}" -m wallpaper_changer.gui'
+    return f'"{sys.executable}" -m wallpaper_changer.gui {_STARTUP_FLAG}'
+
+
+def is_startup_launch() -> bool:
+    """Return True if the app was launched via Windows startup (--startup flag)."""
+    return _STARTUP_FLAG in sys.argv
 
 
 def is_startup_enabled() -> bool:
