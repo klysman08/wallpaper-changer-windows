@@ -36,7 +36,6 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 | **Random or sequential selection** | Switch between images randomly or in order |
 | **Image fit modes** | Fill, Fit, Stretch, Center, or Span |
 | **Auto rotation** | Change wallpaper at configurable intervals (seconds) |
-| **Fade effect** | Smooth transition with intermediate frames when applying |
 | **Start with Windows** | Launches to system tray with auto-rotation enabled |
 | **System tray** | App lives in the notification area — right-click for quick actions |
 | **Multi-language GUI** | English, Português (Brasil), 日本語 — switchable in settings |
@@ -98,7 +97,6 @@ Each monitor is divided into an automatic grid with **1 to 8 images**.
 - **Image selection** — `Random` or `Sequential`
 - **Screen fit** — `Fill`, `Fit`, `Stretch`, `Center`, `Span`
 - **Auto rotation** — set the interval in seconds and click **Start Watch**
-- **Fade effect** — smooth transition with intermediate frames when changing wallpaper
 
 ### Start with Windows
 
@@ -191,7 +189,7 @@ wallpaper-changer/
     ├── image_utils.py       # Image selection and resizing
     ├── monitor.py           # Monitor detection (Win32)
     ├── startup.py           # Windows startup registration
-    └── wallpaper.py         # Wallpaper assembly, fade, and application
+    └── wallpaper.py         # Wallpaper assembly, and application
 ```
 
 ---
