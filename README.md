@@ -8,7 +8,7 @@
 
 ---
 
-![WallpaperChanger](/image.png)
+![WallpaperChanger](image.png)
 
 
 ## Features
