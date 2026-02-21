@@ -8,6 +8,9 @@
 
 ---
 
+![WallpaperChanger](/image.png)
+
+
 ## Features
 
 | Feature | Description |
