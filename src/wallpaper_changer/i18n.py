@@ -118,6 +118,15 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Language
         "language_title": "Language",
         "language_restart_note": "Language change requires restart.",
+
+        # Transparency
+        "transp_title": "Window Transparency",
+        "transp_refresh": "Refresh",
+        "transp_select": "Select a window",
+        "transp_shortcut_info": "Alt+A: 50%  ·  Alt+Scroll: adjust",
+        "transp_applied": "Opacity {alpha} applied",
+        "transp_saved": "Transparency settings saved.",
+        "transp_restored": "Restored opacity for {n} window(s).",
     },
 
     # ── Brazilian Portuguese ──────────────────────────────────────────────────
@@ -226,6 +235,15 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Language
         "language_title": "Idioma",
         "language_restart_note": "Mudança de idioma requer reinicialização.",
+
+        # Transparency
+        "transp_title": "Transparência de Janela",
+        "transp_refresh": "Atualizar",
+        "transp_select": "Selecione uma janela",
+        "transp_shortcut_info": "Alt+A: 50%  ·  Alt+Scroll: ajustar",
+        "transp_applied": "Opacidade {alpha} aplicada",
+        "transp_saved": "Configurações de transparência salvas.",
+        "transp_restored": "Restaurada opacidade de {n} janela(s).",
     },
 
     # ── Japanese ──────────────────────────────────────────────────────────────
@@ -334,6 +352,15 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Language
         "language_title": "言語",
         "language_restart_note": "言語の変更には再起動が必要です。",
+
+        # Transparency
+        "transp_title": "ウィンドウの透過度",
+        "transp_refresh": "更新",
+        "transp_select": "ウィンドウを選択",
+        "transp_shortcut_info": "Alt+A: 50%  ·  Alt+Scroll: 調整",
+        "transp_applied": "透過度 {alpha} を適用",
+        "transp_saved": "透過度設定を保存しました。",
+        "transp_restored": "{n} 件のウィンドウの透過度を復元しました。",
     },
 }
 

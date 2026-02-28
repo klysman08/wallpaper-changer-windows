@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes as wt
-from typing import List, Tuple
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+log = logging.getLogger(__name__)
 
 # ── Win32 Constants ──────────────────────────────────────────────────────────
 GWL_EXSTYLE = -20
@@ -138,3 +143,56 @@ def list_visible_windows() -> List[Tuple[int, str]]:
     EnumWindows(WNDENUMPROC(_callback), 0)
     results.sort(key=lambda t: t[1].lower())
     return results
+
+
+# ── Persistence ──────────────────────────────────────────────────────────────
+
+def _settings_file() -> Path:
+    """Return the path to the transparency settings JSON file."""
+    from .config import PROJECT_ROOT
+    return PROJECT_ROOT / "config" / "transparency.json"
+
+
+def load_opacity_settings() -> Dict[str, int]:
+    """Load saved ``{window_title: alpha}`` map from disk."""
+    path = _settings_file()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {str(k): int(v) for k, v in data.items()}
+    except Exception as exc:
+        log.warning("Cannot read transparency settings: %s", exc)
+        return {}
+
+
+def save_opacity_settings(settings: Dict[str, int]) -> None:
+    """Persist ``{window_title: alpha}`` map to disk."""
+    path = _settings_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.write_text(
+            json.dumps(settings, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        log.warning("Cannot write transparency settings: %s", exc)
+
+
+def reapply_saved_settings() -> int:
+    """Re-apply saved opacity to every currently-visible window that matches.
+
+    Returns the number of windows whose opacity was restored.
+    """
+    settings = load_opacity_settings()
+    if not settings:
+        return 0
+
+    windows = list_visible_windows()
+    count = 0
+    for hwnd, title in windows:
+        if title in settings:
+            alpha = max(0, min(255, settings[title]))
+            set_window_opacity(hwnd, alpha)
+            count += 1
+    return count

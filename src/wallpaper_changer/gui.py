@@ -20,6 +20,14 @@ from .i18n import t, set_language, get_language, SUPPORTED_LANGUAGES
 from .monitor import Monitor, get_monitors
 from .startup import is_startup_enabled, is_startup_launch, set_startup_enabled
 from .wallpaper import apply_wallpaper, apply_single_wallpaper
+from .transparency import (
+    get_foreground_window,
+    list_visible_windows,
+    load_opacity_settings,
+    reapply_saved_settings,
+    save_opacity_settings,
+    set_window_opacity,
+)
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 _MON_COLORS = ["#3a7bd5", "#e05252", "#3dba5a", "#d4a027", "#9b59b6"]
@@ -114,12 +122,27 @@ class WallpaperChangerApp(ttk.Window):
         # ── Hotkey manager ────────────────────────────────────────────────────
         self._hk_manager = HotkeyManager()
 
+        # ── Transparency state ────────────────────────────────────────────────
+        self._transp_windows: list[tuple[int, str]] = []
+        self._opacity_map: dict[str, int] = load_opacity_settings()
+        self._pynput_mouse_listener = None
+        self._pynput_kb_listener = None
+        self._alt_pressed = False
+
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
         self._setup_tray()
         self._refresh_monitors()
         self.after(200, self._draw_monitors)
         self._register_hotkeys()
+        self._start_transparency_listeners()
+
+        # ── Restore saved transparency on startup ─────────────────────────────
+        restored = reapply_saved_settings()
+        if restored:
+            self.after(500, lambda: self._set_status(
+                t("transp_restored", n=restored),
+            ))
 
         # ── Startup-to-tray: minimise + auto-watch ───────────────────────────
         if self._startup_launch:
@@ -171,6 +194,7 @@ class WallpaperChangerApp(ttk.Window):
         self._build_fit_section(main)
         self._build_rotation_section(main)
         self._build_hotkeys_section(main)
+        self._build_transparency_section(main)
         self._build_default_wp_section(main)
         self._build_folder_section(main)
         self._build_language_section(main)
@@ -362,9 +386,195 @@ class WallpaperChangerApp(ttk.Window):
             ).grid(row=len(labels), column=0, columnspan=3, sticky=W, pady=(6, 0))
 
     # ── Default Wallpaper Section ─────────────────────────────────────────────
+    # ── Transparency Section ────────────────────────────────────────────────
+    def _build_transparency_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text=t("transp_title"), padding=10)
+        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.columnconfigure(0, weight=1)
+
+        # ── Window ComboBox + Refresh ─────────────────────────────────────
+        sel_row = ttk.Frame(frame)
+        sel_row.grid(row=0, column=0, sticky=EW, pady=(0, 6))
+        sel_row.columnconfigure(0, weight=1)
+
+        self._transp_combo_var = tk.StringVar()
+        self._transp_combo = ttk.Combobox(
+            sel_row,
+            textvariable=self._transp_combo_var,
+            state="readonly",
+            font=("Segoe UI", 10),
+        )
+        self._transp_combo.grid(row=0, column=0, sticky=EW, padx=(0, 8))
+        self._transp_combo.bind("<<ComboboxSelected>>", self._on_transp_window_selected)
+
+        ttk.Button(
+            sel_row, text=t("transp_refresh"), style="Outline.TButton",
+            command=self._refresh_transp_list, width=10,
+        ).grid(row=0, column=1)
+
+        # ── Opacity Slider ────────────────────────────────────────────────
+        slider_row = ttk.Frame(frame)
+        slider_row.grid(row=1, column=0, sticky=EW, pady=(0, 6))
+        slider_row.columnconfigure(0, weight=1)
+
+        self._transp_opacity_var = tk.IntVar(value=255)
+        self._transp_slider = ttk.Scale(
+            slider_row,
+            from_=50,
+            to=255,
+            variable=self._transp_opacity_var,
+            orient="horizontal",
+            command=self._on_transp_slider_change,
+            style="info.Horizontal.TScale",
+        )
+        self._transp_slider.grid(row=0, column=0, sticky=EW, padx=(0, 8))
+
+        self._transp_opacity_label = ttk.Label(
+            slider_row, text="255", font=("Segoe UI", 11, "bold"),
+            width=4, anchor="center",
+        )
+        self._transp_opacity_label.grid(row=0, column=1)
+
+        # ── Shortcut hints ────────────────────────────────────────────────
+        ttk.Label(
+            frame, text=t("transp_shortcut_info"),
+            font=("Segoe UI", 9), foreground="gray",
+        ).grid(row=2, column=0, sticky=W)
+
+        # Populate on build
+        self.after(300, self._refresh_transp_list)
+
+    # ── Transparency helpers ──────────────────────────────────────────────────
+
+    def _refresh_transp_list(self) -> None:
+        self._transp_windows = list_visible_windows()
+        titles = [title for _, title in self._transp_windows]
+        self._transp_combo["values"] = titles
+        if titles:
+            self._transp_combo.current(0)
+            self._on_transp_window_selected()
+
+    def _transp_selected_hwnd(self) -> int | None:
+        idx = self._transp_combo.current()
+        if idx < 0 or idx >= len(self._transp_windows):
+            return None
+        return self._transp_windows[idx][0]
+
+    def _transp_selected_title(self) -> str | None:
+        idx = self._transp_combo.current()
+        if idx < 0 or idx >= len(self._transp_windows):
+            return None
+        return self._transp_windows[idx][1]
+
+    def _on_transp_window_selected(self, _event=None) -> None:
+        title = self._transp_selected_title()
+        if title is None:
+            return
+        alpha = self._opacity_map.get(title, 255)
+        self._transp_opacity_var.set(alpha)
+        self._transp_opacity_label.configure(text=str(alpha))
+
+    def _on_transp_slider_change(self, value: str) -> None:
+        alpha = int(float(value))
+        self._transp_opacity_label.configure(text=str(alpha))
+        hwnd = self._transp_selected_hwnd()
+        title = self._transp_selected_title()
+        if hwnd is None or title is None:
+            return
+        self._opacity_map[title] = alpha
+        set_window_opacity(hwnd, alpha)
+
+    def _save_transparency_settings(self) -> None:
+        """Persist the current opacity map to disk."""
+        # Only save entries that are not fully opaque
+        to_save = {t: a for t, a in self._opacity_map.items() if a < 255}
+        save_opacity_settings(to_save)
+
+    # ── Transparency global shortcuts ─────────────────────────────────────────
+
+    def _hotkey_half_opacity(self) -> None:
+        """Alt+A: set currently focused window to 50% opacity."""
+        hwnd = get_foreground_window()
+        if not hwnd:
+            return
+        # Find the title
+        from .transparency import _get_window_title
+        title = _get_window_title(hwnd)
+        if title:
+            self._opacity_map[title] = 128
+        set_window_opacity(hwnd, 128)
+        self.after(0, lambda: self._set_status(t("transp_applied", alpha=128)))
+        self.after(0, self._sync_transp_slider_if_match, hwnd)
+
+    def _start_transparency_listeners(self) -> None:
+        """Start the pynput mouse/keyboard listener for Alt+Scroll."""
+        threading.Thread(
+            target=self._run_pynput_listeners, daemon=True,
+        ).start()
+
+    def _run_pynput_listeners(self) -> None:
+        try:
+            from pynput import mouse, keyboard as pynput_kb
+
+            def on_press(key):
+                try:
+                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
+                        self._alt_pressed = True
+                except Exception:
+                    pass
+
+            def on_release(key):
+                try:
+                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
+                        self._alt_pressed = False
+                except Exception:
+                    pass
+
+            def on_scroll(_x, _y, _dx, dy):
+                if not self._alt_pressed:
+                    return
+                hwnd = get_foreground_window()
+                if not hwnd:
+                    return
+                from .transparency import _get_window_title
+                title = _get_window_title(hwnd)
+                if not title:
+                    return
+                current = self._opacity_map.get(title, 255)
+                new_alpha = max(10, min(255, current + int(dy) * 5))
+                self._opacity_map[title] = new_alpha
+                set_window_opacity(hwnd, new_alpha)
+                self.after(0, lambda a=new_alpha: self._set_status(
+                    t("transp_applied", alpha=a),
+                ))
+                self.after(0, self._sync_transp_slider_if_match, hwnd)
+
+            self._pynput_kb_listener = pynput_kb.Listener(
+                on_press=on_press, on_release=on_release,
+            )
+            self._pynput_mouse_listener = mouse.Listener(on_scroll=on_scroll)
+            self._pynput_kb_listener.start()
+            self._pynput_mouse_listener.start()
+            self._pynput_kb_listener.join()
+            self._pynput_mouse_listener.join()
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    def _sync_transp_slider_if_match(self, hwnd: int) -> None:
+        """If the given hwnd matches the combo selection, update the slider."""
+        selected = self._transp_selected_hwnd()
+        if selected == hwnd:
+            title = self._transp_selected_title()
+            if title:
+                alpha = self._opacity_map.get(title, 255)
+                self._transp_opacity_var.set(alpha)
+                self._transp_opacity_label.configure(text=str(alpha))
+
     def _build_default_wp_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("default_wp_title"), padding=10)
-        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -384,7 +594,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("folder_title"), padding=10)
-        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -428,7 +638,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Language Section ──────────────────────────────────────────────────────
     def _build_language_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("language_title"), padding=10)
-        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         btn_row = ttk.Frame(frame)
@@ -465,7 +675,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=10, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=11, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -727,6 +937,7 @@ class WallpaperChangerApp(ttk.Window):
             save_config(cfg)
             self._cfg = cfg
             self._register_hotkeys()
+            self._save_transparency_settings()
             self._set_status(t("config_saved"))
         except Exception as exc:
             self._set_status(t("save_error", msg=exc), error=True)
@@ -815,6 +1026,7 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_prev_var.get(): lambda: self.after(0, self._hotkey_prev),
             self._hk_stop_var.get(): lambda: self.after(0, self._toggle_watch),
             self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
+            "alt+a": lambda: self.after(0, self._hotkey_half_opacity),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
@@ -907,6 +1119,16 @@ class WallpaperChangerApp(ttk.Window):
         self._watching = False
         schedule.clear()
         self._hk_manager.unregister_all()
+        # Save transparency before exit
+        self._save_transparency_settings()
+        # Stop pynput listeners
+        try:
+            if self._pynput_mouse_listener:
+                self._pynput_mouse_listener.stop()
+            if self._pynput_kb_listener:
+                self._pynput_kb_listener.stop()
+        except Exception:
+            pass
         if self._tray_icon is not None:
             self._tray_icon.stop()
             self._tray_icon = None
