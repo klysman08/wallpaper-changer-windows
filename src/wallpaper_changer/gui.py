@@ -111,6 +111,7 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_prev_var = tk.StringVar(value=hk.get("prev_wallpaper", "ctrl+alt+left"))
         self._hk_stop_var = tk.StringVar(value=hk.get("stop_watch", "ctrl+alt+s"))
         self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
+        self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -362,6 +363,7 @@ class WallpaperChangerApp(ttk.Window):
             (t("hk_prev"), self._hk_prev_var),
             (t("hk_stop"), self._hk_stop_var),
             (t("hk_default"), self._hk_default_var),
+            (t("hk_transp"), self._hk_transp_var),
         ]
 
         self._hk_record_btns: list[ttk.Button] = []
@@ -493,17 +495,20 @@ class WallpaperChangerApp(ttk.Window):
     # ── Transparency global shortcuts ─────────────────────────────────────────
 
     def _hotkey_half_opacity(self) -> None:
-        """Alt+A: set currently focused window to 50% opacity."""
+        """Toggle focused window between 50% opacity and fully opaque."""
         hwnd = get_foreground_window()
         if not hwnd:
             return
-        # Find the title
         from .transparency import _get_window_title
         title = _get_window_title(hwnd)
-        if title:
-            self._opacity_map[title] = 128
-        set_window_opacity(hwnd, 128)
-        self.after(0, lambda: self._set_status(t("transp_applied", alpha=128)))
+        if not title:
+            return
+        current = self._opacity_map.get(title, 255)
+        # Toggle: if already semi-transparent, restore to opaque; otherwise set 50%
+        new_alpha = 255 if current < 255 else 128
+        self._opacity_map[title] = new_alpha
+        set_window_opacity(hwnd, new_alpha)
+        self.after(0, lambda: self._set_status(t("transp_applied", alpha=new_alpha)))
         self.after(0, self._sync_transp_slider_if_match, hwnd)
 
     def _start_transparency_listeners(self) -> None:
@@ -897,6 +902,7 @@ class WallpaperChangerApp(ttk.Window):
                 "prev_wallpaper": self._hk_prev_var.get(),
                 "stop_watch": self._hk_stop_var.get(),
                 "default_wallpaper": self._hk_default_var.get(),
+                "toggle_transparency": self._hk_transp_var.get(),
             },
         }
 
@@ -1026,7 +1032,7 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_prev_var.get(): lambda: self.after(0, self._hotkey_prev),
             self._hk_stop_var.get(): lambda: self.after(0, self._toggle_watch),
             self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
-            "alt+a": lambda: self.after(0, self._hotkey_half_opacity),
+            self._hk_transp_var.get(): lambda: self.after(0, self._hotkey_half_opacity),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
