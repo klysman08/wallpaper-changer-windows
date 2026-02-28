@@ -40,6 +40,7 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 | **System tray** | App lives in the notification area — right-click for quick actions |
 | **Multi-language GUI** | English, Português (Brasil), 日本語 — switchable in settings |
 | **Global hotkeys** | Next / Previous / Stop / Default wallpaper via keyboard shortcuts |
+| **Window transparency** | Control any window's opacity via GUI slider or global shortcuts (toggle + scroll) |
 | **Wallpaper history** | Navigate back to previously applied wallpapers |
 | **Default wallpaper** | Assign a fallback image applied via hotkey |
 | **Windows Installer** | Setup.exe via Inno Setup — includes language selection during install |
@@ -119,8 +120,19 @@ Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
 | Previous wallpaper | `Ctrl+Alt+Left` |
 | Stop/Start Watch | `Ctrl+Alt+S` |
 | Default wallpaper | `Ctrl+Alt+D` |
+| Toggle transparency | `Alt+A` |
 
 All shortcuts are fully customizable from the GUI.
+
+### Window Transparency
+
+Control the opacity of any open window directly from the app:
+
+- **ComboBox** — select any visible window from a filterable list
+- **Slider** — adjust opacity in real-time (range 50–255)
+- **Toggle shortcut** (`Alt+A`) — press once for 50% transparency, press again to restore
+- **Scroll shortcut** (`Alt+Scroll`) — hold Alt and scroll to gradually adjust the focused window
+- **Persistence** — opacity settings are saved to `config/transparency.json` and restored on next launch
 
 ### System Tray
 
@@ -176,7 +188,8 @@ wallpaper-changer/
 ├── wallpaper_changer.spec   # PyInstaller spec
 ├── installer.iss            # Inno Setup script
 ├── config/
-│   └── settings.toml        # App settings (language, paths, hotkeys…)
+│   ├── settings.toml        # App settings (language, paths, hotkeys…)
+│   └── transparency.json    # Persisted window opacity settings
 ├── scripts/
 │   └── build_exe.ps1        # Build script
 └── src/wallpaper_changer/
@@ -189,6 +202,7 @@ wallpaper-changer/
     ├── image_utils.py       # Image selection and resizing
     ├── monitor.py           # Monitor detection (Win32)
     ├── startup.py           # Windows startup registration
+    ├── transparency.py      # Window transparency control (Win32 + persistence)
     └── wallpaper.py         # Wallpaper assembly, and application
 ```
 
