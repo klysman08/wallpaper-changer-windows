@@ -124,7 +124,7 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_manager = HotkeyManager()
 
         # ── Transparency state ────────────────────────────────────────────────
-        self._transp_windows: list[tuple[int, str]] = []
+        self._transp_windows: list[tuple[int, str, str]] = []
         self._opacity_map: dict[str, int] = load_opacity_settings()
         self._pynput_mouse_listener = None
         self._pynput_kb_listener = None
@@ -137,6 +137,7 @@ class WallpaperChangerApp(ttk.Window):
         self.after(200, self._draw_monitors)
         self._register_hotkeys()
         self._start_transparency_listeners()
+        self._start_auto_apply_loop()
 
         # ── Restore saved transparency on startup ─────────────────────────────
         restored = reapply_saved_settings()
@@ -148,6 +149,18 @@ class WallpaperChangerApp(ttk.Window):
         # ── Startup-to-tray: minimise + auto-watch ───────────────────────────
         if self._startup_launch:
             self.after(300, self._startup_to_tray)
+
+    def _start_auto_apply_loop(self) -> None:
+        """Periodically trigger the reapplication of transparency rules for any newly opened windows."""
+        def auto_apply() -> None:
+            # We wrap this in try-except so an error doesn't kill the UI loop
+            try:
+                reapply_saved_settings()
+            except Exception:
+                pass
+            self.after(2000, auto_apply)
+            
+        self.after(2000, auto_apply)
 
     # ══════════════════════════════════════════════════════════════════════════
     #   UI Construction
@@ -450,9 +463,10 @@ class WallpaperChangerApp(ttk.Window):
 
     def _refresh_transp_list(self) -> None:
         self._transp_windows = list_visible_windows()
-        titles = [title for _, title in self._transp_windows]
-        self._transp_combo["values"] = titles
-        if titles:
+        # Show both title and process name in combobox
+        display_titles = [f"[{proc}] {title}" for _, title, proc in self._transp_windows]
+        self._transp_combo["values"] = display_titles
+        if display_titles:
             self._transp_combo.current(0)
             self._on_transp_window_selected()
 
@@ -462,17 +476,17 @@ class WallpaperChangerApp(ttk.Window):
             return None
         return self._transp_windows[idx][0]
 
-    def _transp_selected_title(self) -> str | None:
+    def _transp_selected_process_name(self) -> str | None:
         idx = self._transp_combo.current()
         if idx < 0 or idx >= len(self._transp_windows):
             return None
-        return self._transp_windows[idx][1]
+        return self._transp_windows[idx][2]
 
     def _on_transp_window_selected(self, _event=None) -> None:
-        title = self._transp_selected_title()
-        if title is None:
+        proc_name = self._transp_selected_process_name()
+        if proc_name is None:
             return
-        alpha = self._opacity_map.get(title, 255)
+        alpha = self._opacity_map.get(proc_name, 255)
         self._transp_opacity_var.set(alpha)
         self._transp_opacity_label.configure(text=str(alpha))
 
@@ -480,10 +494,10 @@ class WallpaperChangerApp(ttk.Window):
         alpha = int(float(value))
         self._transp_opacity_label.configure(text=str(alpha))
         hwnd = self._transp_selected_hwnd()
-        title = self._transp_selected_title()
-        if hwnd is None or title is None:
+        proc_name = self._transp_selected_process_name()
+        if hwnd is None or proc_name is None:
             return
-        self._opacity_map[title] = alpha
+        self._opacity_map[proc_name] = alpha
         set_window_opacity(hwnd, alpha)
 
     def _save_transparency_settings(self) -> None:
@@ -499,15 +513,25 @@ class WallpaperChangerApp(ttk.Window):
         hwnd = get_foreground_window()
         if not hwnd:
             return
-        from .transparency import _get_window_title
-        title = _get_window_title(hwnd)
-        if not title:
-            return
-        current = self._opacity_map.get(title, 255)
+        from .transparency import _get_process_name_for_hwnd
+        proc_name = _get_process_name_for_hwnd(hwnd)
+        if not proc_name:
+            from .transparency import _get_window_title
+            # Fall back to window title if process name not found
+            title = _get_window_title(hwnd)
+            if title:
+                proc_name = title
+            else:
+                return
+        
+        current = self._opacity_map.get(proc_name, 255)
         # Toggle: if already semi-transparent, restore to opaque; otherwise set 50%
         new_alpha = 255 if current < 255 else 128
-        self._opacity_map[title] = new_alpha
+        self._opacity_map[proc_name] = new_alpha
         set_window_opacity(hwnd, new_alpha)
+        # Also persist it immediately since shortcuts should save state automatically
+        self._save_transparency_settings()
+
         self.after(0, lambda: self._set_status(t("transp_applied", alpha=new_alpha)))
         self.after(0, self._sync_transp_slider_if_match, hwnd)
 
@@ -541,14 +565,23 @@ class WallpaperChangerApp(ttk.Window):
                 hwnd = get_foreground_window()
                 if not hwnd:
                     return
-                from .transparency import _get_window_title
-                title = _get_window_title(hwnd)
-                if not title:
-                    return
-                current = self._opacity_map.get(title, 255)
+                
+                from .transparency import _get_process_name_for_hwnd, _get_window_title
+                proc_name = _get_process_name_for_hwnd(hwnd)
+                if not proc_name:
+                    title = _get_window_title(hwnd)
+                    if title:
+                        proc_name = title
+                    else:
+                        return
+                        
+                current = self._opacity_map.get(proc_name, 255)
                 new_alpha = max(10, min(255, current + int(dy) * 5))
-                self._opacity_map[title] = new_alpha
+                self._opacity_map[proc_name] = new_alpha
                 set_window_opacity(hwnd, new_alpha)
+                # Persist on scroll, though might be a bit chatty
+                self._save_transparency_settings()
+
                 self.after(0, lambda a=new_alpha: self._set_status(
                     t("transp_applied", alpha=a),
                 ))
@@ -571,9 +604,9 @@ class WallpaperChangerApp(ttk.Window):
         """If the given hwnd matches the combo selection, update the slider."""
         selected = self._transp_selected_hwnd()
         if selected == hwnd:
-            title = self._transp_selected_title()
-            if title:
-                alpha = self._opacity_map.get(title, 255)
+            proc_name = self._transp_selected_process_name()
+            if proc_name:
+                alpha = self._opacity_map.get(proc_name, 255)
                 self._transp_opacity_var.set(alpha)
                 self._transp_opacity_label.configure(text=str(alpha))
 

@@ -117,12 +117,41 @@ def _get_window_title(hwnd: int) -> str:
     return buf.value
 
 
-def list_visible_windows() -> List[Tuple[int, str]]:
+def _get_process_name_for_hwnd(hwnd: int) -> str:
+    """Return the executable name for the process that owns the given HWND."""
+    import win32api
+    import win32process
+    import win32con
+
+    try:
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        if not pid:
+            return ""
+        
+        # Open process to query its executable name
+        process_handle = win32api.OpenProcess(
+            win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ, 
+            False, 
+            pid
+        )
+        if process_handle:
+            try:
+                exe_path = win32process.GetModuleFileNameEx(process_handle, 0)
+                if exe_path:
+                    return Path(exe_path).name
+            finally:
+                win32api.CloseHandle(process_handle)
+    except Exception as e:
+        log.debug("Failed to get process name for hwnd %s: %s", hwnd, e)
+    return ""
+
+
+def list_visible_windows() -> List[Tuple[int, str, str]]:
     """Enumerate all visible, titled windows, filtering out system noise.
 
-    Returns a sorted list of ``(hwnd, title)`` tuples.
+    Returns a sorted list of ``(hwnd, title, process_name)`` tuples.
     """
-    results: list[tuple[int, str]] = []
+    results: list[tuple[int, str, str]] = []
 
     def _callback(hwnd: int, _lp: int) -> bool:
         if not IsWindowVisible(hwnd):
@@ -137,7 +166,12 @@ def list_visible_windows() -> List[Tuple[int, str]]:
             "MSCTFIME UI",
         }:
             return True
-        results.append((hwnd, title))
+        
+        proc_name = _get_process_name_for_hwnd(hwnd)
+        # Fall back to title if we couldn't get the process name to avoid breaking things
+        proc_name = proc_name if proc_name else title
+        
+        results.append((hwnd, title, proc_name))
         return True
 
     EnumWindows(WNDENUMPROC(_callback), 0)
@@ -180,7 +214,7 @@ def save_opacity_settings(settings: Dict[str, int]) -> None:
 
 
 def reapply_saved_settings() -> int:
-    """Re-apply saved opacity to every currently-visible window that matches.
+    """Re-apply saved opacity to every currently-visible window that matches by process name.
 
     Returns the number of windows whose opacity was restored.
     """
@@ -190,9 +224,11 @@ def reapply_saved_settings() -> int:
 
     windows = list_visible_windows()
     count = 0
-    for hwnd, title in windows:
-        if title in settings:
-            alpha = max(0, min(255, settings[title]))
+    for hwnd, title, process_name in windows:
+        if process_name in settings:
+            alpha = max(0, min(255, settings[process_name]))
+            # Compare with currently applied transparency if we were tracking it
+            # For now, just unconditionally set it since setting layered attributes for unchanged alpha is fast
             set_window_opacity(hwnd, alpha)
             count += 1
     return count

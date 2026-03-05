@@ -15,7 +15,7 @@ from .transparency import (
 
 # ── Constants ────────────────────────────────────────────────────────────────
 _OPACITY_STEP = 5          # delta per scroll tick
-_HALF_OPACITY = 128        # value applied by Alt+A
+_HALF_OPACITY = 192        # value applied by Alt+A
 _ACCENT = "#3a7bd5"
 
 # Track per-window opacity so the slider / shortcuts stay in sync
@@ -48,15 +48,30 @@ class TransparencyApp(ttk.Window):
             resizable=(True, False),
         )
 
-        self._windows: list[tuple[int, str]] = []
+        self._windows: list[tuple[int, str, str]] = []
         self._listener_thread: threading.Thread | None = None
         self._shortcut_thread: threading.Thread | None = None
 
         self._build_ui()
         self._refresh_window_list()
         self._start_global_shortcuts()
+        self._start_auto_apply_loop()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _start_auto_apply_loop(self) -> None:
+        """Periodically trigger the reapplication of transparency rules for any newly opened windows."""
+        from .transparency import reapply_saved_settings
+        
+        def auto_apply() -> None:
+            # We wrap this in try-except so an error doesn't kill the UI loop
+            try:
+                reapply_saved_settings()
+            except Exception:
+                pass
+            self.after(2000, auto_apply)
+            
+        self.after(2000, auto_apply)
 
     # ── UI Construction ──────────────────────────────────────────────────────
 
@@ -161,12 +176,13 @@ class TransparencyApp(ttk.Window):
 
     def _refresh_window_list(self) -> None:
         self._windows = list_visible_windows()
-        titles = [title for _, title in self._windows]
-        self._combo["values"] = titles
-        if titles:
+        # Show both title and process name in combobox
+        display_titles = [f"[{proc}] {title}" for _, title, proc in self._windows]
+        self._combo["values"] = display_titles
+        if display_titles:
             self._combo.current(0)
             self._on_window_selected()
-        self._set_status(f"{len(titles)} windows found")
+        self._set_status(f"{len(display_titles)} windows found")
 
     def _selected_hwnd(self) -> int | None:
         idx = self._combo.current()
@@ -174,13 +190,27 @@ class TransparencyApp(ttk.Window):
             return None
         return self._windows[idx][0]
 
+    def _selected_process_name(self) -> str | None:
+        idx = self._combo.current()
+        if idx < 0 or idx >= len(self._windows):
+            return None
+        return self._windows[idx][2]
+
     # ── Event Handlers ───────────────────────────────────────────────────────
 
     def _on_window_selected(self, _event=None) -> None:
         hwnd = self._selected_hwnd()
         if hwnd is None:
             return
-        alpha = _get_opacity(hwnd)
+        
+        # We need to get the process name for the selected window
+        # In a standalone controller, we just fetch from current _opacity_map
+        # or load_opacity_settings since it persists.
+        from .transparency import _get_process_name_for_hwnd, load_opacity_settings
+        proc_name = self._selected_process_name()
+        
+        settings = load_opacity_settings()
+        alpha = settings.get(proc_name, 255) if proc_name else 255
         self._opacity_var.set(alpha)
         self._opacity_label.configure(text=str(alpha))
 
@@ -188,9 +218,17 @@ class TransparencyApp(ttk.Window):
         alpha = int(float(value))
         self._opacity_label.configure(text=str(alpha))
         hwnd = self._selected_hwnd()
-        if hwnd is None:
+        proc_name = self._selected_process_name()
+        if hwnd is None or not proc_name:
             return
+            
         _record_opacity(hwnd, alpha)
+        
+        # Save opacity setting globally for the process
+        from .transparency import save_opacity_settings, load_opacity_settings
+        settings = load_opacity_settings()
+        settings[proc_name] = alpha
+        save_opacity_settings(settings)
 
     # ── Global Shortcuts ─────────────────────────────────────────────────────
 
