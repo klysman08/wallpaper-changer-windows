@@ -144,7 +144,7 @@ Closing the window (✕) or clicking **Tray** minimizes the app to the notificat
 
 ```powershell
 # Apply wallpaper immediately
-uv run wallpaper-changer apply
+uv run python -c "from wallpaper_changer.gui import run; run()
 
 # Apply with options
 uv run wallpaper-changer apply --collage-count 6 --selection random

@@ -19,7 +19,12 @@ def main() -> None:
 
 @main.command("apply")
 @click.option("--selection", default=None, help="random | sequential")
-@click.option("--collage-count", default=None, type=int, help="Imagens por monitor (1-8)")
+@click.option(
+    "--collage-count",
+    default=None,
+    type=click.IntRange(1, 8),
+    help="Imagens por monitor (1-8)",
+)
 @click.option("--config", default=None, help="Caminho para settings.toml")
 def apply_cmd(selection: str | None, collage_count: int | None, config: str | None) -> None:
     """Aplica o wallpaper collage imediatamente."""

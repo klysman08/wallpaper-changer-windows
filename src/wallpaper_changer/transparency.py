@@ -168,9 +168,9 @@ def list_visible_windows() -> List[Tuple[int, str, str]]:
             return True
         
         proc_name = _get_process_name_for_hwnd(hwnd)
-        # Fall back to title if we couldn't get the process name to avoid breaking things
-        proc_name = proc_name if proc_name else title
-        
+        if not proc_name:
+            return True
+
         results.append((hwnd, title, proc_name))
         return True
 

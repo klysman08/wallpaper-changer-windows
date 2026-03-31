@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import logging
 import threading
 import time
 import tkinter as tk
@@ -36,6 +37,7 @@ _ACCENT     = "#3a7bd5"
 
 # Fit mode keys — labels are resolved via i18n at build time
 _FIT_KEYS = ["fill", "fit", "stretch", "center", "span"]
+log = logging.getLogger(__name__)
 
 
 def _fit_label(key: str) -> str:
@@ -516,14 +518,8 @@ class WallpaperChangerApp(ttk.Window):
         from .transparency import _get_process_name_for_hwnd
         proc_name = _get_process_name_for_hwnd(hwnd)
         if not proc_name:
-            from .transparency import _get_window_title
-            # Fall back to window title if process name not found
-            title = _get_window_title(hwnd)
-            if title:
-                proc_name = title
-            else:
-                return
-        
+            return
+
         current = self._opacity_map.get(proc_name, 255)
         # Toggle: if already semi-transparent, restore to opaque; otherwise set 50%
         new_alpha = 255 if current < 255 else 128
@@ -565,16 +561,12 @@ class WallpaperChangerApp(ttk.Window):
                 hwnd = get_foreground_window()
                 if not hwnd:
                     return
-                
-                from .transparency import _get_process_name_for_hwnd, _get_window_title
+
+                from .transparency import _get_process_name_for_hwnd
                 proc_name = _get_process_name_for_hwnd(hwnd)
                 if not proc_name:
-                    title = _get_window_title(hwnd)
-                    if title:
-                        proc_name = title
-                    else:
-                        return
-                        
+                    return
+
                 current = self._opacity_map.get(proc_name, 255)
                 new_alpha = max(10, min(255, current + int(dy) * 5))
                 self._opacity_map[proc_name] = new_alpha
@@ -596,9 +588,9 @@ class WallpaperChangerApp(ttk.Window):
             self._pynput_kb_listener.join()
             self._pynput_mouse_listener.join()
         except ImportError:
-            pass
+            log.info("pynput not available; transparency scroll shortcut disabled")
         except Exception:
-            pass
+            log.exception("Unexpected error while running transparency listeners")
 
     def _sync_transp_slider_if_match(self, hwnd: int) -> None:
         """If the given hwnd matches the combo selection, update the slider."""
@@ -1193,7 +1185,7 @@ def run() -> None:
         cfg = load_config()
         set_language(cfg["general"].get("language", "en"))
     except Exception:
-        pass
+        log.exception("Failed to load startup language configuration")
 
     if not _acquire_single_instance():
         root = tk.Tk()

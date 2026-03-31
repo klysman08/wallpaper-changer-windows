@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+import time
 import winreg
 from pathlib import Path
 
@@ -153,7 +154,7 @@ def _apply_or_fade(canvas: Image.Image, out: Path, fade_in: bool) -> None:
             set_wallpaper_win(out)
         else:
             _set_wallpaper_fast(fpath)
-            _time.sleep(_FADE_DELAY)
+            time.sleep(_FADE_DELAY)
 
     # ── Limpeza dos arquivos temporarios ───────────────────────────────
     for f in tmp_paths:
