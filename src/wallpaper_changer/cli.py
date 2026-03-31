@@ -9,7 +9,7 @@ import schedule
 
 from .config import load_config, resolve_path
 from .monitor import get_monitors
-from .wallpaper import apply_wallpaper
+from .wallpaper import EFFECTS, apply_wallpaper
 
 
 @click.group()
@@ -25,8 +25,19 @@ def main() -> None:
     type=click.IntRange(1, 8),
     help="Imagens por monitor (1-8)",
 )
+@click.option(
+    "--effect",
+    default=None,
+    type=click.Choice(EFFECTS),
+    help="Efeito visual: normal | bw | vintage | hdr",
+)
 @click.option("--config", default=None, help="Caminho para settings.toml")
-def apply_cmd(selection: str | None, collage_count: int | None, config: str | None) -> None:
+def apply_cmd(
+    selection: str | None,
+    collage_count: int | None,
+    effect: str | None,
+    config: str | None,
+) -> None:
     """Aplica o wallpaper collage imediatamente."""
     cfg = load_config(Path(config) if config else None)
     monitors = get_monitors()
@@ -37,10 +48,16 @@ def apply_cmd(selection: str | None, collage_count: int | None, config: str | No
         cfg["general"]["selection"] = selection
     if collage_count:
         cfg["general"]["collage_count"] = collage_count
+    if effect:
+        cfg["display"]["effect"] = effect
 
     active_sel = cfg["general"].get("selection", "random")
     count = cfg["general"].get("collage_count", 4)
-    click.echo(f"[INFO] Collage {count} imgs | Selecao: {active_sel} | Monitores: {len(monitors)}")
+    active_effect = cfg["display"].get("effect", "normal")
+    click.echo(
+        f"[INFO] Collage {count} imgs | Selecao: {active_sel} | "
+        f"Efeito: {active_effect} | Monitores: {len(monitors)}"
+    )
 
     out, _imgs = apply_wallpaper(cfg, monitors, out_dir)
     click.echo(f"[OK] Wallpaper aplicado -> {out}")

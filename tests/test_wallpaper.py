@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from wallpaper_changer import wallpaper
@@ -26,3 +27,20 @@ def test_deve_aplicar_fade_sem_erro_quando_fade_esta_ativo(tmp_path, monkeypatch
     assert out_path.exists()
     assert len(fast_calls) == 2
     assert set_calls == [out_path]
+
+
+@pytest.mark.parametrize("effect", ["normal", "bw", "vintage", "hdr"])
+def test_deve_retornar_imagem_rgb_quando_aplicar_efeitos_suportados(effect):
+    canvas = Image.new("RGB", (12, 12), (40, 80, 120))
+
+    result = wallpaper.apply_effect(canvas, effect)
+
+    assert result.mode == "RGB"
+    assert result.size == canvas.size
+
+
+def test_deve_lancar_erro_quando_efeito_invalido():
+    canvas = Image.new("RGB", (12, 12), (40, 80, 120))
+
+    with pytest.raises(ValueError, match="Efeito de imagem invalido"):
+        wallpaper.apply_effect(canvas, "invalid")

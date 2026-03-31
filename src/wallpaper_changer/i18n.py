@@ -48,6 +48,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "fit_center_desc": "No resize, centers on screen",
         "fit_span": "Span",
         "fit_span_desc": "Image distributed across all space",
+        "effect_title": "Image Effect",
+        "effect_normal": "Normal",
+        "effect_bw": "Black & White",
+        "effect_vintage": "Vintage",
+        "effect_hdr": "HDR",
 
         # Rotation
         "rotation_title": "Automatic Rotation",
@@ -166,6 +171,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "fit_center_desc": "Sem redimensionar, centraliza na tela",
         "fit_span": "Estender",
         "fit_span_desc": "Imagem distribuída por todo o espaço",
+        "effect_title": "Efeito de Imagem",
+        "effect_normal": "Normal",
+        "effect_bw": "Preto e Branco",
+        "effect_vintage": "Vintage",
+        "effect_hdr": "HDR",
 
         # Rotation
         "rotation_title": "Rotação Automática",
@@ -284,6 +294,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "fit_center_desc": "リサイズなし、画面中央に配置",
         "fit_span": "スパン",
         "fit_span_desc": "画像を全領域に分散配置",
+        "effect_title": "画像エフェクト",
+        "effect_normal": "標準",
+        "effect_bw": "白黒",
+        "effect_vintage": "ヴィンテージ",
+        "effect_hdr": "HDR",
 
         # Rotation
         "rotation_title": "自動ローテーション",

@@ -7,7 +7,7 @@ import time
 import winreg
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from .config import resolve_path, get_project_root
 from .image_utils import fit_image, pick_images, build_canvas
@@ -18,6 +18,7 @@ SPIF_UPDATEINIFILE    = 0x0001
 SPIF_SENDWININICHANGE = 0x0002
 
 MODES = ["collage"]
+EFFECTS = ("normal", "bw", "vintage", "hdr")
 
 
 # ── Utilitarios Windows ───────────────────────────────────────────────────────
@@ -174,6 +175,23 @@ def _get_state_file(cfg: dict) -> Path:
     return get_project_root() / "config" / "state.json"
 
 
+def apply_effect(canvas: Image.Image, effect: str = "normal") -> Image.Image:
+    """Apply a visual effect to the final canvas before saving it as wallpaper."""
+    if effect == "normal":
+        return canvas
+    if effect == "bw":
+        return ImageOps.grayscale(canvas).convert("RGB")
+    if effect == "vintage":
+        gray = ImageOps.grayscale(canvas)
+        sepia = ImageOps.colorize(gray, black="#3b2a1a", white="#d8c3a5").convert("RGB")
+        return ImageEnhance.Color(sepia).enhance(0.9)
+    if effect == "hdr":
+        enhanced = ImageEnhance.Contrast(canvas).enhance(1.35)
+        enhanced = ImageEnhance.Sharpness(enhanced).enhance(1.45)
+        return enhanced.filter(ImageFilter.DETAIL)
+    raise ValueError(f"Efeito de imagem invalido: {effect}")
+
+
 # ── Montagem do canvas ────────────────────────────────────────────────────────
 
 def _build_canvas_from_sections(
@@ -233,6 +251,7 @@ def _apply_collage(
     """
     folder = _get_folder(cfg)
     fit_mode = cfg["display"]["fit_mode"]
+    effect = cfg["display"].get("effect", "normal")
     selection = cfg["general"].get("selection", "random")
     sf = _get_state_file(cfg)
     count = max(1, int(cfg["general"].get("collage_count", 4)))
@@ -263,6 +282,7 @@ def _apply_collage(
                 img_idx += 1
 
     out = output_dir / "wallpaper_collage.bmp"
+    canvas = apply_effect(canvas, effect)
     canvas.save(str(out), "BMP")
     set_wallpaper_win(out)
     return out, [str(p) for p in imgs]
@@ -275,6 +295,7 @@ def apply_single_wallpaper(
     monitors: list[Monitor],
     output_dir: Path,
     fit_mode: str = "fill",
+    effect: str = "normal",
 ) -> Path:
     """Apply a single image as wallpaper across all monitors."""
     img = Image.open(str(image_path)).convert("RGB")
@@ -286,6 +307,7 @@ def apply_single_wallpaper(
         paste_y = mon.y - min_y
         canvas.paste(fitted, (paste_x, paste_y))
     out = output_dir / "wallpaper_default.bmp"
+    canvas = apply_effect(canvas, effect)
     canvas.save(str(out), "BMP")
     set_wallpaper_win(out)
     return out

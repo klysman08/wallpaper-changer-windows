@@ -35,6 +35,7 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 | **Same images on all monitors** | Option to replicate the same collage on every screen |
 | **Random or sequential selection** | Switch between images randomly or in order |
 | **Image fit modes** | Fill, Fit, Stretch, Center, or Span |
+| **Image effects** | Apply Normal, Black & White, Vintage, or HDR to generated wallpaper |
 | **Auto rotation** | Change wallpaper at configurable intervals (seconds) |
 | **Start with Windows** | Launches to system tray with auto-rotation enabled |
 | **System tray** | App lives in the notification area — right-click for quick actions |
@@ -97,6 +98,7 @@ Each monitor is divided into an automatic grid with **1 to 8 images**.
 
 - **Image selection** — `Random` or `Sequential`
 - **Screen fit** — `Fill`, `Fit`, `Stretch`, `Center`, `Span`
+- **Image effect** — `Normal`, `Black & White`, `Vintage`, `HDR`
 - **Auto rotation** — set the interval in seconds and click **Start Watch**
 
 ### Start with Windows
@@ -149,8 +151,21 @@ uv run python -c "from wallpaper_changer.gui import run; run()
 # Apply with options
 uv run wallpaper-changer apply --collage-count 6 --selection random
 
+# Apply with image effect
+uv run wallpaper-changer apply --effect vintage
+
 # Watch mode (auto change at configured interval)
 uv run wallpaper-changer watch
+```
+
+---
+
+## Configuration (`config/settings.toml`)
+
+```toml
+[display]
+fit_mode = "fill"
+effect   = "normal" # normal | bw | vintage | hdr
 ```
 
 ---
@@ -188,7 +203,7 @@ wallpaper-changer/
 ├── wallpaper_changer.spec   # PyInstaller spec
 ├── installer.iss            # Inno Setup script
 ├── config/
-│   ├── settings.toml        # App settings (language, paths, hotkeys…)
+│   ├── settings.toml        # App settings (language, paths, fit/effect, hotkeys…)
 │   └── transparency.json    # Persisted window opacity settings
 ├── scripts/
 │   └── build_exe.ps1        # Build script

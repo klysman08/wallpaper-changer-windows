@@ -37,6 +37,7 @@ _ACCENT     = "#3a7bd5"
 
 # Fit mode keys — labels are resolved via i18n at build time
 _FIT_KEYS = ["fill", "fit", "stretch", "center", "span"]
+_EFFECT_KEYS = ["normal", "bw", "vintage", "hdr"]
 log = logging.getLogger(__name__)
 
 
@@ -50,6 +51,10 @@ def _fit_desc(key: str) -> str:
 
 def _sel_labels() -> dict[str, str]:
     return {"random": t("sel_random"), "sequential": t("sel_sequential")}
+
+
+def _effect_label(key: str) -> str:
+    return t(f"effect_{key}")
 
 
 # ── Single Instance ───────────────────────────────────────────────────────────
@@ -92,6 +97,7 @@ class WallpaperChangerApp(ttk.Window):
 
         # ── Variaveis de estado ───────────────────────────────────────────────
         self._fit_var = tk.StringVar(value=self._cfg["display"]["fit_mode"])
+        self._effect_var = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
         self._sel_var = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
         self._collage_count_var = tk.IntVar(
@@ -208,6 +214,7 @@ class WallpaperChangerApp(ttk.Window):
         self._build_collage_section(main)
         self._build_selection_section(main)
         self._build_fit_section(main)
+        self._build_effect_section(main)
         self._build_rotation_section(main)
         self._build_hotkeys_section(main)
         self._build_transparency_section(main)
@@ -344,10 +351,26 @@ class WallpaperChangerApp(ttk.Window):
 
         self._select_fit(self._fit_var.get())
 
+    def _build_effect_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text=t("effect_title"), padding=10)
+        frame.grid(row=5, column=0, sticky=EW, padx=12, pady=4)
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=0, column=0, sticky=W)
+
+        self._effect_btns: dict[str, ttk.Radiobutton] = {}
+        for key in _EFFECT_KEYS:
+            rb = ttk.Radiobutton(
+                btn_row, text=_effect_label(key), variable=self._effect_var, value=key,
+                style="Toolbutton",
+            )
+            rb.pack(side=LEFT, padx=(0, 8))
+            self._effect_btns[key] = rb
+
     # ── Rotation / Timer ──────────────────────────────────────────────────────
     def _build_rotation_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("rotation_title"), padding=10)
-        frame.grid(row=5, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         row1 = ttk.Frame(frame)
@@ -370,7 +393,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Hotkeys Section ───────────────────────────────────────────────────────
     def _build_hotkeys_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("hotkeys_title"), padding=10)
-        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         labels = [
@@ -406,7 +429,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Transparency Section ────────────────────────────────────────────────
     def _build_transparency_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("transp_title"), padding=10)
-        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         # ── Window ComboBox + Refresh ─────────────────────────────────────
@@ -604,7 +627,7 @@ class WallpaperChangerApp(ttk.Window):
 
     def _build_default_wp_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("default_wp_title"), padding=10)
-        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -624,7 +647,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("folder_title"), padding=10)
-        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -668,7 +691,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Language Section ──────────────────────────────────────────────────────
     def _build_language_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("language_title"), padding=10)
-        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=11, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         btn_row = ttk.Frame(frame)
@@ -705,7 +728,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=11, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=12, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -921,6 +944,7 @@ class WallpaperChangerApp(ttk.Window):
             },
             "display": {
                 "fit_mode": self._fit_var.get(),
+                "effect": self._effect_var.get(),
             },
             "hotkeys": {
                 "next_wallpaper": self._hk_next_var.get(),
@@ -1039,7 +1063,8 @@ class WallpaperChangerApp(ttk.Window):
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
                 fit = cfg["display"]["fit_mode"]
-                out = apply_single_wallpaper(path, self._monitors, out_dir, fit)
+                effect = cfg["display"].get("effect", "normal")
+                out = apply_single_wallpaper(path, self._monitors, out_dir, fit, effect)
                 self.after(0, lambda: self._set_status(
                     t("default_wp_applied", name=Path(str(out)).name),
                 ))
