@@ -7,3 +7,5 @@ build/
 assets/output/*.bmp
 assets/output/*.jpg
 .python-version
+/CLAUDE.md
+/.claude
