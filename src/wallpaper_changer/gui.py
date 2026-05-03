@@ -37,8 +37,9 @@ _BG_CANVAS  = "#1a1a2e"
 _ACCENT     = "#3a7bd5"
 
 # Fit mode keys — labels are resolved via i18n at build time
-_FIT_KEYS = ["fill", "fit", "stretch", "center", "span"]
-_EFFECT_KEYS = ["normal", "bw", "vintage", "hdr"]
+_FIT_KEYS        = ["fill", "fit", "stretch", "center", "span"]
+_EFFECT_KEYS     = ["normal", "bw", "vintage", "hdr"]
+_TRANSITION_KEYS = ["none", "fade", "slide"]
 log = logging.getLogger(__name__)
 
 
@@ -97,8 +98,9 @@ class WallpaperChangerApp(ttk.Window):
         self._startup_launch = is_startup_launch()
 
         # ── Variaveis de estado ───────────────────────────────────────────────
-        self._fit_var = tk.StringVar(value=self._cfg["display"]["fit_mode"])
-        self._effect_var = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
+        self._fit_var        = tk.StringVar(value=self._cfg["display"]["fit_mode"])
+        self._effect_var     = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
+        self._transition_var = tk.StringVar(value=self._cfg["display"].get("transition", "none"))
         self._sel_var = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
         self._collage_count_var = tk.IntVar(
@@ -217,6 +219,7 @@ class WallpaperChangerApp(ttk.Window):
         self._build_selection_section(main)
         self._build_fit_section(main)
         self._build_effect_section(main)
+        self._build_transition_section(main)
         self._build_rotation_section(main)
         self._build_hotkeys_section(main)
         self._build_transparency_section(main)
@@ -369,10 +372,26 @@ class WallpaperChangerApp(ttk.Window):
             rb.pack(side=LEFT, padx=(0, 8))
             self._effect_btns[key] = rb
 
+    def _build_transition_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text=t("transition_title"), padding=10)
+        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=0, column=0, sticky=W)
+
+        for key in _TRANSITION_KEYS:
+            ttk.Radiobutton(
+                btn_row,
+                text=t(f"transition_{key}"),
+                variable=self._transition_var,
+                value=key,
+                style="Toolbutton",
+            ).pack(side=LEFT, padx=(0, 8))
+
     # ── Rotation / Timer ──────────────────────────────────────────────────────
     def _build_rotation_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("rotation_title"), padding=10)
-        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         row1 = ttk.Frame(frame)
@@ -395,7 +414,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Hotkeys Section ───────────────────────────────────────────────────────
     def _build_hotkeys_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("hotkeys_title"), padding=10)
-        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         labels = [
@@ -432,7 +451,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Transparency Section ────────────────────────────────────────────────
     def _build_transparency_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("transp_title"), padding=10)
-        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         # ── Window ComboBox + Refresh ─────────────────────────────────────
@@ -630,7 +649,7 @@ class WallpaperChangerApp(ttk.Window):
 
     def _build_default_wp_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("default_wp_title"), padding=10)
-        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -650,7 +669,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("folder_title"), padding=10)
-        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=11, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -694,7 +713,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Language Section ──────────────────────────────────────────────────────
     def _build_language_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("language_title"), padding=10)
-        frame.grid(row=11, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=12, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         btn_row = ttk.Frame(frame)
@@ -731,7 +750,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=12, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=13, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -948,6 +967,9 @@ class WallpaperChangerApp(ttk.Window):
             "display": {
                 "fit_mode": self._fit_var.get(),
                 "effect": self._effect_var.get(),
+                "transition": self._transition_var.get(),
+                "transition_duration": self._cfg["display"].get("transition_duration", 0.6),
+                "transition_fps": self._cfg["display"].get("transition_fps", 30),
             },
             "hotkeys": {
                 "next_wallpaper": self._hk_next_var.get(),
@@ -1068,9 +1090,15 @@ class WallpaperChangerApp(ttk.Window):
                 cfg = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                fit = cfg["display"]["fit_mode"]
-                effect = cfg["display"].get("effect", "normal")
-                out = apply_single_wallpaper(path, self._monitors, out_dir, fit, effect)
+                fit        = cfg["display"]["fit_mode"]
+                effect     = cfg["display"].get("effect", "normal")
+                transition = cfg["display"].get("transition", "none")
+                t_dur      = float(cfg["display"].get("transition_duration", 0.6))
+                t_fps      = int(cfg["display"].get("transition_fps", 30))
+                out = apply_single_wallpaper(
+                    path, self._monitors, out_dir, fit, effect,
+                    transition, t_dur, t_fps,
+                )
                 self.after(0, lambda: self._set_status(
                     t("default_wp_applied", name=Path(str(out)).name),
                 ))
