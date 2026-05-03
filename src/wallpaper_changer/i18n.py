@@ -59,6 +59,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "transition_none": "None",
         "transition_fade": "Fade",
         "transition_slide": "Slide",
+        "transition_slide_up": "Slide Up",
+        "transition_zoom": "Zoom",
 
         # Rotation
         "rotation_title": "Automatic Rotation",
@@ -193,6 +195,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "transition_none": "Nenhum",
         "transition_fade": "Fade",
         "transition_slide": "Slide",
+        "transition_slide_up": "Slide Up",
+        "transition_zoom": "Zoom",
 
         # Rotation
         "rotation_title": "Rotação Automática",
@@ -327,6 +331,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "transition_none": "なし",
         "transition_fade": "フェード",
         "transition_slide": "スライド",
+        "transition_slide_up": "上スライド",
+        "transition_zoom": "ズーム",
 
         # Rotation
         "rotation_title": "自動ローテーション",

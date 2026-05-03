@@ -39,7 +39,7 @@ _ACCENT     = "#3a7bd5"
 # Fit mode keys — labels are resolved via i18n at build time
 _FIT_KEYS        = ["fill", "fit", "stretch", "center", "span"]
 _EFFECT_KEYS     = ["normal", "bw", "vintage", "hdr"]
-_TRANSITION_KEYS = ["none", "fade", "slide"]
+_TRANSITION_KEYS = ["none", "fade", "slide", "slide_up", "zoom"]
 log = logging.getLogger(__name__)
 
 
