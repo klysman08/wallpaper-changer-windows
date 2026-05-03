@@ -266,26 +266,16 @@ class TransparencyApp(ttk.Window):
 
     def _start_mouse_listener(self) -> None:
         try:
-            from pynput import mouse, keyboard as pynput_kb
+            import ctypes
+            from pynput import mouse
 
-            self._alt_pressed = False
+            _VK_MENU = 0x12  # Alt key virtual-key code
 
-            def on_press(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = True
-                except Exception:
-                    pass
-
-            def on_release(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = False
-                except Exception:
-                    pass
+            def _alt_is_down() -> bool:
+                return bool(ctypes.windll.user32.GetAsyncKeyState(_VK_MENU) & 0x8000)
 
             def on_scroll(_x, _y, _dx, dy):
-                if not self._alt_pressed:
+                if not _alt_is_down():
                     return
                 hwnd = get_foreground_window()
                 if not hwnd:
@@ -299,14 +289,8 @@ class TransparencyApp(ttk.Window):
                     f"Scroll opacity → {a}",
                 ))
 
-            # Start listeners (blocking, but in daemon thread)
-            self._kb_listener = pynput_kb.Listener(
-                on_press=on_press, on_release=on_release,
-            )
             self._mouse_listener = mouse.Listener(on_scroll=on_scroll)
-            self._kb_listener.start()
             self._mouse_listener.start()
-            self._kb_listener.join()
             self._mouse_listener.join()
         except ImportError:
             self.after(0, lambda: self._set_status(
@@ -338,8 +322,6 @@ class TransparencyApp(ttk.Window):
         try:
             if hasattr(self, "_mouse_listener"):
                 self._mouse_listener.stop()
-            if hasattr(self, "_kb_listener"):
-                self._kb_listener.stop()
         except Exception:
             pass
         self.destroy()
