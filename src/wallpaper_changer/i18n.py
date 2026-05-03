@@ -67,6 +67,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_stop": "Stop/Start Watch:",
         "hk_default": "Default wallpaper:",
         "hk_transp": "Toggle transparency:",
+        "hk_toggle_window": "Open/Close app window:",
         "hk_record": "Record",
         "hk_recording": "Press...",
         "hk_disabled_warning": "\u26a0 'keyboard' library not installed. Hotkeys disabled.",
@@ -112,6 +113,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "Default wallpaper not configured or file not found.",
         "no_monitor_error": "No monitor detected.",
         "hk_lib_unavailable": "'keyboard' library not available.",
+        "notif_watch_started": "Auto-rotation started ({n}s interval).",
+        "notif_watch_stopped": "Auto-rotation stopped.",
+        "notif_default_set": "Default wallpaper set to {name}.",
+        "notif_default_applied": "Default wallpaper applied: {name}.",
 
         # Tray
         "tray_show": "Show",
@@ -190,6 +195,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_stop": "Parar/Iniciar Watch:",
         "hk_default": "Wallpaper padrão:",
         "hk_transp": "Alternar transparência:",
+        "hk_toggle_window": "Abrir/fechar janela do app:",
         "hk_record": "Gravar",
         "hk_recording": "Pressione...",
         "hk_disabled_warning": "\u26a0 Biblioteca 'keyboard' não instalada. Atalhos desativados.",
@@ -235,6 +241,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "Wallpaper padrão não configurado ou arquivo não encontrado.",
         "no_monitor_error": "Nenhum monitor detectado.",
         "hk_lib_unavailable": "Biblioteca 'keyboard' não disponível.",
+        "notif_watch_started": "Rotação automática iniciada (intervalo de {n}s).",
+        "notif_watch_stopped": "Rotação automática parada.",
+        "notif_default_set": "Wallpaper padrão definido para {name}.",
+        "notif_default_applied": "Wallpaper padrão aplicado: {name}.",
 
         # Tray
         "tray_show": "Mostrar",
@@ -313,6 +323,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_stop": "監視の停止/開始：",
         "hk_default": "デフォルト壁紙：",
         "hk_transp": "透過度の切り替え：",
+        "hk_toggle_window": "アプリウィンドウの開閉：",
         "hk_record": "記録",
         "hk_recording": "押してください...",
         "hk_disabled_warning": "\u26a0 'keyboard'ライブラリ未インストール。ホットキー無効。",
@@ -358,6 +369,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "デフォルト壁紙が未設定またはファイルが見つかりません。",
         "no_monitor_error": "モニターが検出されませんでした。",
         "hk_lib_unavailable": "'keyboard'ライブラリが利用できません。",
+        "notif_watch_started": "自動ローテーションを開始しました（間隔 {n}秒）。",
+        "notif_watch_stopped": "自動ローテーションを停止しました。",
+        "notif_default_set": "デフォルト壁紙を {name} に設定しました。",
+        "notif_default_applied": "デフォルト壁紙を適用しました: {name}。",
 
         # Tray
         "tray_show": "表示",

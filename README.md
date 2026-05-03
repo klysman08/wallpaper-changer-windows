@@ -123,6 +123,7 @@ Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
 | Stop/Start Watch | `Ctrl+Alt+S` |
 | Default wallpaper | `Ctrl+Alt+D` |
 | Toggle transparency | `Alt+A` |
+| Open/Close app window | `Ctrl+Alt+W` |
 
 All shortcuts are fully customizable from the GUI.
 

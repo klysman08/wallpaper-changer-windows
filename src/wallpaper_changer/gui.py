@@ -19,6 +19,7 @@ from .config import load_config, save_config, resolve_path
 from .hotkeys import HotkeyManager, read_hotkey, is_available as hotkeys_available
 from .i18n import t, set_language, get_language, SUPPORTED_LANGUAGES
 from .monitor import Monitor, get_monitors
+from .notifications import send_windows_notification
 from .startup import is_startup_enabled, is_startup_launch, set_startup_enabled
 from .wallpaper import apply_wallpaper, apply_single_wallpaper
 from .transparency import (
@@ -120,6 +121,7 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_stop_var = tk.StringVar(value=hk.get("stop_watch", "ctrl+alt+s"))
         self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
         self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
+        self._hk_toggle_window_var = tk.StringVar(value=hk.get("toggle_window", "ctrl+alt+w"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -402,6 +404,7 @@ class WallpaperChangerApp(ttk.Window):
             (t("hk_stop"), self._hk_stop_var),
             (t("hk_default"), self._hk_default_var),
             (t("hk_transp"), self._hk_transp_var),
+            (t("hk_toggle_window"), self._hk_toggle_window_var),
         ]
 
         self._hk_record_btns: list[ttk.Button] = []
@@ -952,6 +955,7 @@ class WallpaperChangerApp(ttk.Window):
                 "stop_watch": self._hk_stop_var.get(),
                 "default_wallpaper": self._hk_default_var.get(),
                 "toggle_transparency": self._hk_transp_var.get(),
+                "toggle_window": self._hk_toggle_window_var.get(),
             },
         }
 
@@ -1003,12 +1007,14 @@ class WallpaperChangerApp(ttk.Window):
             schedule.clear()
             self._watch_btn.configure(text=t("start_watch"), style="info.TButton")
             self._set_status(t("watch_disabled"))
+            send_windows_notification("WallpaperChanger", t("notif_watch_stopped"))
         else:
             cfg = self._collect_config()
             interval = cfg["general"]["interval"]
             self._watching = True
             self._watch_btn.configure(text=t("stop_watch"), style="danger.TButton")
             self._set_status(t("watch_active", n=interval))
+            send_windows_notification("WallpaperChanger", t("notif_watch_started", n=interval))
             schedule.every(interval).seconds.do(self._apply_now)
 
             def _loop() -> None:
@@ -1068,6 +1074,10 @@ class WallpaperChangerApp(ttk.Window):
                 self.after(0, lambda: self._set_status(
                     t("default_wp_applied", name=Path(str(out)).name),
                 ))
+                send_windows_notification(
+                    "WallpaperChanger",
+                    t("notif_default_applied", name=Path(str(out)).name),
+                )
             except Exception as exc:
                 self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
 
@@ -1083,6 +1093,7 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_stop_var.get(): lambda: self.after(0, self._toggle_watch),
             self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
             self._hk_transp_var.get(): lambda: self.after(0, self._hotkey_half_opacity),
+            self._hk_toggle_window_var.get(): lambda: self.after(0, self._toggle_window_visibility),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
@@ -1120,6 +1131,10 @@ class WallpaperChangerApp(ttk.Window):
         )
         if chosen:
             self._default_wp_var.set(chosen)
+            send_windows_notification(
+                "WallpaperChanger",
+                t("notif_default_set", name=Path(chosen).name),
+            )
 
     def _set_status(self, msg: str, error: bool = False) -> None:
         color = "#e74c3c" if error else "gray"
@@ -1170,6 +1185,12 @@ class WallpaperChangerApp(ttk.Window):
         if self._tray_icon is not None:
             self._tray_icon.stop()
             self._tray_icon = None
+
+    def _toggle_window_visibility(self) -> None:
+        if self.state() == "withdrawn":
+            self._show_from_tray()
+            return
+        self._minimize_to_tray()
 
     def _quit_app(self) -> None:
         self._watching = False
