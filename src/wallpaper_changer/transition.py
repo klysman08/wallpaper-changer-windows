@@ -4,10 +4,13 @@ Architecture:
   1. Locate (or create) the WorkerW desktop-layer window via the Progman 0x052C trick.
      WorkerW sits behind desktop icons but above the raw wallpaper bitmap, making it
      the correct surface for frame-accurate animation.
-  2. Pre-render all transition frames in memory as PIL Images (no disk I/O during playback).
+  2. Generate each frame on-the-fly during playback (lazy) — only one frame lives in
+     RAM at a time, keeping peak usage to ~2 frames regardless of fps or duration.
   3. Blit each frame to WorkerW's GDI device context using Pillow's ImageWin.Dib —
      internally a StretchDIBits call, hardware-accelerated on all modern Windows.
-  4. After playback, write the final BMP once and call set_wallpaper_win() to persist.
+  4. After playback, always sync WorkerW with the final canvas so subsequent transitions
+     always start from the correct visual state (fixes stuck wallpaper after "none").
+  5. Write the final BMP once and call set_wallpaper_win() to persist.
 
 Supported transitions: "none", "fade", "slide"
 """
@@ -102,59 +105,74 @@ def _get_current_wallpaper() -> Image.Image | None:
         path = Path(val)
         if not path.exists():
             return None
-        return Image.open(path).convert("RGB")
+        with Image.open(path) as img:
+            return img.convert("RGB")
     except Exception:
         return None
 
 
-# ── Frame builders ────────────────────────────────────────────────────────────
+# ── Single-frame generators ───────────────────────────────────────────────────
 
-def _build_fade_frames(old: Image.Image, new: Image.Image, n: int) -> list[Image.Image]:
-    """Cross-dissolve with smoothstep easing."""
-    return [Image.blend(old, new, _smoothstep(i / n)) for i in range(1, n + 1)]
+def _make_fade_frame(old: Image.Image, new: Image.Image, progress: float) -> Image.Image:
+    return Image.blend(old, new, progress)
 
 
-def _build_slide_frames(old: Image.Image, new: Image.Image, n: int) -> list[Image.Image]:
-    """New image slides in from the right; old image exits left.
-
-    Equivalent to panning a viewport rightward across [old | new].
-    """
+def _make_slide_frame(old: Image.Image, new: Image.Image, progress: float) -> Image.Image:
+    """New image slides in from the right; old exits left (viewport pan over [old|new])."""
     w, h = old.size
-    frames: list[Image.Image] = []
-    for i in range(1, n + 1):
-        offset = int(w * _smoothstep(i / n))
-        frame = Image.new("RGB", (w, h))
-        if w > offset:
-            frame.paste(old.crop((offset, 0, w, h)), (0, 0))
-        if offset > 0:
-            frame.paste(new.crop((0, 0, offset, h)), (w - offset, 0))
-        frames.append(frame)
-    return frames
+    offset = int(w * progress)
+    frame = Image.new("RGB", (w, h))
+    if w > offset:
+        frame.paste(old.crop((offset, 0, w, h)), (0, 0))
+    if offset > 0:
+        frame.paste(new.crop((0, 0, offset, h)), (w - offset, 0))
+    return frame
 
 
-# ── GDI playback ──────────────────────────────────────────────────────────────
+# ── WorkerW drawing ───────────────────────────────────────────────────────────
 
-def _play_frames(
+def _blit_to_worker_w(worker_w: int, img: Image.Image) -> None:
+    """Blit a single PIL Image to WorkerW's GDI device context."""
+    w, h = img.size
+    hdc = user32.GetDC(worker_w)
+    try:
+        dib = ImageWin.Dib(img)
+        dib.draw(hdc, (0, 0, w, h))
+    finally:
+        user32.ReleaseDC(worker_w, hdc)
+
+
+def _play_animation(
     worker_w: int,
-    frames: list[Image.Image],
+    old: Image.Image,
+    new: Image.Image,
+    transition: str,
+    n_frames: int,
     fps: int,
-    canvas_size: tuple[int, int],
 ) -> None:
-    """Blit pre-rendered frames to WorkerW at the target frame rate.
+    """Generate and blit frames lazily at the target rate.
 
-    Converts each PIL Image to a Pillow ImageWin.Dib (DIB section) upfront,
-    then iterates with wall-clock scheduling to avoid drift accumulation.
+    Only one frame is alive in memory at a time: the PIL Image is created,
+    converted to a Dib, blitted, and then immediately discarded before the
+    next frame is generated. Peak RAM = ~2 frames (one active + one Dib).
     """
-    w, h = canvas_size
-    dibs = [ImageWin.Dib(f) for f in frames]
+    w, h = new.size
     frame_delay = 1.0 / fps
 
     hdc = user32.GetDC(worker_w)
     try:
         t_start = time.perf_counter()
-        for i, dib in enumerate(dibs):
+        for i in range(1, n_frames + 1):
+            progress = _smoothstep(i / n_frames)
+            frame = (
+                _make_fade_frame(old, new, progress)
+                if transition == "fade"
+                else _make_slide_frame(old, new, progress)
+            )
+            dib = ImageWin.Dib(frame)
             dib.draw(hdc, (0, 0, w, h))
-            _sleep_until(t_start + (i + 1) * frame_delay)
+            del dib, frame          # free immediately before sleeping
+            _sleep_until(t_start + i * frame_delay)
     finally:
         user32.ReleaseDC(worker_w, hdc)
 
@@ -171,8 +189,11 @@ def apply_transition(
 ) -> None:
     """Animate from the current wallpaper to *canvas*, then persist the result.
 
-    Falls back to a direct apply (no animation) if WorkerW cannot be found or
-    the current wallpaper is unavailable/incompatible.
+    WorkerW is always synced to *canvas* at the end of every call — including
+    "none" — so that subsequent transitions always start from the correct visual
+    state and the stuck-wallpaper / effect-not-changing bug cannot occur.
+
+    Falls back gracefully if WorkerW is unavailable or the animation fails.
 
     Args:
         canvas:           Final composed image (full virtual desktop size).
@@ -184,32 +205,35 @@ def apply_transition(
                           Windows wallpaper API. Called exactly once after
                           animation completes.
     """
-    if transition == "none" or transition not in TRANSITIONS:
-        canvas.save(str(out), "BMP")
-        set_wallpaper_fn(out)
-        return
-
-    old_img = _get_current_wallpaper()
-    if old_img is None:
-        canvas.save(str(out), "BMP")
-        set_wallpaper_fn(out)
-        return
-
-    if old_img.size != canvas.size:
-        old_img = old_img.resize(canvas.size, Image.LANCZOS)
-
-    n_frames = max(1, round(duration * fps))
-
-    if transition == "fade":
-        frames = _build_fade_frames(old_img, canvas, n_frames)
-    else:  # slide
-        frames = _build_slide_frames(old_img, canvas, n_frames)
-
+    worker_w: int | None = None
     try:
         worker_w = _find_worker_w()
-        _play_frames(worker_w, frames, fps, canvas.size)
     except Exception:
-        pass  # animation failed — fall through to persist final frame normally
+        pass
 
+    # ── Run animation (skip for "none") ───────────────────────────────────────
+    if transition in TRANSITIONS and transition != "none" and worker_w is not None:
+        old_img = _get_current_wallpaper()
+        if old_img is not None:
+            if old_img.size != canvas.size:
+                old_img = old_img.resize(canvas.size, Image.LANCZOS)
+            n_frames = max(1, round(duration * fps))
+            try:
+                _play_animation(worker_w, old_img, canvas, transition, n_frames, fps)
+            except Exception:
+                pass  # animation failed; WorkerW sync below still runs
+
+    # ── Persist final wallpaper ───────────────────────────────────────────────
     canvas.save(str(out), "BMP")
     set_wallpaper_fn(out)
+
+    # ── Always sync WorkerW with the final canvas ─────────────────────────────
+    # This guarantees WorkerW always reflects the current wallpaper so that:
+    #   • Switching from an animated transition back to "none" shows the correct image.
+    #   • Changing the image effect (normal → bw → vintage) is immediately visible.
+    #   • The next transition starts from the right "old" frame visually.
+    if worker_w is not None:
+        try:
+            _blit_to_worker_w(worker_w, canvas)
+        except Exception:
+            pass
