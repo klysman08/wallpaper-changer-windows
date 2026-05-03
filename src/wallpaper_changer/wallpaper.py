@@ -49,11 +49,15 @@ def set_wallpaper_win(path: str | Path) -> None:
     """Aplica o arquivo de imagem como wallpaper no Windows."""
     abs_path = str(Path(path).resolve())
     set_wallpaper_style_span()
+    # SPIF_SENDWININICHANGE omitted intentionally: it broadcasts WM_SETTINGCHANGE which
+    # causes Explorer to run its own animated crossfade over WorkerW, making the system
+    # fade visible even when transition="none". SPIF_UPDATEINIFILE is sufficient to
+    # persist the path; SystemParametersInfoW itself applies the wallpaper immediately.
     result = ctypes.windll.user32.SystemParametersInfoW(
         SPI_SETDESKWALLPAPER,
         0,
         abs_path,
-        SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE,
+        SPIF_UPDATEINIFILE,
     )
     if not result:
         raise RuntimeError("SystemParametersInfoW falhou ao aplicar o wallpaper")
