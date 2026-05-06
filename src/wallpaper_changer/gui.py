@@ -39,7 +39,7 @@ _ACCENT     = "#3a7bd5"
 # Fit mode keys — labels are resolved via i18n at build time
 _FIT_KEYS        = ["fill", "fit", "stretch", "center", "span"]
 _EFFECT_KEYS     = ["normal", "bw", "vintage", "hdr"]
-_TRANSITION_KEYS = ["none", "fade", "slide", "slide_up", "zoom"]
+_SCROLL_MODIFIERS = ["alt", "ctrl", "shift", "win"]
 log = logging.getLogger(__name__)
 
 
@@ -98,10 +98,9 @@ class WallpaperChangerApp(ttk.Window):
         self._startup_launch = is_startup_launch()
 
         # ── Variaveis de estado ───────────────────────────────────────────────
-        self._fit_var        = tk.StringVar(value=self._cfg["display"]["fit_mode"])
-        self._effect_var     = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
-        self._transition_var = tk.StringVar(value=self._cfg["display"].get("transition", "none"))
-        self._sel_var = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
+        self._fit_var    = tk.StringVar(value=self._cfg["display"]["fit_mode"])
+        self._effect_var = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
+        self._sel_var    = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
         self._collage_count_var = tk.IntVar(
             value=self._cfg["general"].get("collage_count", 4)
@@ -124,6 +123,7 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
         self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
         self._hk_toggle_window_var = tk.StringVar(value=hk.get("toggle_window", "ctrl+alt+w"))
+        self._scroll_modifier_var = tk.StringVar(value=hk.get("scroll_modifier", "alt"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -139,8 +139,6 @@ class WallpaperChangerApp(ttk.Window):
         self._transp_windows: list[tuple[int, str, str]] = []
         self._opacity_map: dict[str, int] = load_opacity_settings()
         self._pynput_mouse_listener = None
-        self._pynput_kb_listener = None
-        self._alt_pressed = False
 
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
@@ -219,7 +217,6 @@ class WallpaperChangerApp(ttk.Window):
         self._build_selection_section(main)
         self._build_fit_section(main)
         self._build_effect_section(main)
-        self._build_transition_section(main)
         self._build_rotation_section(main)
         self._build_hotkeys_section(main)
         self._build_transparency_section(main)
@@ -372,26 +369,10 @@ class WallpaperChangerApp(ttk.Window):
             rb.pack(side=LEFT, padx=(0, 8))
             self._effect_btns[key] = rb
 
-    def _build_transition_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text=t("transition_title"), padding=10)
-        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
-
-        btn_row = ttk.Frame(frame)
-        btn_row.grid(row=0, column=0, sticky=W)
-
-        for key in _TRANSITION_KEYS:
-            ttk.Radiobutton(
-                btn_row,
-                text=t(f"transition_{key}"),
-                variable=self._transition_var,
-                value=key,
-                style="Toolbutton",
-            ).pack(side=LEFT, padx=(0, 8))
-
     # ── Rotation / Timer ──────────────────────────────────────────────────────
     def _build_rotation_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("rotation_title"), padding=10)
-        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=6, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         row1 = ttk.Frame(frame)
@@ -414,7 +395,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Hotkeys Section ───────────────────────────────────────────────────────
     def _build_hotkeys_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("hotkeys_title"), padding=10)
-        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=7, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         labels = [
@@ -440,18 +421,34 @@ class WallpaperChangerApp(ttk.Window):
             btn.grid(row=i, column=2, pady=2)
             self._hk_record_btns.append(btn)
 
+        # ── Scroll modifier (separate from full hotkeys — only modifier key) ──
+        n = len(labels)
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=n, column=0, columnspan=3, sticky=EW, pady=(8, 4),
+        )
+        ttk.Label(frame, text=t("hk_scroll_modifier")).grid(
+            row=n + 1, column=0, sticky=W, padx=(0, 8), pady=2,
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=self._scroll_modifier_var,
+            values=_SCROLL_MODIFIERS,
+            state="readonly",
+            width=10,
+        ).grid(row=n + 1, column=1, sticky=W, pady=2)
+
         if not hotkeys_available():
             ttk.Label(
                 frame,
                 text=t("hk_disabled_warning"),
                 font=("Segoe UI", 9), foreground="#e74c3c",
-            ).grid(row=len(labels), column=0, columnspan=3, sticky=W, pady=(6, 0))
+            ).grid(row=n + 2, column=0, columnspan=3, sticky=W, pady=(6, 0))
 
     # ── Default Wallpaper Section ─────────────────────────────────────────────
     # ── Transparency Section ────────────────────────────────────────────────
     def _build_transparency_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("transp_title"), padding=10)
-        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=8, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         # ── Window ComboBox + Refresh ─────────────────────────────────────
@@ -576,32 +573,31 @@ class WallpaperChangerApp(ttk.Window):
         self.after(0, lambda: self._set_status(t("transp_applied", alpha=new_alpha)))
         self.after(0, self._sync_transp_slider_if_match, hwnd)
 
+    # VK codes for supported modifier keys
+    _MODIFIER_VK: dict[str, int] = {
+        "alt":   0x12,  # VK_MENU
+        "ctrl":  0x11,  # VK_CONTROL
+        "shift": 0x10,  # VK_SHIFT
+        "win":   0x5B,  # VK_LWIN
+    }
+
     def _start_transparency_listeners(self) -> None:
-        """Start the pynput mouse/keyboard listener for Alt+Scroll."""
+        """Start the pynput mouse listener for modifier+Scroll transparency."""
         threading.Thread(
             target=self._run_pynput_listeners, daemon=True,
         ).start()
 
     def _run_pynput_listeners(self) -> None:
         try:
-            from pynput import mouse, keyboard as pynput_kb
+            import ctypes as _ct
+            from pynput import mouse
 
-            def on_press(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = True
-                except Exception:
-                    pass
-
-            def on_release(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = False
-                except Exception:
-                    pass
+            def _modifier_is_down() -> bool:
+                vk = self._MODIFIER_VK.get(self._scroll_modifier_var.get(), 0x12)
+                return bool(_ct.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
             def on_scroll(_x, _y, _dx, dy):
-                if not self._alt_pressed:
+                if not _modifier_is_down():
                     return
                 hwnd = get_foreground_window()
                 if not hwnd:
@@ -616,7 +612,6 @@ class WallpaperChangerApp(ttk.Window):
                 new_alpha = max(10, min(255, current + int(dy) * 5))
                 self._opacity_map[proc_name] = new_alpha
                 set_window_opacity(hwnd, new_alpha)
-                # Persist on scroll, though might be a bit chatty
                 self._save_transparency_settings()
 
                 self.after(0, lambda a=new_alpha: self._set_status(
@@ -624,13 +619,8 @@ class WallpaperChangerApp(ttk.Window):
                 ))
                 self.after(0, self._sync_transp_slider_if_match, hwnd)
 
-            self._pynput_kb_listener = pynput_kb.Listener(
-                on_press=on_press, on_release=on_release,
-            )
             self._pynput_mouse_listener = mouse.Listener(on_scroll=on_scroll)
-            self._pynput_kb_listener.start()
             self._pynput_mouse_listener.start()
-            self._pynput_kb_listener.join()
             self._pynput_mouse_listener.join()
         except ImportError:
             log.info("pynput not available; transparency scroll shortcut disabled")
@@ -649,7 +639,7 @@ class WallpaperChangerApp(ttk.Window):
 
     def _build_default_wp_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("default_wp_title"), padding=10)
-        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=9, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -669,7 +659,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Folder Section ────────────────────────────────────────────────────────
     def _build_folder_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("folder_title"), padding=10)
-        frame.grid(row=11, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=10, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -713,7 +703,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Language Section ──────────────────────────────────────────────────────
     def _build_language_section(self, parent: ttk.Frame) -> None:
         frame = ttk.Labelframe(parent, text=t("language_title"), padding=10)
-        frame.grid(row=12, column=0, sticky=EW, padx=12, pady=4)
+        frame.grid(row=11, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(1, weight=1)
 
         btn_row = ttk.Frame(frame)
@@ -750,7 +740,7 @@ class WallpaperChangerApp(ttk.Window):
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=13, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=12, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -967,7 +957,7 @@ class WallpaperChangerApp(ttk.Window):
             "display": {
                 "fit_mode": self._fit_var.get(),
                 "effect": self._effect_var.get(),
-                "transition": self._transition_var.get(),
+                "transition": "fade",
                 "transition_duration": self._cfg["display"].get("transition_duration", 0.6),
                 "transition_fps": self._cfg["display"].get("transition_fps", 30),
             },
@@ -978,6 +968,7 @@ class WallpaperChangerApp(ttk.Window):
                 "default_wallpaper": self._hk_default_var.get(),
                 "toggle_transparency": self._hk_transp_var.get(),
                 "toggle_window": self._hk_toggle_window_var.get(),
+                "scroll_modifier": self._scroll_modifier_var.get(),
             },
         }
 
@@ -1226,12 +1217,10 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_manager.unregister_all()
         # Save transparency before exit
         self._save_transparency_settings()
-        # Stop pynput listeners
+        # Stop pynput mouse listener
         try:
             if self._pynput_mouse_listener:
                 self._pynput_mouse_listener.stop()
-            if self._pynput_kb_listener:
-                self._pynput_kb_listener.stop()
         except Exception:
             pass
         if self._tray_icon is not None:

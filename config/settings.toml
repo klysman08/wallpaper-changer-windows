@@ -14,7 +14,7 @@ default_wallpaper = ""
 [display]
 fit_mode            = "fill"
 effect              = "normal"
-transition          = "none"
+transition          = "fade"
 transition_duration = 0.6
 transition_fps      = 30
 
@@ -24,3 +24,4 @@ prev_wallpaper    = "ctrl+alt+left"
 stop_watch        = "ctrl+alt+s"
 default_wallpaper = "ctrl+alt+d"
 toggle_window     = "ctrl+alt+w"
+scroll_modifier   = "alt"
