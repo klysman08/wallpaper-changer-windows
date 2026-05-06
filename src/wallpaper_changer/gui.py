@@ -123,7 +123,11 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
         self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
         self._hk_toggle_window_var = tk.StringVar(value=hk.get("toggle_window", "ctrl+alt+w"))
-        self._scroll_modifier_var = tk.StringVar(value=hk.get("scroll_modifier", "alt"))
+        self._scroll_modifier_var   = tk.StringVar(value=hk.get("scroll_modifier",  "alt"))
+        self._hk_effect_normal_var  = tk.StringVar(value=hk.get("effect_normal",   "ctrl+alt+1"))
+        self._hk_effect_bw_var      = tk.StringVar(value=hk.get("effect_bw",       "ctrl+alt+2"))
+        self._hk_effect_vintage_var = tk.StringVar(value=hk.get("effect_vintage",  "ctrl+alt+3"))
+        self._hk_effect_hdr_var     = tk.StringVar(value=hk.get("effect_hdr",      "ctrl+alt+4"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -421,7 +425,7 @@ class WallpaperChangerApp(ttk.Window):
             btn.grid(row=i, column=2, pady=2)
             self._hk_record_btns.append(btn)
 
-        # ── Scroll modifier (separate from full hotkeys — only modifier key) ──
+        # ── Scroll modifier (only modifier key, no full combo) ───────────────
         n = len(labels)
         ttk.Separator(frame, orient="horizontal").grid(
             row=n, column=0, columnspan=3, sticky=EW, pady=(8, 4),
@@ -437,12 +441,44 @@ class WallpaperChangerApp(ttk.Window):
             width=10,
         ).grid(row=n + 1, column=1, sticky=W, pady=2)
 
+        # ── Image effect hotkeys ──────────────────────────────────────────────
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=n + 2, column=0, columnspan=3, sticky=EW, pady=(8, 4),
+        )
+        ttk.Label(
+            frame, text=t("hk_effects_group"),
+            font=("Segoe UI", 9, "bold"),
+        ).grid(row=n + 3, column=0, columnspan=3, sticky=W, pady=(0, 4))
+
+        effect_labels = [
+            (t("hk_effect_normal"),  self._hk_effect_normal_var),
+            (t("hk_effect_bw"),      self._hk_effect_bw_var),
+            (t("hk_effect_vintage"), self._hk_effect_vintage_var),
+            (t("hk_effect_hdr"),     self._hk_effect_hdr_var),
+        ]
+        for j, (text, var) in enumerate(effect_labels):
+            row_idx = n + 4 + j
+            btn_idx = len(labels) + j
+            ttk.Label(frame, text=text).grid(
+                row=row_idx, column=0, sticky=W, padx=(0, 8), pady=2,
+            )
+            ttk.Entry(frame, textvariable=var, width=24).grid(
+                row=row_idx, column=1, sticky=EW, padx=(0, 4), pady=2,
+            )
+            btn = ttk.Button(
+                frame, text=t("hk_record"), width=8, style="Outline.TButton",
+                command=lambda v=var, b=btn_idx: self._record_hotkey(v, b),
+            )
+            btn.grid(row=row_idx, column=2, pady=2)
+            self._hk_record_btns.append(btn)
+
+        warning_row = n + 4 + len(effect_labels)
         if not hotkeys_available():
             ttk.Label(
                 frame,
                 text=t("hk_disabled_warning"),
                 font=("Segoe UI", 9), foreground="#e74c3c",
-            ).grid(row=n + 2, column=0, columnspan=3, sticky=W, pady=(6, 0))
+            ).grid(row=warning_row, column=0, columnspan=3, sticky=W, pady=(6, 0))
 
     # ── Default Wallpaper Section ─────────────────────────────────────────────
     # ── Transparency Section ────────────────────────────────────────────────
@@ -969,6 +1005,10 @@ class WallpaperChangerApp(ttk.Window):
                 "toggle_transparency": self._hk_transp_var.get(),
                 "toggle_window": self._hk_toggle_window_var.get(),
                 "scroll_modifier": self._scroll_modifier_var.get(),
+                "effect_normal":  self._hk_effect_normal_var.get(),
+                "effect_bw":      self._hk_effect_bw_var.get(),
+                "effect_vintage": self._hk_effect_vintage_var.get(),
+                "effect_hdr":     self._hk_effect_hdr_var.get(),
             },
         }
 
@@ -983,6 +1023,7 @@ class WallpaperChangerApp(ttk.Window):
         def _work() -> None:
             try:
                 cfg = self._collect_config()
+                save_config(cfg)   # persist every apply so settings survive restart
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, images_used = apply_wallpaper(cfg, self._monitors, out_dir)
@@ -1102,6 +1143,11 @@ class WallpaperChangerApp(ttk.Window):
 
         threading.Thread(target=_work, daemon=True).start()
 
+    def _hotkey_set_effect(self, effect: str) -> None:
+        """Hotkey: switch image effect and immediately apply + save."""
+        self._effect_var.set(effect)
+        self._apply_now()
+
     # ── Hotkey helpers ────────────────────────────────────────────────────────
 
     def _register_hotkeys(self) -> None:
@@ -1113,6 +1159,10 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
             self._hk_transp_var.get(): lambda: self.after(0, self._hotkey_half_opacity),
             self._hk_toggle_window_var.get(): lambda: self.after(0, self._toggle_window_visibility),
+            self._hk_effect_normal_var.get():  lambda: self.after(0, lambda: self._hotkey_set_effect("normal")),
+            self._hk_effect_bw_var.get():      lambda: self.after(0, lambda: self._hotkey_set_effect("bw")),
+            self._hk_effect_vintage_var.get(): lambda: self.after(0, lambda: self._hotkey_set_effect("vintage")),
+            self._hk_effect_hdr_var.get():     lambda: self.after(0, lambda: self._hotkey_set_effect("hdr")),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
