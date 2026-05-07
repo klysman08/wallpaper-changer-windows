@@ -88,7 +88,7 @@
       <div class="hero-glow hero-glow-2"></div>
     </div>
     <div class="container hero-content">
-      <div class="badge">v3.1 · MIT License · Free Forever</div>
+      <div class="badge">v3.2 · MIT License · Free Forever</div>
       <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
       <p class="hero-sub">
         Multi-monitor collage mode, auto-rotation, global hotkeys, system tray — completely free and open-source. No
@@ -147,8 +147,16 @@
               <td><span class="icon-good">✓</span> Detects every monitor, respects resolution and position</td>
             </tr>
             <tr>
+              <td><span class="icon-bad">✗</span> Abrupt wallpaper cuts between changes</td>
+              <td><span class="icon-good">✓</span> <strong>Smooth fade transition</strong> at 30 fps — no flicker</td>
+            </tr>
+            <tr>
               <td><span class="icon-bad">✗</span> No auto-start or background rotation</td>
               <td><span class="icon-good">✓</span> <strong>Start with Windows</strong> → auto-rotation from tray</td>
+            </tr>
+            <tr>
+              <td><span class="icon-bad">✗</span> Settings lost after restart</td>
+              <td><span class="icon-good">✓</span> <strong>Auto-save</strong> on every apply — no manual save needed</td>
             </tr>
             <tr>
               <td><span class="icon-bad">✗</span> Paid or ad-supported</td>
@@ -185,16 +193,22 @@
           </p>
         </div>
         <div class="feature-card">
+          <div class="feature-icon">🎞️</div>
+          <h3>Fade Transition</h3>
+          <p>Every wallpaper change crossfades smoothly at 30 fps using GDI WorkerW rendering — no flicker, no abrupt
+            cuts, no system animation artifacts.</p>
+        </div>
+        <div class="feature-card">
           <div class="feature-icon">⌨️</div>
           <h3>Global Hotkeys</h3>
-          <p>Next, Previous, Stop/Start, Default wallpaper, and Transparency toggle — all reachable from any app via
-            customizable keyboard shortcuts.</p>
+          <p>Next, Previous, Stop/Start, Default wallpaper — plus instant effect switching (Normal / B&W / Vintage / HDR)
+            via Ctrl+Alt+1–4. All fully customizable.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🪟</div>
           <h3>Window Transparency</h3>
-          <p>Control the opacity of any window via a slider or global shortcuts. Toggle with a hotkey, fine-tune with
-            Alt+Scroll. Settings persist across restarts.</p>
+          <p>Control any window's opacity via slider or shortcuts. Toggle with a hotkey, fine-tune with
+            modifier+Scroll. The scroll modifier key (Alt/Ctrl/Shift/Win) is configurable.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🌍</div>
@@ -329,6 +343,12 @@
                 </div>
               </div>
               <div class="mock-setting-row">
+                <span>Image effect</span>
+                <div class="mock-toggle-group">
+                  <span class="mock-active">Normal</span><span>B&amp;W</span><span>Vintage</span><span>HDR</span>
+                </div>
+              </div>
+              <div class="mock-setting-row">
                 <span>Auto-rotation interval</span>
                 <div class="mock-input-row">
                   <div class="mock-input">30</div>
@@ -348,8 +368,8 @@
               </div>
             </div>
           </div>
-          <p class="panel-desc">All settings are persisted to a TOML config file. Language and rotation can be changed
-            at any time without restarting.</p>
+          <p class="panel-desc">Settings are <strong>auto-saved on every Apply</strong> — no manual save needed. Language,
+            effects, fit mode, and all hotkeys survive restarts automatically.</p>
         </div>
         <div class="preview-panel" id="tab-tray">
           <div class="mock-window tray-window">
@@ -453,7 +473,7 @@ cd wallpaper-changer-windows/wallpaper-changer
 uv sync
 
 <span class="c"># 3. Launch the GUI</span>
-uv run python -c "from wallpaper_changer.gui import run; run()"</code></pre>
+uv run wallpaper-changer-gui</code></pre>
         </div>
         <div class="install-req">
           <h4>Prerequisites</h4>
@@ -531,12 +551,32 @@ uv run python -c "from wallpaper_changer.gui import run; run()"</code></pre>
             <span>Apply default wallpaper</span>
           </div>
           <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></div>
+            <span>Open / Close app window</span>
+          </div>
+          <div class="hotkey-row">
             <div class="hotkey-keys"><kbd>Alt</kbd><kbd>A</kbd></div>
             <span>Toggle transparency (50% ↔ opaque)</span>
           </div>
           <div class="hotkey-row">
             <div class="hotkey-keys"><kbd>Alt</kbd><kbd>Scroll ↕</kbd></div>
-            <span>Adjust focused window opacity gradually</span>
+            <span>Adjust focused window opacity (modifier configurable)</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>1</kbd></div>
+            <span>Effect: Normal</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>2</kbd></div>
+            <span>Effect: Black &amp; White</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>3</kbd></div>
+            <span>Effect: Vintage</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>4</kbd></div>
+            <span>Effect: HDR</span>
           </div>
         </div>
       </div>
@@ -553,8 +593,23 @@ uv run python -c "from wallpaper_changer.gui import run; run()"</code></pre>
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
-              <span class="version-tag">v3.1</span>
+              <span class="version-tag">v3.2</span>
               <span class="version-label current-label">Latest</span>
+            </div>
+            <ul class="change-list">
+              <li>Smooth fade transition at 30 fps between wallpapers (WorkerW + GDI rendering)</li>
+              <li>Image effect hotkeys — Ctrl+Alt+1–4 switch Normal / B&W / Vintage / HDR instantly</li>
+              <li>Configurable scroll modifier for transparency (Alt, Ctrl, Shift, or Win)</li>
+              <li>Auto-save — every Apply persists settings to disk, no manual Save needed</li>
+              <li>Fixed sticky-modifier bug in transparency scroll using Win32 GetAsyncKeyState</li>
+            </ul>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v3.1</span>
             </div>
             <ul class="change-list">
               <li>Window Transparency Control — adjust opacity of any window via GUI slider</li>
