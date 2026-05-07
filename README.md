@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-3.0-orange)
+![Version](https://img.shields.io/badge/Version-3.1-orange)
 
 ---
 
@@ -22,6 +22,7 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 | Always visible in the taskbar | Runs silently in the **system tray** |
 | English-only interfaces | **3 languages** — English, Português (Brasil), 日本語 |
 | No auto-start or background rotation | **Start with Windows** → launches to tray with auto-rotation |
+| Abrupt wallpaper changes | **Smooth fade transition** at 30 fps via WorkerW injection |
 | Paid or ad-supported | 100% free, MIT licensed, no telemetry |
 | Complex installers or manual setup | One-click **Windows Installer** with language selection |
 
@@ -35,13 +36,16 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 | **Same images on all monitors** | Option to replicate the same collage on every screen |
 | **Random or sequential selection** | Switch between images randomly or in order |
 | **Image fit modes** | Fill, Fit, Stretch, Center, or Span |
-| **Image effects** | Apply Normal, Black & White, Vintage, or HDR to generated wallpaper |
+| **Image effects** | Normal, Black & White, Vintage, or HDR — switchable instantly via hotkey |
+| **Fade transition** | Smooth 30 fps crossfade between wallpapers using GDI WorkerW rendering |
 | **Auto rotation** | Change wallpaper at configurable intervals (seconds) |
+| **Auto-save settings** | Every apply persists current settings — no manual Save needed |
 | **Start with Windows** | Launches to system tray with auto-rotation enabled |
 | **System tray** | App lives in the notification area — right-click for quick actions |
 | **Multi-language GUI** | English, Português (Brasil), 日本語 — switchable in settings |
-| **Global hotkeys** | Next / Previous / Stop / Default wallpaper via keyboard shortcuts |
-| **Window transparency** | Control any window's opacity via GUI slider or global shortcuts (toggle + scroll) |
+| **Global hotkeys** | Next / Previous / Stop / Default wallpaper + effect switching via keyboard |
+| **Window transparency** | Control any window's opacity via GUI slider or shortcuts (toggle + scroll) |
+| **Configurable scroll modifier** | Choose which key (Alt / Ctrl / Shift / Win) activates transparency scroll |
 | **Wallpaper history** | Navigate back to previously applied wallpapers |
 | **Default wallpaper** | Assign a fallback image applied via hotkey |
 | **Windows Installer** | Setup.exe via Inno Setup — includes language selection during install |
@@ -64,11 +68,11 @@ Most wallpaper apps fall into two categories: simple slideshows that only handle
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
 cd wallpaper-changer-windows/wallpaper-changer
 
-# 2. Create virtual environment and install dependencies
+# 2. Install dependencies
 uv sync
 
 # 3. Start the GUI
-uv run python -c "from wallpaper_changer.gui import run; run()"
+uv run wallpaper-changer-gui
 ```
 
 ### Prerequisites (source only)
@@ -92,7 +96,7 @@ WallpaperChanger automatically detects all connected monitors, showing a live pr
 Each monitor is divided into an automatic grid with **1 to 8 images**.
 
 - Choose the number of images with the numeric buttons
-- Enable **"Same images on all monitors"** to replicate the same set
+- Enable **"Same images on all monitors"** to replicate the same set across all screens
 
 ### Settings
 
@@ -100,6 +104,14 @@ Each monitor is divided into an automatic grid with **1 to 8 images**.
 - **Screen fit** — `Fill`, `Fit`, `Stretch`, `Center`, `Span`
 - **Image effect** — `Normal`, `Black & White`, `Vintage`, `HDR`
 - **Auto rotation** — set the interval in seconds and click **Start Watch**
+
+### Fade Transition
+
+Every wallpaper change is animated with a smooth **crossfade at 30 fps**. The transition is rendered directly onto the Windows desktop layer (WorkerW) using GDI blitting — no flicker, no abrupt cuts.
+
+### Auto-Save
+
+Settings are **saved automatically on every Apply** — including image effect, fit mode, folder, and all hotkeys. Restarting the app or the computer will always restore the last configuration. The explicit "Save Config" button is still available but is no longer required.
 
 ### Start with Windows
 
@@ -111,7 +123,7 @@ Switch between **English**, **Português (Brasil)**, and **日本語** from the 
 
 ### Wallpapers Folder
 
-Define the source folder for images.
+Define the source folder for images.  
 Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
 
 ### Global Hotkeys
@@ -124,8 +136,12 @@ Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
 | Default wallpaper | `Ctrl+Alt+D` |
 | Toggle transparency | `Alt+A` |
 | Open/Close app window | `Ctrl+Alt+W` |
+| **Effect: Normal** | `Ctrl+Alt+1` |
+| **Effect: Black & White** | `Ctrl+Alt+2` |
+| **Effect: Vintage** | `Ctrl+Alt+3` |
+| **Effect: HDR** | `Ctrl+Alt+4` |
 
-All shortcuts are fully customizable from the GUI.
+All shortcuts are fully customizable from the **Hotkeys** section in the GUI. Effect hotkeys switch the active effect and immediately apply the wallpaper.
 
 ### Window Transparency
 
@@ -134,7 +150,8 @@ Control the opacity of any open window directly from the app:
 - **ComboBox** — select any visible window from a filterable list
 - **Slider** — adjust opacity in real-time (range 50–255)
 - **Toggle shortcut** (`Alt+A`) — press once for 50% transparency, press again to restore
-- **Scroll shortcut** (`Alt+Scroll`) — hold Alt and scroll to gradually adjust the focused window
+- **Scroll shortcut** — hold the configured modifier key and scroll to gradually adjust the focused window's opacity
+- **Configurable modifier** — choose which key activates scroll transparency (`Alt`, `Ctrl`, `Shift`, or `Win`) in the Hotkeys section
 - **Persistence** — opacity settings are saved to `config/transparency.json` and restored on next launch
 
 ### System Tray
@@ -147,7 +164,7 @@ Closing the window (✕) or clicking **Tray** minimizes the app to the notificat
 
 ```powershell
 # Apply wallpaper immediately
-uv run python -c "from wallpaper_changer.gui import run; run()
+uv run wallpaper-changer apply
 
 # Apply with options
 uv run wallpaper-changer apply --collage-count 6 --selection random
@@ -164,9 +181,37 @@ uv run wallpaper-changer watch
 ## Configuration (`config/settings.toml`)
 
 ```toml
+[general]
+mode                 = "collage"
+selection            = "random"
+interval             = 300
+collage_count        = 4
+collage_same_for_all = false
+language             = "en"
+
+[paths]
+wallpapers_folder = "C:\\Users\\Public\\Pictures"
+output_folder     = "assets/output"
+default_wallpaper = ""
+
 [display]
-fit_mode = "fill"
-effect   = "normal" # normal | bw | vintage | hdr
+fit_mode            = "fill"
+effect              = "normal"   # normal | bw | vintage | hdr
+transition          = "fade"
+transition_duration = 0.6
+transition_fps      = 30
+
+[hotkeys]
+next_wallpaper    = "ctrl+alt+right"
+prev_wallpaper    = "ctrl+alt+left"
+stop_watch        = "ctrl+alt+s"
+default_wallpaper = "ctrl+alt+d"
+toggle_window     = "ctrl+alt+w"
+scroll_modifier   = "alt"        # alt | ctrl | shift | win
+effect_normal     = "ctrl+alt+1"
+effect_bw         = "ctrl+alt+2"
+effect_vintage    = "ctrl+alt+3"
+effect_hdr        = "ctrl+alt+4"
 ```
 
 ---
@@ -176,7 +221,6 @@ effect   = "normal" # normal | bw | vintage | hdr
 ### Portable executable (PyInstaller)
 
 ```powershell
-cd wallpaper-changer
 .\scripts\build_exe.ps1 -NoInstaller
 ```
 
@@ -187,7 +231,6 @@ Result in `dist\WallpaperChanger\`.
 Prerequisite: [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed.
 
 ```powershell
-cd wallpaper-changer
 .\scripts\build_exe.ps1
 ```
 
@@ -218,8 +261,9 @@ wallpaper-changer/
     ├── image_utils.py       # Image selection and resizing
     ├── monitor.py           # Monitor detection (Win32)
     ├── startup.py           # Windows startup registration
+    ├── transition.py        # Fade transition engine (WorkerW + GDI)
     ├── transparency.py      # Window transparency control (Win32 + persistence)
-    └── wallpaper.py         # Wallpaper assembly, and application
+    └── wallpaper.py         # Wallpaper assembly and application
 ```
 
 ---
