@@ -10,7 +10,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from .config import resolve_path, get_project_root
 from .image_utils import fit_image, pick_images, build_canvas
-from .monitor import Monitor, get_monitors
+from .monitor import Monitor
 from .transition import apply_transition, _DEFAULT_DURATION, _DEFAULT_FPS
 
 SPI_SETDESKWALLPAPER  = 0x0014
@@ -168,13 +168,20 @@ def _apply_collage(
     min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
     canvas = build_canvas(total_w, total_h)
 
+    # When same_for_all, pre-load each source image once per unique cell size
+    # to avoid redundant File I/O and fit_image processing across monitors.
+    _fitted_cache: dict[tuple, Image.Image] = {}
+
     img_idx = 0
     for mon in monitors:
         cells = _compute_grid_layout(count, mon.width, mon.height)
         for j, (cell_x, cell_y, cell_w, cell_h) in enumerate(cells):
             src_idx = j if same_for_all else img_idx
-            img = Image.open(imgs[src_idx]).convert("RGB")
-            img = fit_image(img, cell_w, cell_h, fit_mode)
+            cache_key = (src_idx, cell_w, cell_h)
+            if cache_key not in _fitted_cache:
+                raw = Image.open(imgs[src_idx]).convert("RGB")
+                _fitted_cache[cache_key] = fit_image(raw, cell_w, cell_h, fit_mode)
+            img = _fitted_cache[cache_key]
             paste_x = (mon.x - min_x) + cell_x
             paste_y = (mon.y - min_y) + cell_y
             canvas.paste(img, (paste_x, paste_y))

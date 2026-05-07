@@ -101,9 +101,8 @@ def _find_worker_w() -> int:
 def _get_current_wallpaper() -> Image.Image | None:
     """Read the current wallpaper from the registry and return it as a PIL Image."""
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop")
-        val, _ = winreg.QueryValueEx(key, "Wallpaper")
-        winreg.CloseKey(key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop") as key:
+            val, _ = winreg.QueryValueEx(key, "Wallpaper")
         path = Path(val)
         if not path.exists():
             return None
@@ -150,7 +149,7 @@ def _make_zoom_frame(old: Image.Image, new: Image.Image, progress: float) -> Ima
     scale = max(0.02, progress)
     new_w = max(1, int(w * scale))
     new_h = max(1, int(h * scale))
-    scaled = new.resize((new_w, new_h), Image.LANCZOS)
+    scaled = new.resize((new_w, new_h), Image.BILINEAR)
     x = (w - new_w) // 2
     y = (h - new_h) // 2
     frame = old.copy()

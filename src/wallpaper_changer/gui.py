@@ -625,12 +625,11 @@ class WallpaperChangerApp(ttk.Window):
 
     def _run_pynput_listeners(self) -> None:
         try:
-            import ctypes as _ct
             from pynput import mouse
 
             def _modifier_is_down() -> bool:
                 vk = self._MODIFIER_VK.get(self._scroll_modifier_var.get(), 0x12)
-                return bool(_ct.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+                return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
             def on_scroll(_x, _y, _dx, dy):
                 if not _modifier_is_down():
@@ -769,8 +768,8 @@ class WallpaperChangerApp(ttk.Window):
             cfg = self._collect_config()
             save_config(cfg)
             self._cfg = cfg
-        except Exception:
-            pass
+        except Exception as exc:
+            self._set_status(t("save_error", msg=exc), error=True)
         self._lang_note.configure(text=t("language_restart_note"))
 
     # ── Action Bar ────────────────────────────────────────────────────────────
@@ -858,8 +857,7 @@ class WallpaperChangerApp(ttk.Window):
     def _update_folder_info(self) -> None:
         """Kick off a background scan of the wallpaper folder."""
         # Clear treeview immediately for responsiveness
-        for item in self._img_tree.get_children():
-            self._img_tree.delete(item)
+        self._img_tree.delete(*self._img_tree.get_children())
 
         folder = Path(self._folder_var.get())
         if not folder.exists():
@@ -878,8 +876,7 @@ class WallpaperChangerApp(ttk.Window):
 
     def _populate_folder_tree(self, images: list[Path]) -> None:
         """Populate the folder treeview with scan results (runs on main thread)."""
-        for item in self._img_tree.get_children():
-            self._img_tree.delete(item)
+        self._img_tree.delete(*self._img_tree.get_children())
 
         count = len(images)
         self._folder_info.configure(
@@ -1023,7 +1020,7 @@ class WallpaperChangerApp(ttk.Window):
         def _work() -> None:
             try:
                 cfg = self._collect_config()
-                save_config(cfg)   # persist every apply so settings survive restart
+                self.after(0, lambda c=cfg: save_config(c))  # persist on main thread — avoids race conditions
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, images_used = apply_wallpaper(cfg, self._monitors, out_dir)
