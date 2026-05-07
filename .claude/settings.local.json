@@ -12,7 +12,9 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/gui.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "PowerShell(Stop-Process -Name \"WallpaperChanger\" -Force -ErrorAction SilentlyContinue)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/wallpaper.py', encoding='utf-8'\\).read\\(\\)\\); print\\('wallpaper.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/transition.py', encoding='utf-8'\\).read\\(\\)\\); print\\('transition.py OK'\\)\")"
     ]
   }
 }
