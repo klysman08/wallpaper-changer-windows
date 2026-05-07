@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ctypes
 import math
-import time
 import winreg
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from .config import resolve_path, get_project_root
 from .image_utils import fit_image, pick_images, build_canvas
 from .monitor import Monitor, get_monitors
+from .transition import apply_transition, _DEFAULT_DURATION, _DEFAULT_FPS
 
 SPI_SETDESKWALLPAPER  = 0x0014
 SPIF_UPDATEINIFILE    = 0x0001
@@ -49,120 +49,20 @@ def set_wallpaper_win(path: str | Path) -> None:
     """Aplica o arquivo de imagem como wallpaper no Windows."""
     abs_path = str(Path(path).resolve())
     set_wallpaper_style_span()
+    # SPIF_SENDWININICHANGE omitted intentionally: it broadcasts WM_SETTINGCHANGE which
+    # causes Explorer to run its own animated crossfade over WorkerW, making the system
+    # fade visible even when transition="none". SPIF_UPDATEINIFILE is sufficient to
+    # persist the path; SystemParametersInfoW itself applies the wallpaper immediately.
     result = ctypes.windll.user32.SystemParametersInfoW(
         SPI_SETDESKWALLPAPER,
         0,
         abs_path,
-        SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE,
+        SPIF_UPDATEINIFILE,
     )
     if not result:
         raise RuntimeError("SystemParametersInfoW falhou ao aplicar o wallpaper")
 
 
-def _set_wallpaper_fast(path: str | Path) -> None:
-    """
-    Aplica wallpaper SEM broadcast de WM_SETTINGCHANGE.
-
-    Muito mais rapido que set_wallpaper_win() porque nao espera que todas
-    as janelas do sistema confirmem a mudanca. Ideal para frames
-    intermediarios de fade onde velocidade e critica.
-    """
-    abs_path = str(Path(path).resolve())
-    ctypes.windll.user32.SystemParametersInfoW(
-        SPI_SETDESKWALLPAPER,
-        0,
-        abs_path,
-        SPIF_UPDATEINIFILE,  # apenas grava no registro, sem broadcast
-    )
-
-
-def _get_current_wallpaper() -> Path | None:
-    """Le o caminho do wallpaper atual a partir do registro do Windows."""
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop")
-        val, _ = winreg.QueryValueEx(key, "Wallpaper")
-        winreg.CloseKey(key)
-        p = Path(val)
-        return p if p.exists() else None
-    except Exception:
-        return None
-
-
-def _smoothstep(t: float) -> float:
-    """Ease-in-out (Hermite) — curva suave que desacelera no inicio e no fim."""
-    t = max(0.0, min(1.0, t))
-    return t * t * (3.0 - 2.0 * t)
-
-
-_FADE_FRAMES = 12
-_FADE_DELAY  = 0.035  # ~0.42 s total (12 × 0.035)
-
-
-def _apply_or_fade(canvas: Image.Image, out: Path, fade_in: bool) -> None:
-    """
-    Salva o canvas em *out* e aplica como wallpaper.
-
-    Se *fade_in* e True, gera uma transicao suave com:
-      - Curva ease-in-out (smoothstep) para alpha natural
-      - Frames pre-gerados em disco antes da animacao
-      - _set_wallpaper_fast() nos frames intermediarios (sem broadcast
-        WM_SETTINGCHANGE), eliminando o gargalo de ~100ms por frame
-      - Dois caminhos alternados para forcar o Windows a recarregar
-    """
-    if not fade_in:
-        canvas.save(str(out), "BMP")
-        set_wallpaper_win(out)
-        return
-
-    old_path = _get_current_wallpaper()
-    if old_path is None:
-        canvas.save(str(out), "BMP")
-        set_wallpaper_win(out)
-        return
-
-    try:
-        old_img = Image.open(old_path).convert("RGB")
-        if old_img.size != canvas.size:
-            old_img = old_img.resize(canvas.size, Image.LANCZOS)
-    except Exception:
-        canvas.save(str(out), "BMP")
-        set_wallpaper_win(out)
-        return
-
-    fade_dir = out.parent
-    tmp_a = fade_dir / "_fade_a.bmp"
-    tmp_b = fade_dir / "_fade_b.bmp"
-    tmp_paths = (tmp_a, tmp_b)
-
-    # ── Pre-gerar todos os frames em disco ─────────────────────────────
-    frame_files: list[Path] = []
-    for i in range(1, _FADE_FRAMES + 1):
-        t = i / _FADE_FRAMES
-        alpha = _smoothstep(t)
-        frame = Image.blend(old_img, canvas, alpha)
-        dest = tmp_paths[i % 2]
-        frame.save(str(dest), "BMP")
-        frame_files.append(dest)
-
-    # ── Reproduzir animacao — apenas troca de caminho, sem I/O ─────────
-    # Configura o estilo span uma unica vez antes da animacao
-    set_wallpaper_style_span()
-    for idx, fpath in enumerate(frame_files):
-        is_last = idx == len(frame_files) - 1
-        if is_last:
-            # Ultimo frame: gravar imagem final no destino real
-            canvas.save(str(out), "BMP")
-            set_wallpaper_win(out)
-        else:
-            _set_wallpaper_fast(fpath)
-            time.sleep(_FADE_DELAY)
-
-    # ── Limpeza dos arquivos temporarios ───────────────────────────────
-    for f in tmp_paths:
-        try:
-            f.unlink()
-        except Exception:
-            pass
 
 
 # ── Resolucao de pasta e estado ───────────────────────────────────────────────
@@ -283,8 +183,10 @@ def _apply_collage(
 
     out = output_dir / "wallpaper_collage.bmp"
     canvas = apply_effect(canvas, effect)
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    transition = cfg["display"].get("transition", "none")
+    duration = float(cfg["display"].get("transition_duration", _DEFAULT_DURATION))
+    fps = int(cfg["display"].get("transition_fps", _DEFAULT_FPS))
+    apply_transition(canvas, out, transition, duration, fps, set_wallpaper_win)
     return out, [str(p) for p in imgs]
 
 
@@ -296,6 +198,9 @@ def apply_single_wallpaper(
     output_dir: Path,
     fit_mode: str = "fill",
     effect: str = "normal",
+    transition: str = "none",
+    transition_duration: float = _DEFAULT_DURATION,
+    transition_fps: int = _DEFAULT_FPS,
 ) -> Path:
     """Apply a single image as wallpaper across all monitors."""
     img = Image.open(str(image_path)).convert("RGB")
@@ -308,8 +213,7 @@ def apply_single_wallpaper(
         canvas.paste(fitted, (paste_x, paste_y))
     out = output_dir / "wallpaper_default.bmp"
     canvas = apply_effect(canvas, effect)
-    canvas.save(str(out), "BMP")
-    set_wallpaper_win(out)
+    apply_transition(canvas, out, transition, transition_duration, transition_fps, set_wallpaper_win)
     return out
 
 

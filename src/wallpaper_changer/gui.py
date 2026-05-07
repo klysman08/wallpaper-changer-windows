@@ -37,8 +37,9 @@ _BG_CANVAS  = "#1a1a2e"
 _ACCENT     = "#3a7bd5"
 
 # Fit mode keys — labels are resolved via i18n at build time
-_FIT_KEYS = ["fill", "fit", "stretch", "center", "span"]
-_EFFECT_KEYS = ["normal", "bw", "vintage", "hdr"]
+_FIT_KEYS        = ["fill", "fit", "stretch", "center", "span"]
+_EFFECT_KEYS     = ["normal", "bw", "vintage", "hdr"]
+_SCROLL_MODIFIERS = ["alt", "ctrl", "shift", "win"]
 log = logging.getLogger(__name__)
 
 
@@ -97,9 +98,9 @@ class WallpaperChangerApp(ttk.Window):
         self._startup_launch = is_startup_launch()
 
         # ── Variaveis de estado ───────────────────────────────────────────────
-        self._fit_var = tk.StringVar(value=self._cfg["display"]["fit_mode"])
+        self._fit_var    = tk.StringVar(value=self._cfg["display"]["fit_mode"])
         self._effect_var = tk.StringVar(value=self._cfg["display"].get("effect", "normal"))
-        self._sel_var = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
+        self._sel_var    = tk.StringVar(value=self._cfg["general"].get("selection", "random"))
         self._interval_var = tk.StringVar(value=str(self._cfg["general"]["interval"]))
         self._collage_count_var = tk.IntVar(
             value=self._cfg["general"].get("collage_count", 4)
@@ -122,6 +123,11 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_default_var = tk.StringVar(value=hk.get("default_wallpaper", "ctrl+alt+d"))
         self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
         self._hk_toggle_window_var = tk.StringVar(value=hk.get("toggle_window", "ctrl+alt+w"))
+        self._scroll_modifier_var   = tk.StringVar(value=hk.get("scroll_modifier",  "alt"))
+        self._hk_effect_normal_var  = tk.StringVar(value=hk.get("effect_normal",   "ctrl+alt+1"))
+        self._hk_effect_bw_var      = tk.StringVar(value=hk.get("effect_bw",       "ctrl+alt+2"))
+        self._hk_effect_vintage_var = tk.StringVar(value=hk.get("effect_vintage",  "ctrl+alt+3"))
+        self._hk_effect_hdr_var     = tk.StringVar(value=hk.get("effect_hdr",      "ctrl+alt+4"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -137,8 +143,6 @@ class WallpaperChangerApp(ttk.Window):
         self._transp_windows: list[tuple[int, str, str]] = []
         self._opacity_map: dict[str, int] = load_opacity_settings()
         self._pynput_mouse_listener = None
-        self._pynput_kb_listener = None
-        self._alt_pressed = False
 
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
@@ -421,12 +425,60 @@ class WallpaperChangerApp(ttk.Window):
             btn.grid(row=i, column=2, pady=2)
             self._hk_record_btns.append(btn)
 
+        # ── Scroll modifier (only modifier key, no full combo) ───────────────
+        n = len(labels)
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=n, column=0, columnspan=3, sticky=EW, pady=(8, 4),
+        )
+        ttk.Label(frame, text=t("hk_scroll_modifier")).grid(
+            row=n + 1, column=0, sticky=W, padx=(0, 8), pady=2,
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=self._scroll_modifier_var,
+            values=_SCROLL_MODIFIERS,
+            state="readonly",
+            width=10,
+        ).grid(row=n + 1, column=1, sticky=W, pady=2)
+
+        # ── Image effect hotkeys ──────────────────────────────────────────────
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=n + 2, column=0, columnspan=3, sticky=EW, pady=(8, 4),
+        )
+        ttk.Label(
+            frame, text=t("hk_effects_group"),
+            font=("Segoe UI", 9, "bold"),
+        ).grid(row=n + 3, column=0, columnspan=3, sticky=W, pady=(0, 4))
+
+        effect_labels = [
+            (t("hk_effect_normal"),  self._hk_effect_normal_var),
+            (t("hk_effect_bw"),      self._hk_effect_bw_var),
+            (t("hk_effect_vintage"), self._hk_effect_vintage_var),
+            (t("hk_effect_hdr"),     self._hk_effect_hdr_var),
+        ]
+        for j, (text, var) in enumerate(effect_labels):
+            row_idx = n + 4 + j
+            btn_idx = len(labels) + j
+            ttk.Label(frame, text=text).grid(
+                row=row_idx, column=0, sticky=W, padx=(0, 8), pady=2,
+            )
+            ttk.Entry(frame, textvariable=var, width=24).grid(
+                row=row_idx, column=1, sticky=EW, padx=(0, 4), pady=2,
+            )
+            btn = ttk.Button(
+                frame, text=t("hk_record"), width=8, style="Outline.TButton",
+                command=lambda v=var, b=btn_idx: self._record_hotkey(v, b),
+            )
+            btn.grid(row=row_idx, column=2, pady=2)
+            self._hk_record_btns.append(btn)
+
+        warning_row = n + 4 + len(effect_labels)
         if not hotkeys_available():
             ttk.Label(
                 frame,
                 text=t("hk_disabled_warning"),
                 font=("Segoe UI", 9), foreground="#e74c3c",
-            ).grid(row=len(labels), column=0, columnspan=3, sticky=W, pady=(6, 0))
+            ).grid(row=warning_row, column=0, columnspan=3, sticky=W, pady=(6, 0))
 
     # ── Default Wallpaper Section ─────────────────────────────────────────────
     # ── Transparency Section ────────────────────────────────────────────────
@@ -557,32 +609,31 @@ class WallpaperChangerApp(ttk.Window):
         self.after(0, lambda: self._set_status(t("transp_applied", alpha=new_alpha)))
         self.after(0, self._sync_transp_slider_if_match, hwnd)
 
+    # VK codes for supported modifier keys
+    _MODIFIER_VK: dict[str, int] = {
+        "alt":   0x12,  # VK_MENU
+        "ctrl":  0x11,  # VK_CONTROL
+        "shift": 0x10,  # VK_SHIFT
+        "win":   0x5B,  # VK_LWIN
+    }
+
     def _start_transparency_listeners(self) -> None:
-        """Start the pynput mouse/keyboard listener for Alt+Scroll."""
+        """Start the pynput mouse listener for modifier+Scroll transparency."""
         threading.Thread(
             target=self._run_pynput_listeners, daemon=True,
         ).start()
 
     def _run_pynput_listeners(self) -> None:
         try:
-            from pynput import mouse, keyboard as pynput_kb
+            import ctypes as _ct
+            from pynput import mouse
 
-            def on_press(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = True
-                except Exception:
-                    pass
-
-            def on_release(key):
-                try:
-                    if key in (pynput_kb.Key.alt_l, pynput_kb.Key.alt_r):
-                        self._alt_pressed = False
-                except Exception:
-                    pass
+            def _modifier_is_down() -> bool:
+                vk = self._MODIFIER_VK.get(self._scroll_modifier_var.get(), 0x12)
+                return bool(_ct.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
             def on_scroll(_x, _y, _dx, dy):
-                if not self._alt_pressed:
+                if not _modifier_is_down():
                     return
                 hwnd = get_foreground_window()
                 if not hwnd:
@@ -597,7 +648,6 @@ class WallpaperChangerApp(ttk.Window):
                 new_alpha = max(10, min(255, current + int(dy) * 5))
                 self._opacity_map[proc_name] = new_alpha
                 set_window_opacity(hwnd, new_alpha)
-                # Persist on scroll, though might be a bit chatty
                 self._save_transparency_settings()
 
                 self.after(0, lambda a=new_alpha: self._set_status(
@@ -605,13 +655,8 @@ class WallpaperChangerApp(ttk.Window):
                 ))
                 self.after(0, self._sync_transp_slider_if_match, hwnd)
 
-            self._pynput_kb_listener = pynput_kb.Listener(
-                on_press=on_press, on_release=on_release,
-            )
             self._pynput_mouse_listener = mouse.Listener(on_scroll=on_scroll)
-            self._pynput_kb_listener.start()
             self._pynput_mouse_listener.start()
-            self._pynput_kb_listener.join()
             self._pynput_mouse_listener.join()
         except ImportError:
             log.info("pynput not available; transparency scroll shortcut disabled")
@@ -948,6 +993,9 @@ class WallpaperChangerApp(ttk.Window):
             "display": {
                 "fit_mode": self._fit_var.get(),
                 "effect": self._effect_var.get(),
+                "transition": "fade",
+                "transition_duration": self._cfg["display"].get("transition_duration", 0.6),
+                "transition_fps": self._cfg["display"].get("transition_fps", 30),
             },
             "hotkeys": {
                 "next_wallpaper": self._hk_next_var.get(),
@@ -956,6 +1004,11 @@ class WallpaperChangerApp(ttk.Window):
                 "default_wallpaper": self._hk_default_var.get(),
                 "toggle_transparency": self._hk_transp_var.get(),
                 "toggle_window": self._hk_toggle_window_var.get(),
+                "scroll_modifier": self._scroll_modifier_var.get(),
+                "effect_normal":  self._hk_effect_normal_var.get(),
+                "effect_bw":      self._hk_effect_bw_var.get(),
+                "effect_vintage": self._hk_effect_vintage_var.get(),
+                "effect_hdr":     self._hk_effect_hdr_var.get(),
             },
         }
 
@@ -970,6 +1023,7 @@ class WallpaperChangerApp(ttk.Window):
         def _work() -> None:
             try:
                 cfg = self._collect_config()
+                save_config(cfg)   # persist every apply so settings survive restart
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, images_used = apply_wallpaper(cfg, self._monitors, out_dir)
@@ -1068,9 +1122,15 @@ class WallpaperChangerApp(ttk.Window):
                 cfg = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                fit = cfg["display"]["fit_mode"]
-                effect = cfg["display"].get("effect", "normal")
-                out = apply_single_wallpaper(path, self._monitors, out_dir, fit, effect)
+                fit        = cfg["display"]["fit_mode"]
+                effect     = cfg["display"].get("effect", "normal")
+                transition = cfg["display"].get("transition", "none")
+                t_dur      = float(cfg["display"].get("transition_duration", 0.6))
+                t_fps      = int(cfg["display"].get("transition_fps", 30))
+                out = apply_single_wallpaper(
+                    path, self._monitors, out_dir, fit, effect,
+                    transition, t_dur, t_fps,
+                )
                 self.after(0, lambda: self._set_status(
                     t("default_wp_applied", name=Path(str(out)).name),
                 ))
@@ -1083,6 +1143,11 @@ class WallpaperChangerApp(ttk.Window):
 
         threading.Thread(target=_work, daemon=True).start()
 
+    def _hotkey_set_effect(self, effect: str) -> None:
+        """Hotkey: switch image effect and immediately apply + save."""
+        self._effect_var.set(effect)
+        self._apply_now()
+
     # ── Hotkey helpers ────────────────────────────────────────────────────────
 
     def _register_hotkeys(self) -> None:
@@ -1094,6 +1159,10 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
             self._hk_transp_var.get(): lambda: self.after(0, self._hotkey_half_opacity),
             self._hk_toggle_window_var.get(): lambda: self.after(0, self._toggle_window_visibility),
+            self._hk_effect_normal_var.get():  lambda: self.after(0, lambda: self._hotkey_set_effect("normal")),
+            self._hk_effect_bw_var.get():      lambda: self.after(0, lambda: self._hotkey_set_effect("bw")),
+            self._hk_effect_vintage_var.get(): lambda: self.after(0, lambda: self._hotkey_set_effect("vintage")),
+            self._hk_effect_hdr_var.get():     lambda: self.after(0, lambda: self._hotkey_set_effect("hdr")),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
@@ -1198,12 +1267,10 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_manager.unregister_all()
         # Save transparency before exit
         self._save_transparency_settings()
-        # Stop pynput listeners
+        # Stop pynput mouse listener
         try:
             if self._pynput_mouse_listener:
                 self._pynput_mouse_listener.stop()
-            if self._pynput_kb_listener:
-                self._pynput_kb_listener.stop()
         except Exception:
             pass
         if self._tray_icon is not None:

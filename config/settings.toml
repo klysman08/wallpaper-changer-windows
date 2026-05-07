@@ -12,8 +12,11 @@ output_folder     = "assets/output"
 default_wallpaper = ""
 
 [display]
-fit_mode = "fill"
-effect   = "normal"
+fit_mode            = "fill"
+effect              = "normal"
+transition          = "fade"
+transition_duration = 0.6
+transition_fps      = 30
 
 [hotkeys]
 next_wallpaper    = "ctrl+alt+right"
@@ -21,3 +24,8 @@ prev_wallpaper    = "ctrl+alt+left"
 stop_watch        = "ctrl+alt+s"
 default_wallpaper = "ctrl+alt+d"
 toggle_window     = "ctrl+alt+w"
+scroll_modifier   = "alt"
+effect_normal     = "ctrl+alt+1"
+effect_bw         = "ctrl+alt+2"
+effect_vintage    = "ctrl+alt+3"
+effect_hdr        = "ctrl+alt+4"

@@ -54,6 +54,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "effect_vintage": "Vintage",
         "effect_hdr": "HDR",
 
+        # Transition
+        "transition_title": "Transition Effect",
+        "transition_none": "None",
+        "transition_fade": "Fade",
+        "transition_slide": "Slide",
+        "transition_slide_up": "Slide Up",
+        "transition_zoom": "Zoom",
+
         # Rotation
         "rotation_title": "Automatic Rotation",
         "interval_label": "Interval:",
@@ -68,6 +76,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_default": "Default wallpaper:",
         "hk_transp": "Toggle transparency:",
         "hk_toggle_window": "Open/Close app window:",
+        "hk_scroll_modifier": "Transparency scroll modifier:",
+        "hk_effects_group": "Image Effects",
+        "hk_effect_normal": "Normal:",
+        "hk_effect_bw": "Black & White:",
+        "hk_effect_vintage": "Vintage:",
+        "hk_effect_hdr": "HDR:",
         "hk_record": "Record",
         "hk_recording": "Press...",
         "hk_disabled_warning": "\u26a0 'keyboard' library not installed. Hotkeys disabled.",
@@ -182,6 +196,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "effect_vintage": "Vintage",
         "effect_hdr": "HDR",
 
+        # Transition
+        "transition_title": "Efeito de Transição",
+        "transition_none": "Nenhum",
+        "transition_fade": "Fade",
+        "transition_slide": "Slide",
+        "transition_slide_up": "Slide Up",
+        "transition_zoom": "Zoom",
+
         # Rotation
         "rotation_title": "Rotação Automática",
         "interval_label": "Intervalo:",
@@ -196,6 +218,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_default": "Wallpaper padrão:",
         "hk_transp": "Alternar transparência:",
         "hk_toggle_window": "Abrir/fechar janela do app:",
+        "hk_scroll_modifier": "Modificador do scroll de transparência:",
+        "hk_effects_group": "Efeitos de Imagem",
+        "hk_effect_normal": "Normal:",
+        "hk_effect_bw": "Preto e Branco:",
+        "hk_effect_vintage": "Vintage:",
+        "hk_effect_hdr": "HDR:",
         "hk_record": "Gravar",
         "hk_recording": "Pressione...",
         "hk_disabled_warning": "\u26a0 Biblioteca 'keyboard' não instalada. Atalhos desativados.",
@@ -310,6 +338,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "effect_vintage": "ヴィンテージ",
         "effect_hdr": "HDR",
 
+        # Transition
+        "transition_title": "トランジション効果",
+        "transition_none": "なし",
+        "transition_fade": "フェード",
+        "transition_slide": "スライド",
+        "transition_slide_up": "上スライド",
+        "transition_zoom": "ズーム",
+
         # Rotation
         "rotation_title": "自動ローテーション",
         "interval_label": "間隔：",
@@ -324,6 +360,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "hk_default": "デフォルト壁紙：",
         "hk_transp": "透過度の切り替え：",
         "hk_toggle_window": "アプリウィンドウの開閉：",
+        "hk_scroll_modifier": "透過スクロール修飾キー：",
+        "hk_effects_group": "画像エフェクト",
+        "hk_effect_normal": "標準：",
+        "hk_effect_bw": "白黒：",
+        "hk_effect_vintage": "ヴィンテージ：",
+        "hk_effect_hdr": "HDR：",
         "hk_record": "記録",
         "hk_recording": "押してください...",
         "hk_disabled_warning": "\u26a0 'keyboard'ライブラリ未インストール。ホットキー無効。",

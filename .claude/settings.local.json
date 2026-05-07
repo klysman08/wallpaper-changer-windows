@@ -3,7 +3,16 @@
     "allow": [
       "Bash(git checkout *)",
       "Bash(git merge *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('src/wallpaper_changer/wallpaper.py'\\).read\\(\\)\\); print\\('wallpaper.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/transition.py'\\).read\\(\\)\\); print\\('transition.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/gui.py'\\).read\\(\\)\\); print\\('gui.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/gui.py', encoding='utf-8'\\).read\\(\\)\\); print\\('gui.py OK'\\)\")",
+      "Bash(uv run *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/wallpaper_changer/gui.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "PowerShell(Stop-Process -Name \"WallpaperChanger\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
