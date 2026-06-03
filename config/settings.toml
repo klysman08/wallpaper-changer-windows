@@ -1,31 +1,38 @@
 [general]
-mode                 = "collage"
-selection            = "random"
-interval             = 300
-collage_count        = 4
+mode = "collage"
+selection = "random"
+interval = 300
+collage_count = 4
 collage_same_for_all = false
-language             = "en"
+language = "en"
 
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
-output_folder     = "assets/output"
+output_folder = "assets/output"
 default_wallpaper = ""
 
 [display]
-fit_mode            = "fill"
-effect              = "normal"
-transition          = "fade"
+fit_mode = "fill"
+effect = "normal"
+transition = "fade"
 transition_duration = 0.6
-transition_fps      = 30
+transition_fps = 30
 
 [hotkeys]
-next_wallpaper    = "ctrl+alt+right"
-prev_wallpaper    = "ctrl+alt+left"
-stop_watch        = "ctrl+alt+s"
+next_wallpaper = "ctrl+alt+right"
+prev_wallpaper = "ctrl+alt+left"
+stop_watch = "ctrl+alt+s"
 default_wallpaper = "ctrl+alt+d"
-toggle_window     = "ctrl+alt+w"
-scroll_modifier   = "alt"
-effect_normal     = "ctrl+alt+1"
-effect_bw         = "ctrl+alt+2"
-effect_vintage    = "ctrl+alt+3"
-effect_hdr        = "ctrl+alt+4"
+toggle_transparency = "alt+a"
+toggle_window = "ctrl+alt+w"
+scroll_modifier = "alt"
+effect_normal = "ctrl+alt+1"
+effect_bw = "ctrl+alt+2"
+effect_vintage = "ctrl+alt+3"
+effect_hdr = "ctrl+alt+4"
+
+[video]
+enabled = false
+folder = "C:/Users/klysm/Videos/wuwa"
+loop = false
+sound = true

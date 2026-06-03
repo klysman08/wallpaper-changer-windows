@@ -6,6 +6,9 @@ build/
 *.egg-info/
 assets/output/*.bmp
 assets/output/*.jpg
+# Vendored libmpv (large, platform-specific) — keep only the README
+libmpv/*
+!libmpv/README.md
 .python-version
 /CLAUDE.md
 /.claude

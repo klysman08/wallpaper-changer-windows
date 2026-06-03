@@ -13,6 +13,15 @@ datas = [
     (str(HERE / "config" / "settings.toml"), "config"),
 ]
 
+# ── Binarios nativos ──────────────────────────────────────────────────────────
+# libmpv (video wallpaper) e opcional: so e empacotado se o DLL estiver presente.
+# Coloque libmpv-2.dll em ./libmpv/ para incluir o recurso de wallpaper em video.
+binaries = []
+for _dll in ("libmpv-2.dll", "mpv-2.dll", "mpv-1.dll"):
+    _candidate = HERE / "libmpv" / _dll
+    if _candidate.exists():
+        binaries.append((str(_candidate), "."))
+
 # ── Imports ocultos ───────────────────────────────────────────────────────────
 hidden = [
     "ttkbootstrap",
@@ -28,13 +37,14 @@ hidden = [
     "pywintypes",
     "tomllib",
     "ctypes.wintypes",
+    "mpv",
 ]
 
 # ── Analise de codigo ─────────────────────────────────────────────────────────
 a = Analysis(
     [str(HERE / "main.py")],
     pathex=[str(HERE / "src")],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hidden,
     hookspath=[],

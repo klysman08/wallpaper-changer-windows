@@ -22,6 +22,7 @@ from .monitor import Monitor, get_monitors
 from .notifications import send_windows_notification
 from .startup import is_startup_enabled, is_startup_launch, set_startup_enabled
 from .wallpaper import apply_wallpaper, apply_single_wallpaper
+from .video_wallpaper import VideoWallpaperPlayer, scan_video_folder, has_mpv
 from .transparency import (
     get_foreground_window,
     list_visible_windows,
@@ -132,6 +133,14 @@ class WallpaperChangerApp(ttk.Window):
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
 
+        # ── Video wallpaper state ─────────────────────────────────────────────
+        vid = self._cfg.get("video", {})
+        self._video_enabled_var = tk.BooleanVar(value=bool(vid.get("enabled", False)))
+        self._video_folder_var  = tk.StringVar(value=str(vid.get("folder", "")))
+        self._video_loop_var    = tk.BooleanVar(value=bool(vid.get("loop", True)))
+        self._video_sound_var   = tk.BooleanVar(value=bool(vid.get("sound", False)))
+        self._video_player: VideoWallpaperPlayer | None = None
+
         # ── Wallpaper history (in-session) ────────────────────────────────────
         self._wp_history: list[list[str]] = []
         self._wp_hist_idx: int = -1
@@ -227,6 +236,7 @@ class WallpaperChangerApp(ttk.Window):
         self._build_default_wp_section(main)
         self._build_folder_section(main)
         self._build_language_section(main)
+        self._build_video_section(main)
         self._build_action_bar(main)
         self._build_status_bar()
 
@@ -772,10 +782,220 @@ class WallpaperChangerApp(ttk.Window):
             self._set_status(t("save_error", msg=exc), error=True)
         self._lang_note.configure(text=t("language_restart_note"))
 
+    # ── Video Wallpaper Section ───────────────────────────────────────────────
+    def _build_video_section(self, parent: ttk.Frame) -> None:
+        frame = ttk.Labelframe(parent, text=t("video_title"), padding=10)
+        frame.grid(row=12, column=0, sticky=EW, padx=12, pady=4)
+        frame.columnconfigure(0, weight=1)
+
+        # libmpv availability — disable the whole section gracefully if missing
+        if not has_mpv():
+            ttk.Label(
+                frame, text=t("video_mpv_missing"),
+                font=("Segoe UI", 9), foreground="#e74c3c",
+            ).grid(row=0, column=0, sticky=W)
+            return
+
+        # Enable toggle
+        ttk.Checkbutton(
+            frame, text=t("video_enable"),
+            variable=self._video_enabled_var,
+            style="Roundtoggle.Toolbutton",
+            command=self._on_video_enable_toggle,
+        ).grid(row=0, column=0, sticky=W, pady=(0, 8))
+
+        # Folder row
+        folder_row = ttk.Frame(frame)
+        folder_row.grid(row=1, column=0, sticky=EW, pady=(0, 4))
+        folder_row.columnconfigure(0, weight=1)
+
+        ttk.Label(folder_row, text=t("video_folder_label")).grid(
+            row=0, column=0, sticky=W, pady=(0, 4)
+        )
+
+        entry_row = ttk.Frame(folder_row)
+        entry_row.grid(row=1, column=0, sticky=EW)
+        entry_row.columnconfigure(0, weight=1)
+
+        entry = ttk.Entry(entry_row, textvariable=self._video_folder_var)
+        entry.grid(row=0, column=0, sticky=EW, padx=(0, 6))
+        entry.bind("<FocusOut>", lambda _: self._update_video_folder_info())
+
+        ttk.Button(
+            entry_row, text="...", width=4, style="Outline.TButton",
+            command=self._browse_video_folder,
+        ).grid(row=0, column=1)
+
+        ttk.Label(
+            folder_row, text=t("video_folder_formats"),
+            font=("Segoe UI", 9), foreground="gray",
+        ).grid(row=2, column=0, sticky=W, pady=(4, 0))
+
+        self._video_folder_info = ttk.Label(
+            frame, text="", font=("Segoe UI", 9), foreground="gray",
+        )
+        self._video_folder_info.grid(row=2, column=0, sticky=W, pady=(2, 4))
+
+        # Video list
+        self._video_tree = ttk.Treeview(
+            frame, columns=("name",), show="headings", height=4, selectmode="browse",
+        )
+        self._video_tree.heading("name", text=t("video_files_header"), anchor=W)
+        self._video_tree.column("name", anchor=W)
+        self._video_tree.grid(row=3, column=0, sticky=EW, pady=(0, 8))
+
+        vtree_scroll = ttk.Scrollbar(frame, orient=VERTICAL, command=self._video_tree.yview)
+        vtree_scroll.grid(row=3, column=1, sticky="ns", pady=(0, 8))
+        self._video_tree.configure(yscrollcommand=vtree_scroll.set)
+
+        # Options: loop / play-once + sound toggle
+        opts = ttk.Frame(frame)
+        opts.grid(row=4, column=0, sticky=W, pady=(0, 8))
+
+        ttk.Radiobutton(
+            opts, text=t("video_loop"), variable=self._video_loop_var, value=True,
+            style="Toolbutton",
+        ).pack(side=LEFT, padx=(0, 8))
+
+        ttk.Radiobutton(
+            opts, text=t("video_next_on_end"), variable=self._video_loop_var, value=False,
+            style="Toolbutton",
+        ).pack(side=LEFT, padx=(0, 20))
+
+        ttk.Checkbutton(
+            opts, text=t("video_sound"), variable=self._video_sound_var,
+            style="Roundtoggle.Toolbutton",
+            command=self._on_video_sound_toggle,
+        ).pack(side=LEFT)
+
+        ttk.Label(
+            frame, text=t("video_sound_note"),
+            font=("Segoe UI", 9), foreground="gray",
+        ).grid(row=5, column=0, sticky=W, pady=(0, 6))
+
+        # Play / Stop buttons
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=6, column=0, sticky=W)
+
+        self._video_play_btn = ttk.Button(
+            btn_row, text=t("video_play"), style="success.TButton", width=16,
+            command=self._video_play,
+        )
+        self._video_play_btn.pack(side=LEFT, padx=(0, 8))
+
+        self._video_stop_btn = ttk.Button(
+            btn_row, text=t("video_stop"), style="danger.TButton", width=16,
+            command=self._video_stop, state=DISABLED,
+        )
+        self._video_stop_btn.pack(side=LEFT)
+
+        # Status label
+        self._video_status_lbl = ttk.Label(
+            frame, text="", font=("Segoe UI", 9), foreground="gray",
+        )
+        self._video_status_lbl.grid(row=7, column=0, sticky=W, pady=(6, 0))
+
+        # Populate the list if a folder is already configured
+        if self._video_folder_var.get():
+            self.after(100, self._update_video_folder_info)
+
+    # ── Video Wallpaper Controls ──────────────────────────────────────────────
+    def _browse_video_folder(self) -> None:
+        current = Path(self._video_folder_var.get())
+        initial = str(current) if current.exists() else str(Path.home())
+        chosen = filedialog.askdirectory(title=t("video_select_folder"), initialdir=initial)
+        if chosen:
+            self._video_folder_var.set(chosen)
+            self._update_video_folder_info()
+
+    def _update_video_folder_info(self) -> None:
+        if not hasattr(self, "_video_tree"):
+            return
+        folder = Path(self._video_folder_var.get())
+        self._video_tree.delete(*self._video_tree.get_children())
+        if not folder.exists():
+            self._video_folder_info.configure(text=t("folder_not_found"), foreground="#e74c3c")
+            return
+        videos = scan_video_folder(folder)
+        self._video_folder_info.configure(
+            text=t("video_files_found", n=len(videos)), foreground="gray"
+        )
+        for i, v in enumerate(videos[:50]):
+            self._video_tree.insert("", END, values=(f"{i + 1:03d}  {v.name}",))
+        if len(videos) > 50:
+            self._video_tree.insert("", END, values=(f"... +{len(videos) - 50}",))
+
+    def _on_video_enable_toggle(self) -> None:
+        if not self._video_enabled_var.get() and self._video_player:
+            self._video_stop()
+
+    def _on_video_sound_toggle(self) -> None:
+        if self._video_player:
+            self._video_player.set_sound(self._video_sound_var.get())
+
+    def _video_play(self) -> None:
+        if not has_mpv():
+            self._set_status(t("video_mpv_missing"), error=True)
+            return
+        folder = Path(self._video_folder_var.get())
+        videos = scan_video_folder(folder)
+        if not videos:
+            self._set_status(t("video_no_files"), error=True)
+            return
+        if not self._monitors:
+            self._set_status(t("no_monitor_action"), error=True)
+            return
+
+        # Video, image-apply and watch are mutually exclusive — they all contend
+        # for the WORKERW desktop layer. Stop watch first.
+        if self._watching:
+            self._watching = False
+            schedule.clear()
+            self._watch_btn.configure(text=t("start_watch"), style="info.TButton")
+
+        if self._video_player and self._video_player.is_running():
+            self._video_player.stop()
+
+        player = VideoWallpaperPlayer()
+        player.configure(
+            videos=videos,
+            loop=bool(self._video_loop_var.get()),
+            sound=bool(self._video_sound_var.get()),
+            monitors=self._monitors,
+            on_status=lambda s: self.after(
+                0, lambda v=s: self._video_status_lbl.configure(text=v, foreground="gray")
+            ),
+        )
+        try:
+            player.start()
+        except Exception as exc:
+            self._set_status(t("error_prefix", msg=exc), error=True)
+            return
+        self._video_player = player
+        self._video_enabled_var.set(True)
+        self._video_play_btn.configure(state=DISABLED)
+        self._video_stop_btn.configure(state=NORMAL)
+        self._video_status_lbl.configure(
+            text=t("video_playing", name=videos[0].name), foreground="gray"
+        )
+        self._set_status(t("video_minimize_hint"))
+        send_windows_notification("WallpaperChanger", t("video_playing", name=videos[0].name))
+
+    def _video_stop(self) -> None:
+        if self._video_player:
+            self._video_player.stop()
+            self._video_player = None
+        self._video_enabled_var.set(False)
+        if hasattr(self, "_video_play_btn"):
+            self._video_play_btn.configure(state=NORMAL)
+            self._video_stop_btn.configure(state=DISABLED)
+            self._video_status_lbl.configure(text=t("video_stopped"))
+        self._set_status(t("video_stopped"))
+
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
         bar = ttk.Frame(parent, padding=(12, 8))
-        bar.grid(row=12, column=0, sticky=EW, padx=12, pady=(8, 4))
+        bar.grid(row=13, column=0, sticky=EW, padx=12, pady=(8, 4))
         bar.columnconfigure((0, 1, 2), weight=1)
 
         self._apply_btn = ttk.Button(
@@ -1007,6 +1227,12 @@ class WallpaperChangerApp(ttk.Window):
                 "effect_vintage": self._hk_effect_vintage_var.get(),
                 "effect_hdr":     self._hk_effect_hdr_var.get(),
             },
+            "video": {
+                "enabled": bool(self._video_enabled_var.get()),
+                "folder":  self._video_folder_var.get(),
+                "loop":    bool(self._video_loop_var.get()),
+                "sound":   bool(self._video_sound_var.get()),
+            },
         }
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -1014,6 +1240,9 @@ class WallpaperChangerApp(ttk.Window):
         if not self._monitors:
             self._set_status(t("no_monitor_action"), error=True)
             return
+        # Image and video wallpaper are mutually exclusive — stop the video player.
+        if self._video_player and self._video_player.is_running():
+            self._video_stop()
         self._apply_btn.configure(state=DISABLED, text=t("applying"))
         self._set_status(t("applying"))
 
@@ -1060,6 +1289,9 @@ class WallpaperChangerApp(ttk.Window):
             self._set_status(t("watch_disabled"))
             send_windows_notification("WallpaperChanger", t("notif_watch_stopped"))
         else:
+            # Watch and video wallpaper are mutually exclusive — stop the player.
+            if self._video_player and self._video_player.is_running():
+                self._video_stop()
             cfg = self._collect_config()
             interval = cfg["general"]["interval"]
             self._watching = True
@@ -1262,6 +1494,10 @@ class WallpaperChangerApp(ttk.Window):
         self._watching = False
         schedule.clear()
         self._hk_manager.unregister_all()
+        # Stop video wallpaper playback before exit
+        if self._video_player:
+            self._video_player.stop()
+            self._video_player = None
         # Save transparency before exit
         self._save_transparency_settings()
         # Stop pynput mouse listener
