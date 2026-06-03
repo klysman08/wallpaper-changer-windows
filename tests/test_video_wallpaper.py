@@ -26,6 +26,7 @@ class _FakeMPV:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.mute = kwargs.get("mute", True)
+        self.playlist_pos = 0
         self.loaded: list[tuple[str, str]] = []
         self.terminated = False
         _FakeMPV.instances.append(self)
@@ -132,6 +133,35 @@ def test_player_stop_terminates_and_destroys(monkeypatch):
     assert player.is_running() is False
     assert _FakeMPV.instances[0].terminated is True
     assert vw.user32.DestroyWindow.call_count == 1
+
+
+def test_player_next_prev_navigation_wraps_and_syncs(monkeypatch):
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch)
+
+    monitors = [Monitor(0, 0, 0, 800, 600), Monitor(1, 800, 0, 800, 600)]
+    player = vw.VideoWallpaperPlayer()
+    player.configure(
+        videos=[Path("a.mp4"), Path("b.mp4"), Path("c.mp4")],
+        loop=True, sound=False, monitors=monitors,
+    )
+    player.start()
+
+    assert player.next_video() == "b.mp4"
+    # both monitors jump to the same index (re-synced)
+    assert [inst.playlist_pos for inst in _FakeMPV.instances] == [1, 1]
+    assert player.next_video() == "c.mp4"
+    assert player.next_video() == "a.mp4"          # wraps forward past the end
+    assert player.prev_video() == "c.mp4"          # wraps backward past the start
+    assert [inst.playlist_pos for inst in _FakeMPV.instances] == [2, 2]
+
+
+def test_player_next_prev_noop_when_stopped():
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+    # Not started — must not raise, just returns the first/empty name.
+    assert player.next_video() == "a.mp4"
+    assert player.prev_video() == "a.mp4"
 
 
 def test_player_start_raises_without_desktop_layer(monkeypatch):

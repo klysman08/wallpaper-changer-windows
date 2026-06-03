@@ -86,6 +86,6 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
+    upx_exclude=["libmpv-2.dll"],
     name="WallpaperChanger",
 )

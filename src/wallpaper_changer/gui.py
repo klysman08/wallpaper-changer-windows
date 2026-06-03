@@ -131,6 +131,8 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_effect_hdr_var     = tk.StringVar(value=hk.get("effect_hdr",      "ctrl+alt+4"))
         self._hk_video_var          = tk.StringVar(value=hk.get("toggle_video",       "ctrl+alt+v"))
         self._hk_video_sound_var    = tk.StringVar(value=hk.get("toggle_video_sound", "ctrl+alt+m"))
+        self._hk_video_next_var     = tk.StringVar(value=hk.get("next_video",          "ctrl+alt+."))
+        self._hk_video_prev_var     = tk.StringVar(value=hk.get("prev_video",          "ctrl+alt+,"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -496,6 +498,8 @@ class WallpaperChangerApp(ttk.Window):
         video_labels = [
             (t("hk_toggle_video"), self._hk_video_var),
             (t("hk_toggle_video_sound"), self._hk_video_sound_var),
+            (t("hk_next_video"), self._hk_video_next_var),
+            (t("hk_prev_video"), self._hk_video_prev_var),
         ]
         for k, (text, var) in enumerate(video_labels):
             row_idx = base_row + 2 + k
@@ -904,7 +908,7 @@ class WallpaperChangerApp(ttk.Window):
             font=("Segoe UI", 9), foreground="gray",
         ).grid(row=5, column=0, sticky=W, pady=(0, 6))
 
-        # Play / Stop buttons
+        # Play / Stop + Prev / Next buttons
         btn_row = ttk.Frame(frame)
         btn_row.grid(row=6, column=0, sticky=W)
 
@@ -919,6 +923,18 @@ class WallpaperChangerApp(ttk.Window):
             command=self._video_stop, state=DISABLED,
         )
         self._video_stop_btn.pack(side=LEFT)
+
+        self._video_prev_btn = ttk.Button(
+            btn_row, text=t("video_prev"), style="secondary.TButton", width=10,
+            command=self._video_prev,
+        )
+        self._video_prev_btn.pack(side=LEFT, padx=(16, 4))
+
+        self._video_next_btn = ttk.Button(
+            btn_row, text=t("video_next"), style="secondary.TButton", width=10,
+            command=self._video_next,
+        )
+        self._video_next_btn.pack(side=LEFT)
 
         # Status label
         self._video_status_lbl = ttk.Label(
@@ -1022,6 +1038,26 @@ class WallpaperChangerApp(ttk.Window):
             self._video_stop_btn.configure(state=DISABLED)
             self._video_status_lbl.configure(text=t("video_stopped"))
         self._set_status(t("video_stopped"))
+
+    def _video_seek(self, forward: bool) -> None:
+        """Skip to the next/previous video; no-op when nothing is playing."""
+        if not (self._video_player and self._video_player.is_running()):
+            return
+        name = (
+            self._video_player.next_video() if forward
+            else self._video_player.prev_video()
+        )
+        if hasattr(self, "_video_status_lbl"):
+            self._video_status_lbl.configure(
+                text=t("video_playing", name=name), foreground="gray"
+            )
+        self._set_status(t("video_playing", name=name))
+
+    def _video_next(self) -> None:
+        self._video_seek(True)
+
+    def _video_prev(self) -> None:
+        self._video_seek(False)
 
     # ── Action Bar ────────────────────────────────────────────────────────────
     def _build_action_bar(self, parent: ttk.Frame) -> None:
@@ -1259,6 +1295,8 @@ class WallpaperChangerApp(ttk.Window):
                 "effect_hdr":     self._hk_effect_hdr_var.get(),
                 "toggle_video":        self._hk_video_var.get(),
                 "toggle_video_sound":  self._hk_video_sound_var.get(),
+                "next_video":          self._hk_video_next_var.get(),
+                "prev_video":          self._hk_video_prev_var.get(),
             },
             "video": {
                 "enabled": bool(self._video_enabled_var.get()),
@@ -1442,6 +1480,8 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_effect_hdr_var.get():     lambda: self.after(0, lambda: self._hotkey_set_effect("hdr")),
             self._hk_video_var.get():          lambda: self.after(0, self._hotkey_toggle_video),
             self._hk_video_sound_var.get():    lambda: self.after(0, self._hotkey_toggle_video_sound),
+            self._hk_video_next_var.get():     lambda: self.after(0, self._video_next),
+            self._hk_video_prev_var.get():     lambda: self.after(0, self._video_prev),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:

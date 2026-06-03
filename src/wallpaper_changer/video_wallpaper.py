@@ -22,6 +22,7 @@ import ctypes
 import ctypes.wintypes as wt
 import logging
 import os
+import sys
 import threading
 from pathlib import Path
 from typing import Callable
@@ -73,6 +74,11 @@ def _prepare_libmpv() -> None:
     _libmpv_prepared.append(True)
 
     candidates: list[Path] = []
+    # When frozen by PyInstaller, bundled binaries live in sys._MEIPASS
+    # (the _internal folder); python-mpv finds the DLL via %PATH%, not _MEIPASS.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass))
     env_dir = os.environ.get("MPV_DLL_DIR")
     if env_dir:
         candidates.append(Path(env_dir))
@@ -313,10 +319,55 @@ class VideoWallpaperPlayer:
                 except Exception:
                     pass
 
+    def next_video(self) -> str:
+        """Skip to the next video in the folder (wraps). Returns its name."""
+        return self._step(1)
+
+    def prev_video(self) -> str:
+        """Skip to the previous video in the folder (wraps). Returns its name."""
+        return self._step(-1)
+
+    def _step(self, direction: int) -> str:
+        """Move every monitor's playlist by *direction* and re-sync them.
+
+        Navigation is driven through mpv's ``playlist_pos`` so all monitors jump to
+        the same index (re-syncing them) and the exact target name is known. Wrapping
+        works regardless of the loop setting, which is what users expect from an
+        explicit next/previous action.
+        """
+        with self._lock:
+            players = list(self._players)
+            videos = list(self._videos)
+        n = len(videos)
+        if not players or n == 0:
+            return videos[0].name if videos else ""
+        try:
+            current = players[0].playlist_pos or 0
+        except Exception:
+            current = 0
+        target = (current + direction) % n
+        for player in players:
+            try:
+                player.playlist_pos = target
+            except Exception:
+                pass
+        name = videos[target].name
+        self._notify(name)
+        return name
+
     def current_name(self) -> str:
-        if self._videos:
-            return self._videos[0].name
-        return ""
+        """Name of the video currently playing (reflects mpv's real position)."""
+        with self._lock:
+            players = list(self._players)
+            videos = list(self._videos)
+        if players and videos:
+            try:
+                pos = players[0].playlist_pos
+                if pos is not None and 0 <= pos < len(videos):
+                    return videos[pos].name
+            except Exception:
+                pass
+        return videos[0].name if videos else ""
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
