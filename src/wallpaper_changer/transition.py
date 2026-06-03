@@ -19,7 +19,6 @@ Supported transitions: "none", "fade", "slide", "slide_up", "zoom"
 from __future__ import annotations
 
 import ctypes
-import ctypes.wintypes as wt
 import time
 import winreg
 from pathlib import Path
@@ -27,10 +26,11 @@ from typing import Callable
 
 from PIL import Image, ImageWin
 
+from .workerw import get_workerw
+
 # ── Win32 bindings ────────────────────────────────────────────────────────────
 
 user32 = ctypes.windll.user32
-WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
 
 TRANSITIONS = ("none", "fade", "slide", "slide_up", "zoom")
 
@@ -56,44 +56,6 @@ def _sleep_until(target: float) -> None:
         time.sleep(remaining - 0.002)
     while time.perf_counter() < target:
         pass
-
-
-# ── WorkerW discovery ─────────────────────────────────────────────────────────
-
-def _find_worker_w() -> int:
-    """Return the HWND of the WorkerW desktop-layer window.
-
-    Sends the undocumented 0x052C message to Progman, which causes it to spawn
-    a WorkerW child positioned behind the SHELLDLL_DefView (desktop icons).
-    The same WorkerW is reused on subsequent calls — the message is idempotent.
-    """
-    progman = user32.FindWindowW("Progman", None)
-    if not progman:
-        raise RuntimeError("Progman window not found")
-
-    result = wt.DWORD(0)
-    user32.SendMessageTimeoutW(
-        progman, 0x052C, 0, 0,
-        0,      # SMTO_NORMAL
-        1000,   # timeout ms
-        ctypes.byref(result),
-    )
-
-    worker_w = wt.HWND(0)
-
-    def _enum(hwnd: int, _lp: int) -> bool:
-        if user32.FindWindowExW(hwnd, None, "SHELLDLL_DefView", None):
-            found = user32.FindWindowExW(None, hwnd, "WorkerW", None)
-            if found:
-                worker_w.value = found
-        return True
-
-    user32.EnumWindows(WNDENUMPROC(_enum), 0)
-
-    if not worker_w.value:
-        raise RuntimeError("WorkerW desktop layer not found")
-
-    return worker_w.value
 
 
 # ── Current wallpaper ─────────────────────────────────────────────────────────
@@ -229,11 +191,7 @@ def apply_transition(
 
     Falls back gracefully if WorkerW is unavailable or the animation fails.
     """
-    worker_w: int | None = None
-    try:
-        worker_w = _find_worker_w()
-    except Exception:
-        pass
+    worker_w = get_workerw()
 
     # ── Animated transition ───────────────────────────────────────────────────
     make_frame = _FRAME_MAKERS.get(transition)

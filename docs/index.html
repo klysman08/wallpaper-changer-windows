@@ -5,8 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="WallpaperChanger — The most powerful free collage wallpaper manager for Windows. Multi-monitor, multi-language, auto-rotation, zero bloat." />
-  <meta name="keywords" content="wallpaper manager, windows wallpaper, multi-monitor wallpaper, collage wallpaper, dual monitor wallpaper, free wallpaper app, open-source wallpaper" />
+    content="WallpaperChanger — The most powerful free collage & live video wallpaper manager for Windows. Multi-monitor, multi-language, auto-rotation, zero bloat." />
+  <meta name="keywords" content="wallpaper manager, windows wallpaper, multi-monitor wallpaper, collage wallpaper, video wallpaper, live wallpaper, animated wallpaper, dual monitor wallpaper, free wallpaper app, open-source wallpaper" />
   <link rel="canonical" href="https://wallpaper.astrofocus.app/" />
 
   <!-- Open Graph / Facebook -->
@@ -14,13 +14,13 @@
   <meta property="og:url" content="https://wallpaper.astrofocus.app/" />
   <meta property="og:site_name" content="WallpaperChanger" />
   <meta property="og:title" content="WallpaperChanger for Windows" />
-  <meta property="og:description" content="Multi-monitor collage wallpaper manager. Free, open-source, MIT licensed." />
+  <meta property="og:description" content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed." />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:url" content="https://wallpaper.astrofocus.app/" />
   <meta name="twitter:title" content="WallpaperChanger for Windows" />
-  <meta name="twitter:description" content="Multi-monitor collage wallpaper manager. Free, open-source, MIT licensed." />
+  <meta name="twitter:description" content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed." />
 
   <title>WallpaperChanger — Multi-Monitor Wallpaper Manager for Windows</title>
 
@@ -36,7 +36,7 @@
       "price": "0",
       "priceCurrency": "USD"
     },
-    "description": "Multi-monitor collage wallpaper manager. Free, open-source, MIT licensed.",
+    "description": "Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed.",
     "url": "https://wallpaper.astrofocus.app/"
   }
   </script>
@@ -88,11 +88,11 @@
       <div class="hero-glow hero-glow-2"></div>
     </div>
     <div class="container hero-content">
-      <div class="badge">v3.2 · MIT License · Free Forever</div>
+      <div class="badge">v3.3 · MIT License · Free Forever</div>
       <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
       <p class="hero-sub">
-        Multi-monitor collage mode, auto-rotation, global hotkeys, system tray — completely free and open-source. No
-        subscriptions. No ads. No telemetry.
+        Multi-monitor collage mode, <strong>live video wallpapers</strong>, auto-rotation, global hotkeys, system tray —
+        completely free and open-source. No subscriptions. No ads. No telemetry.
       </p>
       <div class="hero-actions">
         <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
@@ -143,6 +143,10 @@
               <td><span class="icon-good">✓</span> <strong>Collage mode</strong> — grid of 1–8 images per monitor</td>
             </tr>
             <tr>
+              <td><span class="icon-bad">✗</span> Live/animated wallpapers cost money</td>
+              <td><span class="icon-good">✓</span> <strong>Video wallpaper</strong> — play any video behind your icons, free</td>
+            </tr>
+            <tr>
               <td><span class="icon-bad">✗</span> No real multi-monitor awareness</td>
               <td><span class="icon-good">✓</span> Detects every monitor, respects resolution and position</td>
             </tr>
@@ -175,6 +179,12 @@
       <h2 class="section-title">Everything you need,<br /><span class="gradient-text">nothing you don't.</span></h2>
       <div class="features-grid">
         <div class="feature-card">
+          <div class="feature-icon">🎬</div>
+          <h3>Video Wallpaper</h3>
+          <p>Play any video (MP4, MKV, WebM, MOV…) as a live wallpaper behind your desktop icons. Hardware-accelerated
+            via libmpv, multi-monitor, aspect-correct, with optional audio.</p>
+        </div>
+        <div class="feature-card">
           <div class="feature-icon">🖼️</div>
           <h3>Collage Grid</h3>
           <p>Automatic layout with 1 to 8 images per monitor. Each screen gets its own dynamically composed wallpaper.
@@ -201,8 +211,8 @@
         <div class="feature-card">
           <div class="feature-icon">⌨️</div>
           <h3>Global Hotkeys</h3>
-          <p>Next, Previous, Stop/Start, Default wallpaper — plus instant effect switching (Normal / B&W / Vintage / HDR)
-            via Ctrl+Alt+1–4. All fully customizable.</p>
+          <p>Next, Previous, Stop/Start, Default wallpaper, effect switching (Ctrl+Alt+1–4), plus full video control —
+            play/stop, mute, and next/previous clip. All fully customizable.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🪟</div>
@@ -264,6 +274,7 @@
       <div class="preview-tabs">
         <button class="tab-btn active" data-tab="monitors">Monitor Detection</button>
         <button class="tab-btn" data-tab="collage">Collage Mode</button>
+        <button class="tab-btn" data-tab="video">Video Wallpaper</button>
         <button class="tab-btn" data-tab="settings">Settings</button>
         <button class="tab-btn" data-tab="tray">System Tray</button>
       </div>
@@ -322,6 +333,43 @@
           </div>
           <p class="panel-desc">Pick how many images compose each monitor's wallpaper. The app automatically arranges
             them in the optimal grid layout.</p>
+        </div>
+        <div class="preview-panel" id="tab-video">
+          <div class="mock-window">
+            <div class="mock-titlebar">
+              <div class="mock-dots"><span></span><span></span><span></span></div>
+              <span class="mock-title">WallpaperChanger — Video Wallpaper</span>
+            </div>
+            <div class="mock-body mock-settings">
+              <div class="mock-setting-row">
+                <span>Video folder</span>
+                <div class="mock-input-row">
+                  <div class="mock-input">C:\Videos\live</div>
+                </div>
+              </div>
+              <div class="mock-setting-row">
+                <span>Playback</span>
+                <div class="mock-toggle-group">
+                  <span class="mock-active">Loop</span><span>Play once</span>
+                </div>
+              </div>
+              <div class="mock-setting-row">
+                <span>Audio</span>
+                <div class="mock-checkbox checked">✓</div>
+              </div>
+              <div class="mock-setting-row">
+                <span>Controls</span>
+                <div class="mock-input-row">
+                  <div class="mock-btn">▶ Play</div>
+                  <div class="mock-btn">■ Stop</div>
+                  <div class="mock-btn">⏮ Prev</div>
+                  <div class="mock-btn">⏭ Next</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-desc">Point it at a folder of videos and play them as a live wallpaper rendered into the
+            desktop WORKERW layer — behind your icons, GPU-accelerated, aspect-correct, across every monitor.</p>
         </div>
         <div class="preview-panel" id="tab-settings">
           <div class="mock-window">
@@ -528,6 +576,17 @@ uv run wallpaper-changer-gui</code></pre>
             <pre id="cli-3"><code>uv run wallpaper-changer watch</code></pre>
           </div>
         </div>
+        <div class="cli-card">
+          <div class="cli-card-header">Video wallpaper</div>
+          <div class="code-block-wrapper">
+            <div class="code-header">
+              <span>PowerShell</span>
+              <button class="copy-btn" data-target="cli-4">Copy</button>
+            </div>
+            <pre id="cli-4"><code>uv run wallpaper-changer video \
+  --folder C:\Videos\live --loop</code></pre>
+          </div>
+        </div>
       </div>
       <div class="hotkeys-section">
         <h3>Global Hotkeys</h3>
@@ -578,6 +637,22 @@ uv run wallpaper-changer-gui</code></pre>
             <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>4</kbd></div>
             <span>Effect: HDR</span>
           </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>V</kbd></div>
+            <span>Start / Stop video wallpaper</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>M</kbd></div>
+            <span>Toggle video sound</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>.</kbd></div>
+            <span>Next video</span>
+          </div>
+          <div class="hotkey-row">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>,</kbd></div>
+            <span>Previous video</span>
+          </div>
         </div>
       </div>
     </div>
@@ -593,8 +668,24 @@ uv run wallpaper-changer-gui</code></pre>
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
-              <span class="version-tag">v3.2</span>
+              <span class="version-tag">v3.3</span>
               <span class="version-label current-label">Latest</span>
+            </div>
+            <ul class="change-list">
+              <li>Video wallpaper — play any video (MP4/MKV/WebM/MOV…) behind your desktop icons via libmpv + WORKERW</li>
+              <li>Hardware-accelerated, multi-monitor playback with aspect-correct fit — vertical 9:16 clips no longer stretched</li>
+              <li>Optional audio playback from the video's own track</li>
+              <li>Video hotkeys — Start/Stop (Ctrl+Alt+V), mute (Ctrl+Alt+M), Next (Ctrl+Alt+.), Previous (Ctrl+Alt+,)</li>
+              <li>Previous/Next playlist navigation with all monitors re-synced</li>
+              <li>New <code>wallpaper-changer video</code> CLI command</li>
+            </ul>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v3.2</span>
             </div>
             <ul class="change-list">
               <li>Smooth fade transition at 30 fps between wallpapers (WorkerW + GDI rendering)</li>
