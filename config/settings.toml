@@ -30,6 +30,8 @@ effect_normal = "ctrl+alt+1"
 effect_bw = "ctrl+alt+2"
 effect_vintage = "ctrl+alt+3"
 effect_hdr = "ctrl+alt+4"
+toggle_video = "ctrl+alt+v"
+toggle_video_sound = "ctrl+alt+m"
 
 [video]
 enabled = false

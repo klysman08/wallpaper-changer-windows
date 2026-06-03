@@ -266,7 +266,7 @@ class VideoWallpaperPlayer:
             wid=str(int(hwnd)),
             vo="gpu",
             hwdec="auto",
-            keepaspect=False,                       # fill the whole monitor
+            keepaspect=True,                        # preserve aspect ratio (letterbox)
             loop_playlist="inf" if self._loop else "no",
             mute=not audio,
             osc=False,

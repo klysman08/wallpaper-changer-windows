@@ -129,6 +129,8 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_effect_bw_var      = tk.StringVar(value=hk.get("effect_bw",       "ctrl+alt+2"))
         self._hk_effect_vintage_var = tk.StringVar(value=hk.get("effect_vintage",  "ctrl+alt+3"))
         self._hk_effect_hdr_var     = tk.StringVar(value=hk.get("effect_hdr",      "ctrl+alt+4"))
+        self._hk_video_var          = tk.StringVar(value=hk.get("toggle_video",       "ctrl+alt+v"))
+        self._hk_video_sound_var    = tk.StringVar(value=hk.get("toggle_video_sound", "ctrl+alt+m"))
         self._default_wp_var = tk.StringVar(
             value=self._cfg.get("paths", {}).get("default_wallpaper", ""),
         )
@@ -469,6 +471,35 @@ class WallpaperChangerApp(ttk.Window):
         for j, (text, var) in enumerate(effect_labels):
             row_idx = n + 4 + j
             btn_idx = len(labels) + j
+            ttk.Label(frame, text=text).grid(
+                row=row_idx, column=0, sticky=W, padx=(0, 8), pady=2,
+            )
+            ttk.Entry(frame, textvariable=var, width=24).grid(
+                row=row_idx, column=1, sticky=EW, padx=(0, 4), pady=2,
+            )
+            btn = ttk.Button(
+                frame, text=t("hk_record"), width=8, style="Outline.TButton",
+                command=lambda v=var, b=btn_idx: self._record_hotkey(v, b),
+            )
+            btn.grid(row=row_idx, column=2, pady=2)
+            self._hk_record_btns.append(btn)
+
+        # ── Video wallpaper hotkeys ───────────────────────────────────────────
+        base_row = n + 4 + len(effect_labels)
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=base_row, column=0, columnspan=3, sticky=EW, pady=(8, 4),
+        )
+        ttk.Label(
+            frame, text=t("hk_video_group"), font=("Segoe UI", 9, "bold"),
+        ).grid(row=base_row + 1, column=0, columnspan=3, sticky=W, pady=(0, 4))
+
+        video_labels = [
+            (t("hk_toggle_video"), self._hk_video_var),
+            (t("hk_toggle_video_sound"), self._hk_video_sound_var),
+        ]
+        for k, (text, var) in enumerate(video_labels):
+            row_idx = base_row + 2 + k
+            btn_idx = len(labels) + len(effect_labels) + k
             ttk.Label(frame, text=text).grid(
                 row=row_idx, column=0, sticky=W, padx=(0, 8), pady=2,
             )
@@ -1226,6 +1257,8 @@ class WallpaperChangerApp(ttk.Window):
                 "effect_bw":      self._hk_effect_bw_var.get(),
                 "effect_vintage": self._hk_effect_vintage_var.get(),
                 "effect_hdr":     self._hk_effect_hdr_var.get(),
+                "toggle_video":        self._hk_video_var.get(),
+                "toggle_video_sound":  self._hk_video_sound_var.get(),
             },
             "video": {
                 "enabled": bool(self._video_enabled_var.get()),
@@ -1377,6 +1410,21 @@ class WallpaperChangerApp(ttk.Window):
         self._effect_var.set(effect)
         self._apply_now()
 
+    def _hotkey_toggle_video(self) -> None:
+        """Hotkey: start the video wallpaper if stopped, stop it if running."""
+        if self._video_player and self._video_player.is_running():
+            self._video_stop()
+        else:
+            self._video_play()
+
+    def _hotkey_toggle_video_sound(self) -> None:
+        """Hotkey: toggle the video's audio on/off (live if playing)."""
+        new_state = not self._video_sound_var.get()
+        self._video_sound_var.set(new_state)
+        if self._video_player and self._video_player.is_running():
+            self._video_player.set_sound(new_state)
+        self._set_status(t("video_sound_on") if new_state else t("video_sound_off"))
+
     # ── Hotkey helpers ────────────────────────────────────────────────────────
 
     def _register_hotkeys(self) -> None:
@@ -1392,6 +1440,8 @@ class WallpaperChangerApp(ttk.Window):
             self._hk_effect_bw_var.get():      lambda: self.after(0, lambda: self._hotkey_set_effect("bw")),
             self._hk_effect_vintage_var.get(): lambda: self.after(0, lambda: self._hotkey_set_effect("vintage")),
             self._hk_effect_hdr_var.get():     lambda: self.after(0, lambda: self._hotkey_set_effect("hdr")),
+            self._hk_video_var.get():          lambda: self.after(0, self._hotkey_toggle_video),
+            self._hk_video_sound_var.get():    lambda: self.after(0, self._hotkey_toggle_video_sound),
         })
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
