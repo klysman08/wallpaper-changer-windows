@@ -38,10 +38,37 @@ class _FakeMPV:
         self.terminated = True
 
 
-def _install_fake_mpv(monkeypatch):
+class _LoadFailMPV(_FakeMPV):
+    """mpv whose loadfile fails *after* the instance is bound to the host window."""
+
+    def loadfile(self, path, mode="replace"):
+        raise RuntimeError("cannot load file")
+
+
+class _PosFailMPV(_FakeMPV):
+    """mpv whose playlist_pos get/set always raises (a core mid-shutdown)."""
+
+    def __init__(self, **kwargs):
+        # Bypass _FakeMPV.__init__'s playlist_pos assignment (it hits the setter).
+        self.kwargs = kwargs
+        self.mute = kwargs.get("mute", True)
+        self.loaded = []
+        self.terminated = False
+        _FakeMPV.instances.append(self)
+
+    @property
+    def playlist_pos(self):
+        raise RuntimeError("core shutting down")
+
+    @playlist_pos.setter
+    def playlist_pos(self, value):
+        raise RuntimeError("core shutting down")
+
+
+def _install_fake_mpv(monkeypatch, mpv_cls=None):
     _FakeMPV.instances.clear()
     fake_mod = types.ModuleType("mpv")
-    fake_mod.MPV = _FakeMPV
+    fake_mod.MPV = mpv_cls or _FakeMPV
     monkeypatch.setitem(sys.modules, "mpv", fake_mod)
 
 
@@ -179,6 +206,137 @@ def test_player_start_raises_without_desktop_layer(monkeypatch):
     else:
         raise AssertionError("expected RuntimeError when no desktop layer is found")
     assert player.is_running() is False
+
+
+# ── Crash safety: cleanup & error swallowing ──────────────────────────────────
+
+def test_make_player_failure_terminates_before_window_destroy(monkeypatch):
+    """A load failure must terminate mpv *before* its window is destroyed, and must
+    not leak the instance — otherwise mpv keeps rendering into a freed HWND (crash)."""
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch, _LoadFailMPV)
+
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+
+    try:
+        player.start()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected RuntimeError when every monitor fails")
+
+    assert player.is_running() is False
+    # the bound mpv instance was terminated (not leaked)
+    assert _FakeMPV.instances and all(i.terminated for i in _FakeMPV.instances)
+    # its host window was destroyed via _destroy_window (IsWindow -> DestroyWindow)
+    assert vw.user32.DestroyWindow.called
+
+
+def test_start_cleans_up_partial_state_on_unexpected_error(monkeypatch):
+    """If a later monitor throws mid-setup, start() must tear down what it already
+    built and reset internal state so a retry starts clean."""
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch)
+
+    calls = {"n": 0}
+
+    def flaky_create(parent, mon, left, top):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("simulated CreateWindowExW failure")
+        return 1000 + mon.index
+
+    monkeypatch.setattr(vw, "_create_host_window", flaky_create)
+
+    monitors = [Monitor(0, 0, 0, 800, 600), Monitor(1, 800, 0, 800, 600)]
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=monitors)
+
+    try:
+        player.start()
+    except OSError:
+        pass
+    else:
+        raise AssertionError("expected the OSError to propagate")
+
+    assert player.is_running() is False
+    # the first monitor's mpv instance was terminated during cleanup
+    assert _FakeMPV.instances and all(i.terminated for i in _FakeMPV.instances)
+    assert player._players == [] and player._hwnds == []
+
+
+def test_start_after_failure_starts_clean(monkeypatch):
+    """A failed start must not leave windows a later successful start would duplicate."""
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch, _LoadFailMPV)
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+    try:
+        player.start()
+    except RuntimeError:
+        pass
+    assert player._hwnds == []
+
+    # A healthy start now creates exactly one window/instance — no duplication.
+    _install_fake_mpv(monkeypatch)
+    player.start()
+    assert player.is_running() is True
+    assert len(player._hwnds) == 1
+    assert len([i for i in _FakeMPV.instances if not i.terminated]) == 1
+
+
+def test_double_stop_is_safe(monkeypatch):
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch)
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+    player.start()
+    player.stop()
+    player.stop()   # must not raise
+    assert player.is_running() is False
+
+
+def test_restart_terminates_previous_instances(monkeypatch):
+    """Calling start() while already running tears down the old instances first."""
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch)
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+    player.start()
+    first = list(_FakeMPV.instances)
+
+    player.start()   # restart
+
+    assert all(i.terminated for i in first)
+    assert player.is_running() is True
+    assert len([i for i in _FakeMPV.instances if not i.terminated]) == 1
+
+
+def test_set_sound_when_stopped_is_noop():
+    player = vw.VideoWallpaperPlayer()
+    player.configure(videos=[Path("a.mp4")], monitors=[Monitor(0, 0, 0, 800, 600)])
+    player.set_sound(True)    # no players -> must not raise
+    player.set_sound(False)
+    assert player.is_running() is False
+
+
+def test_navigation_swallows_mpv_errors(monkeypatch):
+    """next/prev/current_name must never propagate mpv property errors (raised when
+    the core is mid-shutdown) — a hotkey press must not crash the app."""
+    _patch_win32(monkeypatch)
+    _install_fake_mpv(monkeypatch, _PosFailMPV)
+    player = vw.VideoWallpaperPlayer()
+    player.configure(
+        videos=[Path("a.mp4"), Path("b.mp4")],
+        monitors=[Monitor(0, 0, 0, 800, 600)],
+    )
+    player.start()
+
+    # playlist_pos getter raises -> _step falls back to current=0 -> target=1
+    assert player.next_video() == "b.mp4"
+    # getter raises -> current_name falls back to the first video
+    assert player.current_name() == "a.mp4"
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

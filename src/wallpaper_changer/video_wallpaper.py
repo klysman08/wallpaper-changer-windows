@@ -47,6 +47,8 @@ user32.CreateWindowExW.argtypes = [
     wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID,
 ]
 user32.DestroyWindow.argtypes = [wt.HWND]
+user32.IsWindow.argtypes = [wt.HWND]
+user32.IsWindow.restype = wt.BOOL
 user32.GetWindowRect.argtypes = [wt.HWND, ctypes.POINTER(wt.RECT)]
 user32.InvalidateRect.argtypes = [wt.HWND, ctypes.c_void_p, wt.BOOL]
 user32.UpdateWindow.argtypes = [wt.HWND]
@@ -56,6 +58,11 @@ user32.UpdateWindow.argtypes = [wt.HWND]
 
 # One-shot guard (a list avoids a module-level ``global`` statement).
 _libmpv_prepared: list[bool] = []
+
+# Hold the handles returned by os.add_dll_directory for the process lifetime.
+# Per the os.add_dll_directory contract, the returned object owns the search-path
+# entry; keeping a reference guarantees the directory stays resolvable.
+_dll_dir_handles: list = []
 
 
 def _prepare_libmpv() -> None:
@@ -95,7 +102,7 @@ def _prepare_libmpv() -> None:
         try:
             if not directory.is_dir():
                 continue
-            os.add_dll_directory(str(directory))
+            _dll_dir_handles.append(os.add_dll_directory(str(directory)))
             # python-mpv finds the DLL via %PATH%, so prepend the directory there too.
             os.environ["PATH"] = f"{directory}{os.pathsep}{os.environ.get('PATH', '')}"
         except Exception:
@@ -156,6 +163,22 @@ def _create_host_window(
                     getattr(mon, "index", "?"), ctypes.get_last_error())
         return None
     return int(hwnd)
+
+
+def _destroy_window(hwnd: int | None) -> None:
+    """Destroy a host window if it still exists.
+
+    Safe to call with ``None`` or a stale handle: the WORKERW layer can be recreated
+    by Explorer (display changes, shell restart), which destroys our child windows
+    out from under us, so the handle may already be invalid.
+    """
+    if not hwnd:
+        return
+    try:
+        if user32.IsWindow(hwnd):
+            user32.DestroyWindow(hwnd)
+    except Exception:
+        pass
 
 
 def _refresh_desktop(parent: int | None) -> None:
@@ -230,41 +253,49 @@ class VideoWallpaperPlayer:
                     "place libmpv-2.dll on the path."
                 ) from exc
 
-            parent = get_desktop_parent()
-            if not parent:
-                raise RuntimeError(
-                    "Could not find the desktop layer (WORKERW/Progman). "
-                    "Is Explorer running?"
-                )
-            self._parent = parent
-            parent_left, parent_top = _window_origin(parent)
-
-            first = True
-            for mon in self._monitors:
-                hwnd = _create_host_window(parent, mon, parent_left, parent_top)
-                if not hwnd:
-                    continue
-                try:
-                    player = self._make_player(mpv, hwnd, audio=self._sound and first)
-                except Exception as exc:
-                    log.warning("Failed to start mpv on monitor %s: %s",
-                                getattr(mon, "index", "?"), exc)
-                    user32.DestroyWindow(hwnd)
-                    continue
-                self._players.append(player)
-                self._hwnds.append(hwnd)
-                first = False
-
-            if not self._players:
+            try:
+                self._start_locked(mpv)
+            except Exception:
+                # Never leave half-created windows or un-terminated mpv instances
+                # behind — a window destroyed while mpv still renders into it crashes.
                 self._stop_locked()
-                raise RuntimeError(
-                    "No video host windows could be created on the desktop layer."
-                )
-
-            self._running = True
+                raise
 
         if self._videos:
             self._notify(self._videos[0].name)
+
+    def _start_locked(self, mpv) -> None:
+        """Create the host windows and mpv instances. Caller must hold ``_lock``."""
+        parent = get_desktop_parent()
+        if not parent:
+            raise RuntimeError(
+                "Could not find the desktop layer (WORKERW/Progman). "
+                "Is Explorer running?"
+            )
+        self._parent = parent
+        parent_left, parent_top = _window_origin(parent)
+
+        first = True
+        for mon in self._monitors:
+            hwnd = _create_host_window(parent, mon, parent_left, parent_top)
+            if not hwnd:
+                continue
+            try:
+                player = self._make_player(mpv, hwnd, audio=self._sound and first)
+            except Exception as exc:
+                log.warning("Failed to start mpv on monitor %s: %s",
+                            getattr(mon, "index", "?"), exc)
+                _destroy_window(hwnd)
+                continue
+            self._players.append(player)
+            self._hwnds.append(hwnd)
+            first = False
+
+        if not self._players:
+            raise RuntimeError(
+                "No video host windows could be created on the desktop layer."
+            )
+        self._running = True
 
     def _make_player(self, mpv, hwnd: int, *, audio: bool):
         """Create one mpv instance bound to *hwnd* and load the playlist."""
@@ -279,8 +310,17 @@ class VideoWallpaperPlayer:
             input_default_bindings=False,
             input_vo_keyboard=False,
         )
-        for i, video in enumerate(self._videos):
-            player.loadfile(str(video), mode="replace" if i == 0 else "append")
+        try:
+            for i, video in enumerate(self._videos):
+                player.loadfile(str(video), mode="replace" if i == 0 else "append")
+        except Exception:
+            # The instance is already bound to hwnd. Terminate it before the caller
+            # destroys the window, otherwise mpv keeps rendering into a dead HWND.
+            try:
+                player.terminate()
+            except Exception:
+                pass
+            raise
         return player
 
     def stop(self) -> None:
@@ -288,6 +328,8 @@ class VideoWallpaperPlayer:
             self._stop_locked()
 
     def _stop_locked(self) -> None:
+        # Terminate every mpv instance BEFORE destroying its window, so mpv never
+        # renders into a freed HWND (which would crash the process natively).
         for player in self._players:
             try:
                 player.terminate()
@@ -295,10 +337,7 @@ class VideoWallpaperPlayer:
                 pass
         self._players.clear()
         for hwnd in self._hwnds:
-            try:
-                user32.DestroyWindow(hwnd)
-            except Exception:
-                pass
+            _destroy_window(hwnd)
         self._hwnds.clear()
         _refresh_desktop(self._parent)
         self._parent = None
