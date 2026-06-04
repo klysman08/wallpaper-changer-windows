@@ -47,8 +47,6 @@ user32.CreateWindowExW.argtypes = [
     wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID,
 ]
 user32.DestroyWindow.argtypes = [wt.HWND]
-user32.IsWindow.argtypes = [wt.HWND]
-user32.IsWindow.restype = wt.BOOL
 user32.GetWindowRect.argtypes = [wt.HWND, ctypes.POINTER(wt.RECT)]
 user32.InvalidateRect.argtypes = [wt.HWND, ctypes.c_void_p, wt.BOOL]
 user32.UpdateWindow.argtypes = [wt.HWND]
@@ -166,17 +164,18 @@ def _create_host_window(
 
 
 def _destroy_window(hwnd: int | None) -> None:
-    """Destroy a host window if it still exists.
+    """Destroy a host window. Safe to call with ``None`` or a stale handle.
 
-    Safe to call with ``None`` or a stale handle: the WORKERW layer can be recreated
-    by Explorer (display changes, shell restart), which destroys our child windows
-    out from under us, so the handle may already be invalid.
+    The WORKERW layer can be recreated by Explorer (display changes, shell restart),
+    destroying our child windows and leaving stale handles. No ``IsWindow`` guard is
+    needed: ``DestroyWindow`` is robust against invalid handles (it returns FALSE and
+    sets ERROR_INVALID_WINDOW_HANDLE rather than crashing), and a guard would only add
+    a TOCTOU window. The ``try/except`` is belt-and-suspenders.
     """
     if not hwnd:
         return
     try:
-        if user32.IsWindow(hwnd):
-            user32.DestroyWindow(hwnd)
+        user32.DestroyWindow(hwnd)
     except Exception:
         pass
 
