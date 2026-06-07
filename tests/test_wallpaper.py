@@ -16,6 +16,7 @@ def test_apply_single_wallpaper_builds_canvas_and_delegates_to_transition(tmp_pa
 
     def fake_transition(canvas, out, set_fn):
         captured["size"] = canvas.size
+        captured["set_fn"] = set_fn
         canvas.save(str(out), "BMP")   # emulate persistence
 
     monkeypatch.setattr(wallpaper, "apply_transition", fake_transition)
@@ -25,6 +26,8 @@ def test_apply_single_wallpaper_builds_canvas_and_delegates_to_transition(tmp_pa
     assert out == tmp_path / "wallpaper_default.bmp"
     assert out.exists()
     assert captured["size"] == (16, 16)   # virtual desktop = the single 16x16 monitor
+    # the setter handed to apply_transition must be the real Win32 applier, not None/other
+    assert captured["set_fn"] is wallpaper.set_wallpaper_win
 
 
 @pytest.mark.parametrize("effect", ["normal", "bw", "vintage", "hdr"])
