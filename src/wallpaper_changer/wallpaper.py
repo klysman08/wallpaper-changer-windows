@@ -11,7 +11,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from .config import resolve_path, get_project_root
 from .image_utils import fit_image, pick_images, build_canvas
 from .monitor import Monitor
-from .transition import apply_transition, _DEFAULT_DURATION, _DEFAULT_FPS
+from .transition import apply_transition
 
 SPI_SETDESKWALLPAPER  = 0x0014
 SPIF_UPDATEINIFILE    = 0x0001
@@ -190,10 +190,7 @@ def _apply_collage(
 
     out = output_dir / "wallpaper_collage.bmp"
     canvas = apply_effect(canvas, effect)
-    transition = cfg["display"].get("transition", "none")
-    duration = float(cfg["display"].get("transition_duration", _DEFAULT_DURATION))
-    fps = int(cfg["display"].get("transition_fps", _DEFAULT_FPS))
-    apply_transition(canvas, out, transition, duration, fps, set_wallpaper_win)
+    apply_transition(canvas, out, set_wallpaper_win)
     return out, [str(p) for p in imgs]
 
 
@@ -205,9 +202,6 @@ def apply_single_wallpaper(
     output_dir: Path,
     fit_mode: str = "fill",
     effect: str = "normal",
-    transition: str = "none",
-    transition_duration: float = _DEFAULT_DURATION,
-    transition_fps: int = _DEFAULT_FPS,
 ) -> Path:
     """Apply a single image as wallpaper across all monitors."""
     img = Image.open(str(image_path)).convert("RGB")
@@ -220,7 +214,7 @@ def apply_single_wallpaper(
         canvas.paste(fitted, (paste_x, paste_y))
     out = output_dir / "wallpaper_default.bmp"
     canvas = apply_effect(canvas, effect)
-    apply_transition(canvas, out, transition, transition_duration, transition_fps, set_wallpaper_win)
+    apply_transition(canvas, out, set_wallpaper_win)
     return out
 
 

@@ -1,32 +1,30 @@
-from pathlib import Path
-
 import pytest
 from PIL import Image
 
 from wallpaper_changer import wallpaper
+from wallpaper_changer.monitor import Monitor
 
 
-def test_deve_aplicar_fade_sem_erro_quando_fade_esta_ativo(tmp_path, monkeypatch):
-    old_wallpaper = tmp_path / "old.bmp"
-    out_path = tmp_path / "new.bmp"
-    Image.new("RGB", (8, 8), (255, 0, 0)).save(old_wallpaper, "BMP")
-    canvas = Image.new("RGB", (8, 8), (0, 255, 0))
+def test_apply_single_wallpaper_builds_canvas_and_delegates_to_transition(tmp_path, monkeypatch):
+    """apply_single_wallpaper composes the virtual-desktop canvas and hands it to
+    apply_transition — verified without touching any Win32 API."""
+    src = tmp_path / "src.png"
+    Image.new("RGB", (20, 20), (200, 100, 50)).save(src)
+    monitors = [Monitor(0, 0, 0, 16, 16)]
 
-    fast_calls: list[Path] = []
-    set_calls: list[Path] = []
+    captured: dict = {}
 
-    monkeypatch.setattr(wallpaper, "_FADE_FRAMES", 3)
-    monkeypatch.setattr(wallpaper, "_FADE_DELAY", 0.0)
-    monkeypatch.setattr(wallpaper, "_get_current_wallpaper", lambda: old_wallpaper)
-    monkeypatch.setattr(wallpaper, "set_wallpaper_style_span", lambda: None)
-    monkeypatch.setattr(wallpaper, "_set_wallpaper_fast", lambda path: fast_calls.append(Path(path)))
-    monkeypatch.setattr(wallpaper, "set_wallpaper_win", lambda path: set_calls.append(Path(path)))
+    def fake_transition(canvas, out, set_fn):
+        captured["size"] = canvas.size
+        canvas.save(str(out), "BMP")   # emulate persistence
 
-    wallpaper._apply_or_fade(canvas, out_path, fade_in=True)
+    monkeypatch.setattr(wallpaper, "apply_transition", fake_transition)
 
-    assert out_path.exists()
-    assert len(fast_calls) == 2
-    assert set_calls == [out_path]
+    out = wallpaper.apply_single_wallpaper(src, monitors, tmp_path, fit_mode="fill")
+
+    assert out == tmp_path / "wallpaper_default.bmp"
+    assert out.exists()
+    assert captured["size"] == (16, 16)   # virtual desktop = the single 16x16 monitor
 
 
 @pytest.mark.parametrize("effect", ["normal", "bw", "vintage", "hdr"])
