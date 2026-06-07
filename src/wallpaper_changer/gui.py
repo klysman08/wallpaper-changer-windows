@@ -1277,9 +1277,6 @@ class WallpaperChangerApp(ttk.Window):
             "display": {
                 "fit_mode": self._fit_var.get(),
                 "effect": self._effect_var.get(),
-                "transition": "fade",
-                "transition_duration": self._cfg["display"].get("transition_duration", 0.6),
-                "transition_fps": self._cfg["display"].get("transition_fps", 30),
             },
             "hotkeys": {
                 "next_wallpaper": self._hk_next_var.get(),
@@ -1424,12 +1421,8 @@ class WallpaperChangerApp(ttk.Window):
                 out_dir.mkdir(parents=True, exist_ok=True)
                 fit        = cfg["display"]["fit_mode"]
                 effect     = cfg["display"].get("effect", "normal")
-                transition = cfg["display"].get("transition", "none")
-                t_dur      = float(cfg["display"].get("transition_duration", 0.6))
-                t_fps      = int(cfg["display"].get("transition_fps", 30))
                 out = apply_single_wallpaper(
                     path, self._monitors, out_dir, fit, effect,
-                    transition, t_dur, t_fps,
                 )
                 self.after(0, lambda: self._set_status(
                     t("default_wp_applied", name=Path(str(out)).name),
