@@ -45,6 +45,47 @@
   --pixel-shadow-sm: 2px 2px 0 0 var(--border-color);
   --pixel-shadow-lg: 6px 6px 0 0 var(--border-color);
   --nav-h: 74px;
+
+  --bg-grid-color: rgba(44, 37, 32, 0.03);
+  --menu-border-dashed: 1px dashed rgba(44, 37, 32, 0.1);
+  --mock-taskbar-bg: #EAE3D2;
+  --mock-screen-inactive-bg: #3A322C;
+  --mock-stand-bg: #C4B9A1;
+}
+
+[data-theme="dark"] {
+  --bg-paper: #181412;
+  --bg-surface: #26201D;
+  --bg-surface-alt: #2D2522;
+  --border-color: #F5EBE1;
+  
+  --primary: #F28E73;
+  --primary-hover: #F7A892;
+  --primary-light: #3D2D29;
+  
+  --secondary: #82B099;
+  --secondary-hover: #98C4AE;
+  --secondary-light: #25332C;
+  
+  --accent: #F4D35E;
+  --accent-light: #3F341E;
+  
+  --accent-blue: #588EA5;
+  --accent-blue-hover: #71A0B6;
+  --accent-blue-light: #22343E;
+  
+  --text-primary: #F5EBE1;
+  --text-muted: #C8B9AD;
+  --text-dim: #9C8E84;
+  
+  --green: #82B099;
+  --red: #F28E73;
+  
+  --bg-grid-color: rgba(245, 235, 225, 0.03);
+  --menu-border-dashed: 1px dashed rgba(245, 235, 225, 0.1);
+  --mock-taskbar-bg: #2C2522;
+  --mock-screen-inactive-bg: #181412;
+  --mock-stand-bg: #4F453E;
 }
 
 html {
@@ -56,8 +97,8 @@ body {
   font-family: var(--font-body);
   background-color: var(--bg-paper);
   background-image: 
-    linear-gradient(rgba(44, 37, 32, 0.03) 2px, transparent 2px),
-    linear-gradient(90deg, rgba(44, 37, 32, 0.03) 2px, transparent 2px);
+    linear-gradient(var(--bg-grid-color) 2px, transparent 2px),
+    linear-gradient(90deg, var(--bg-grid-color) 2px, transparent 2px);
   background-size: 24px 24px;
   color: var(--text-primary);
   line-height: 1.65;
@@ -230,6 +271,41 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
   list-style: none;
   gap: 14px;
   align-items: center;
+}
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: var(--bg-surface);
+  border: var(--pixel-border-sm);
+  box-shadow: var(--pixel-shadow-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
+}
+.nav-icon-btn:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 var(--border-color);
+  background: var(--primary-light);
+}
+.nav-icon-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.nav-icon-btn svg {
+  display: block;
+}
+[data-theme="dark"] img.hero-illustration {
+  filter: brightness(0.85) contrast(1.1);
 }
 .nav-links li a {
   display: block;
@@ -674,7 +750,7 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
 .mock-screen {
   width: 120px;
   height: 76px;
-  background: #3A322C;
+  background: var(--mock-screen-inactive-bg);
   border: var(--pixel-border);
   position: relative;
   overflow: hidden;
@@ -688,7 +764,7 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
 .mock-stand {
   width: 32px;
   height: 12px;
-  background: #C4B9A1;
+  background: var(--mock-stand-bg);
   border: var(--pixel-border);
   border-top: none;
 }
@@ -875,7 +951,7 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
 .mock-taskbar {
   width: 100%;
   height: 48px;
-  background: #EAE3D2;
+  background: var(--mock-taskbar-bg);
   border: var(--pixel-border-sm);
   display: flex;
   align-items: center;
@@ -918,7 +994,7 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
   font-weight: 600;
   cursor: pointer;
   color: var(--text-primary);
-  border-bottom: 1px dashed rgba(44, 37, 32, 0.1);
+  border-bottom: var(--menu-border-dashed);
 }
 .menu-item:last-child {
   border-bottom: none;

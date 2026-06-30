@@ -124,3 +124,252 @@ const sectionObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.4 });
 
 sections.forEach(s => sectionObserver.observe(s));
+
+/* ─── RETRO AUDIO ENGINE (WEB AUDIO API) ─── */
+const RetroAudio = {
+  ctx: null,
+  enabled: true,
+  volume: 0.1, // Adjusted for clear but pleasant sound
+
+  init() {
+    if (this.ctx) return;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      this.ctx = new AudioContextClass();
+    }
+  },
+
+  resume() {
+    this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  },
+
+  playTone(freqs, duration, type = 'square', fadeOut = true) {
+    if (!this.enabled) return;
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = type;
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      // Volume envelope
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(this.volume, now + 0.005);
+      
+      if (fadeOut) {
+        gain.gain.setValueAtTime(this.volume, now + duration - 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      } else {
+        gain.gain.setValueAtTime(this.volume, now + duration);
+      }
+
+      // Frequency sweeps
+      if (Array.isArray(freqs)) {
+        if (freqs.length === 1) {
+          osc.frequency.setValueAtTime(freqs[0], now);
+        } else {
+          osc.frequency.setValueAtTime(freqs[0], now);
+          const step = duration / (freqs.length - 1);
+          for (let i = 1; i < freqs.length; i++) {
+            osc.frequency.setValueAtTime(freqs[i], now + i * step);
+          }
+        }
+      } else {
+        osc.frequency.setValueAtTime(freqs, now);
+      }
+
+      osc.start(now);
+      osc.stop(now + duration + 0.05);
+    } catch (e) {
+      console.warn("Audio playback failed", e);
+    }
+  },
+
+  playClick() {
+    // Decaying triangular wave sound
+    this.playTone([500, 250, 100], 0.08, 'triangle');
+  },
+
+  playHover() {
+    // Extremely subtle high tick sound
+    const oldVol = this.volume;
+    this.volume = 0.02;
+    this.playTone([800, 1000], 0.02, 'sine');
+    this.volume = oldVol;
+  },
+
+  playCoin() {
+    // Classic Mario-style coin chime (B5 -> E6)
+    if (!this.enabled) return;
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'square';
+      osc1.frequency.setValueAtTime(987.77, now); // B5
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      gain1.gain.setValueAtTime(this.volume, now);
+      gain1.gain.setValueAtTime(this.volume, now + 0.08);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc1.start(now);
+      osc1.stop(now + 0.1);
+
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'square';
+      osc2.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      gain2.gain.setValueAtTime(0, now);
+      gain2.gain.setValueAtTime(this.volume, now + 0.08);
+      gain2.gain.setValueAtTime(this.volume, now + 0.25);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.35);
+    } catch (e) {
+      console.warn(e);
+    }
+  },
+
+  playToggle(on) {
+    // Rising arpeggio for ON, falling for OFF
+    if (on) {
+      this.playTone([300, 450, 600, 800], 0.15, 'triangle');
+    } else {
+      this.playTone([800, 600, 450, 300], 0.15, 'triangle');
+    }
+  }
+};
+
+/* ─── INITIALIZE USER PREFERENCES (THEME & SOUND) ─── */
+const htmlEl = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const soundToggle = document.getElementById('soundToggle');
+
+const sunIcon = themeToggle.querySelector('.sun-icon');
+const moonIcon = themeToggle.querySelector('.moon-icon');
+const soundOnIcon = soundToggle.querySelector('.sound-on-icon');
+const soundOffIcon = soundToggle.querySelector('.sound-off-icon');
+
+// 1. Theme Configuration
+const currentTheme = localStorage.getItem('theme') || 'light';
+if (currentTheme === 'dark') {
+  htmlEl.setAttribute('data-theme', 'dark');
+  sunIcon.style.display = 'none';
+  moonIcon.style.display = 'block';
+}
+
+themeToggle.addEventListener('click', () => {
+  const isDark = htmlEl.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    htmlEl.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
+    sunIcon.style.display = 'block';
+    moonIcon.style.display = 'none';
+    RetroAudio.playToggle(false);
+  } else {
+    htmlEl.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
+    sunIcon.style.display = 'none';
+    moonIcon.style.display = 'block';
+    RetroAudio.playToggle(true);
+  }
+});
+
+// 2. Sound Configuration
+const soundMuted = localStorage.getItem('sound-muted') === 'true';
+if (soundMuted) {
+  RetroAudio.enabled = false;
+  soundOnIcon.style.display = 'none';
+  soundOffIcon.style.display = 'block';
+}
+
+soundToggle.addEventListener('click', () => {
+  RetroAudio.enabled = !RetroAudio.enabled;
+  localStorage.setItem('sound-muted', (!RetroAudio.enabled).toString());
+  
+  if (RetroAudio.enabled) {
+    soundOnIcon.style.display = 'block';
+    soundOffIcon.style.display = 'none';
+    RetroAudio.playToggle(true);
+  } else {
+    // Play toggle-off sound right before disabling
+    RetroAudio.enabled = true;
+    RetroAudio.playToggle(false);
+    // Tiny delay to allow audio buffer scheduling before disabling engine
+    setTimeout(() => {
+      RetroAudio.enabled = false;
+      soundOnIcon.style.display = 'none';
+      soundOffIcon.style.display = 'block';
+    }, 150);
+  }
+});
+
+// 3. Global Keyboard Shortcuts
+window.addEventListener('keydown', (e) => {
+  // Avoid triggers when typing in inputs/textareas
+  if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+    return;
+  }
+  const key = e.key.toLowerCase();
+  if (key === 't') {
+    themeToggle.click();
+  } else if (key === 's') {
+    soundToggle.click();
+  }
+});
+
+// 4. Attach Retro Audio Events to Interactive elements
+const setupRetroAudioEvents = () => {
+  const selectors = 'a, button, .tab-btn, .install-tab, .mock-btn, .mock-checkbox, .num-btns button, .mock-toggle-group span, .menu-item';
+  document.querySelectorAll(selectors).forEach(el => {
+    // Avoid double clicking sounds on theme/sound toggles or copy-btn since they have custom audio logic
+    if (el.id === 'themeToggle' || el.id === 'soundToggle' || el.classList.contains('copy-btn')) {
+      return;
+    }
+    el.addEventListener('click', () => {
+      RetroAudio.playClick();
+    });
+  });
+
+  // Attach hover sounds
+  document.querySelectorAll(selectors).forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      RetroAudio.playHover();
+    });
+  });
+
+  // Special Coin sound for copy button clicks
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      RetroAudio.playCoin();
+    });
+  });
+};
+
+// Resume Audio Context on initial user interaction to conform with modern browser policies
+const resumeAudioOnInteraction = () => {
+  RetroAudio.resume();
+  ['click', 'keydown', 'touchstart'].forEach(evtType => {
+    document.removeEventListener(evtType, resumeAudioOnInteraction);
+  });
+};
+['click', 'keydown', 'touchstart'].forEach(evtType => {
+  document.addEventListener(evtType, resumeAudioOnInteraction);
+});
+
+// Run layout setup
+setupRetroAudioEvents();
