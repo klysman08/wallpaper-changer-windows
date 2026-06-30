@@ -125,6 +125,25 @@ const sectionObserver = new IntersectionObserver((entries) => {
 
 sections.forEach(s => sectionObserver.observe(s));
 
+/* ─── SAFE STORAGE WRAPPER ─── */
+const SafeStorage = {
+  data: {},
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return this.data[key] || null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      this.data[key] = value;
+    }
+  }
+};
+
 /* ─── RETRO AUDIO ENGINE (WEB AUDIO API) ─── */
 const RetroAudio = {
   ctx: null,
@@ -135,14 +154,22 @@ const RetroAudio = {
     if (this.ctx) return;
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (AudioContextClass) {
-      this.ctx = new AudioContextClass();
+      try {
+        this.ctx = new AudioContextClass();
+      } catch (e) {
+        console.warn("Failed to create AudioContext:", e);
+      }
     }
   },
 
   resume() {
-    this.init();
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    try {
+      this.init();
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    } catch (e) {
+      console.warn("Failed to resume AudioContext:", e);
     }
   },
 
@@ -259,105 +286,109 @@ const htmlEl = document.documentElement;
 const themeToggle = document.getElementById('themeToggle');
 const soundToggle = document.getElementById('soundToggle');
 
-const sunIcon = themeToggle.querySelector('.sun-icon');
-const moonIcon = themeToggle.querySelector('.moon-icon');
-const soundOnIcon = soundToggle.querySelector('.sound-on-icon');
-const soundOffIcon = soundToggle.querySelector('.sound-off-icon');
+if (themeToggle && soundToggle) {
+  const sunIcon = themeToggle.querySelector('.sun-icon');
+  const moonIcon = themeToggle.querySelector('.moon-icon');
+  const soundOnIcon = soundToggle.querySelector('.sound-on-icon');
+  const soundOffIcon = soundToggle.querySelector('.sound-off-icon');
 
-// 1. Theme Configuration
-const currentTheme = localStorage.getItem('theme') || 'light';
-if (currentTheme === 'dark') {
-  htmlEl.setAttribute('data-theme', 'dark');
-  sunIcon.style.display = 'none';
-  moonIcon.style.display = 'block';
-}
-
-themeToggle.addEventListener('click', () => {
-  const isDark = htmlEl.getAttribute('data-theme') === 'dark';
-  if (isDark) {
-    htmlEl.removeAttribute('data-theme');
-    localStorage.setItem('theme', 'light');
-    sunIcon.style.display = 'block';
-    moonIcon.style.display = 'none';
-    RetroAudio.playToggle(false);
-  } else {
+  // 1. Theme Configuration
+  const currentTheme = SafeStorage.getItem('theme') || 'light';
+  if (currentTheme === 'dark') {
     htmlEl.setAttribute('data-theme', 'dark');
-    localStorage.setItem('theme', 'dark');
-    sunIcon.style.display = 'none';
-    moonIcon.style.display = 'block';
-    RetroAudio.playToggle(true);
+    if (sunIcon) sunIcon.style.display = 'none';
+    if (moonIcon) moonIcon.style.display = 'block';
   }
-});
 
-// 2. Sound Configuration
-const soundMuted = localStorage.getItem('sound-muted') === 'true';
-if (soundMuted) {
-  RetroAudio.enabled = false;
-  soundOnIcon.style.display = 'none';
-  soundOffIcon.style.display = 'block';
+  themeToggle.addEventListener('click', () => {
+    const isDark = htmlEl.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      htmlEl.removeAttribute('data-theme');
+      SafeStorage.setItem('theme', 'light');
+      if (sunIcon) sunIcon.style.display = 'block';
+      if (moonIcon) moonIcon.style.display = 'none';
+      RetroAudio.playToggle(false);
+    } else {
+      htmlEl.setAttribute('data-theme', 'dark');
+      SafeStorage.setItem('theme', 'dark');
+      if (sunIcon) sunIcon.style.display = 'none';
+      if (moonIcon) moonIcon.style.display = 'block';
+      RetroAudio.playToggle(true);
+    }
+  });
+
+  // 2. Sound Configuration
+  const soundMuted = SafeStorage.getItem('sound-muted') === 'true';
+  if (soundMuted) {
+    RetroAudio.enabled = false;
+    if (soundOnIcon) soundOnIcon.style.display = 'none';
+    if (soundOffIcon) soundOffIcon.style.display = 'block';
+  }
+
+  soundToggle.addEventListener('click', () => {
+    RetroAudio.enabled = !RetroAudio.enabled;
+    SafeStorage.setItem('sound-muted', (!RetroAudio.enabled).toString());
+    
+    if (RetroAudio.enabled) {
+      if (soundOnIcon) soundOnIcon.style.display = 'block';
+      if (soundOffIcon) soundOffIcon.style.display = 'none';
+      RetroAudio.playToggle(true);
+    } else {
+      // Play toggle-off sound right before disabling
+      RetroAudio.enabled = true;
+      RetroAudio.playToggle(false);
+      // Tiny delay to allow audio buffer scheduling before disabling engine
+      setTimeout(() => {
+        RetroAudio.enabled = false;
+        if (soundOnIcon) soundOnIcon.style.display = 'none';
+        if (soundOffIcon) soundOffIcon.style.display = 'block';
+      }, 150);
+    }
+  });
+
+  // 3. Global Keyboard Shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+      return;
+    }
+    const key = e.key.toLowerCase();
+    if (key === 't') {
+      themeToggle.click();
+    } else if (key === 's') {
+      soundToggle.click();
+    }
+  });
 }
-
-soundToggle.addEventListener('click', () => {
-  RetroAudio.enabled = !RetroAudio.enabled;
-  localStorage.setItem('sound-muted', (!RetroAudio.enabled).toString());
-  
-  if (RetroAudio.enabled) {
-    soundOnIcon.style.display = 'block';
-    soundOffIcon.style.display = 'none';
-    RetroAudio.playToggle(true);
-  } else {
-    // Play toggle-off sound right before disabling
-    RetroAudio.enabled = true;
-    RetroAudio.playToggle(false);
-    // Tiny delay to allow audio buffer scheduling before disabling engine
-    setTimeout(() => {
-      RetroAudio.enabled = false;
-      soundOnIcon.style.display = 'none';
-      soundOffIcon.style.display = 'block';
-    }, 150);
-  }
-});
-
-// 3. Global Keyboard Shortcuts
-window.addEventListener('keydown', (e) => {
-  // Avoid triggers when typing in inputs/textareas
-  if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
-    return;
-  }
-  const key = e.key.toLowerCase();
-  if (key === 't') {
-    themeToggle.click();
-  } else if (key === 's') {
-    soundToggle.click();
-  }
-});
 
 // 4. Attach Retro Audio Events to Interactive elements
 const setupRetroAudioEvents = () => {
-  const selectors = 'a, button, .tab-btn, .install-tab, .mock-btn, .mock-checkbox, .num-btns button, .mock-toggle-group span, .menu-item';
-  document.querySelectorAll(selectors).forEach(el => {
-    // Avoid double clicking sounds on theme/sound toggles or copy-btn since they have custom audio logic
-    if (el.id === 'themeToggle' || el.id === 'soundToggle' || el.classList.contains('copy-btn')) {
-      return;
-    }
-    el.addEventListener('click', () => {
-      RetroAudio.playClick();
+  try {
+    const selectors = 'a, button, .tab-btn, .install-tab, .mock-btn, .mock-checkbox, .num-btns button, .mock-toggle-group span, .menu-item';
+    document.querySelectorAll(selectors).forEach(el => {
+      if (el.id === 'themeToggle' || el.id === 'soundToggle' || el.classList.contains('copy-btn')) {
+        return;
+      }
+      el.addEventListener('click', () => {
+        RetroAudio.playClick();
+      });
     });
-  });
 
-  // Attach hover sounds
-  document.querySelectorAll(selectors).forEach(el => {
-    el.addEventListener('mouseenter', () => {
-      RetroAudio.playHover();
+    // Attach hover sounds
+    document.querySelectorAll(selectors).forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        RetroAudio.playHover();
+      });
     });
-  });
 
-  // Special Coin sound for copy button clicks
-  document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      RetroAudio.playCoin();
+    // Special Coin sound for copy button clicks
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        RetroAudio.playCoin();
+      });
     });
-  });
+  } catch (e) {
+    console.warn("Failed to set up audio events:", e);
+  }
 };
 
 // Resume Audio Context on initial user interaction to conform with modern browser policies
