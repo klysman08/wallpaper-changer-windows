@@ -1,184 +1,143 @@
-# WallpaperChanger
+# 🖼️ WallpaperChanger
 
-> The most powerful free collage wallpaper manager for Windows — multi-monitor, multi-language, auto-rotation, and zero bloat.
+> The most powerful free collage & live video wallpaper manager for Windows. Multi-monitor, multi-language, auto-rotation, smooth transitions, and zero bloat.
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-3.2-orange)
-
----
-
-![WallpaperChanger](image.png)
-
-## Why WallpaperChanger?
-
-Most wallpaper apps fall into two categories: simple slideshows that only handle one image at a time, or paid tools locked behind subscriptions. **WallpaperChanger** fills the gap by offering features that usually require premium software — completely free and open-source.
-
-| Problem with other apps | WallpaperChanger solution |
-|---|---|
-| Single image per screen only | **Collage mode** — grid of 1–8 images per monitor |
-| No real multi-monitor awareness | Detects every monitor, respects resolution and position |
-| Always visible in the taskbar | Runs silently in the **system tray** |
-| English-only interfaces | **3 languages** — English, Português (Brasil), 日本語 |
-| No auto-start or background rotation | **Start with Windows** → launches to tray with auto-rotation |
-| Abrupt wallpaper changes | **Smooth fade transition** at 30 fps via WorkerW injection |
-| Paid or ad-supported | 100% free, MIT licensed, no telemetry |
-| Complex installers or manual setup | One-click **Windows Installer** with language selection |
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white&style=flat-square)](https://python.org)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white&style=flat-square)](https://microsoft.com)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-3.3-orange&style=flat-square)](https://github.com/klysman08/wallpaper-changer-windows/releases)
+[![Docs](https://img.shields.io/badge/Docs-Live%20Site-df7356?style=flat-square)](https://wallpaper.astrofocus.app/)
 
 ---
 
-## Features
+![WallpaperChanger Hero Setup](docs/hero-preview.png)
 
-| Feature | Description |
-|---|---|
-| **Collage grid** | Automatic layout with 1 to 8 images per monitor |
-| **Same images on all monitors** | Option to replicate the same collage on every screen |
-| **Random or sequential selection** | Switch between images randomly or in order |
-| **Image fit modes** | Fill, Fit, Stretch, Center, or Span |
-| **Image effects** | Normal, Black & White, Vintage, or HDR — switchable instantly via hotkey |
-| **Fade transition** | Smooth 30 fps crossfade between wallpapers using GDI WorkerW rendering |
-| **Auto rotation** | Change wallpaper at configurable intervals (seconds) |
-| **Auto-save settings** | Every apply persists current settings — no manual Save needed |
-| **Start with Windows** | Launches to system tray with auto-rotation enabled |
-| **System tray** | App lives in the notification area — right-click for quick actions |
-| **Multi-language GUI** | English, Português (Brasil), 日本語 — switchable in settings |
-| **Global hotkeys** | Next / Previous / Stop / Default wallpaper + effect switching via keyboard |
-| **Window transparency** | Control any window's opacity via GUI slider or shortcuts (toggle + scroll) |
-| **Configurable scroll modifier** | Choose which key (Alt / Ctrl / Shift / Win) activates transparency scroll |
-| **Wallpaper history** | Navigate back to previously applied wallpapers |
-| **Default wallpaper** | Assign a fallback image applied via hotkey |
-| **Windows Installer** | Setup.exe via Inno Setup — includes language selection during install |
-| **CLI** | Full command-line control for scripting and automation |
+## 🌟 Why WallpaperChanger?
+
+Most wallpaper utilities are either simplistic slideshows that can't handle multiple displays, or resource-heavy tools locked behind subscriptions and ads. **WallpaperChanger** is built to bridge this gap, offering premium, highly customizable features completely free, open-source, and offline.
+
+| Feature | Other Wallpaper Utilities | WallpaperChanger Solution |
+| :--- | :--- | :--- |
+| **Multi-Monitor Layouts** | ✗ Single image stretched or forced per screen | ✓ **Collage Mode**: Custom grid of 1–8 images per monitor |
+| **Live Wallpapers** | ✗ Restricted, resource-heavy, or paid | ✓ **Video Wallpaper**: Aspect-correct, hardware-accelerated play via `libmpv` |
+| **Transitions** | ✗ Instant, jarring cuts | ✓ **Smooth Fade**: 30 FPS crossfade transition |
+| **System Footprint** | ✗ Taskbar hog, telemetry, ads, account required | ✓ **Zero Bloat**: Runs silently in the system tray, 100% telemetry-free |
+| **Language Support** | ✗ English only | ✓ **Multi-Language**: Full English, Português, and Japanese UI |
+| **Automation & Scripts** | ✗ GUI-only configuration | ✓ **CLI Console**: Execute transitions, play videos, and run watch cycles |
 
 ---
 
-## Quick Start
+## ✨ Features
 
-### Option A — Installer (recommended)
+- **Collage Grid**: Automatic grid layouts of 1 to 8 images per monitor.
+- **Video Wallpaper (New v3.3)**: Render any video format (`.mp4`, `.mkv`, `.webm`, `.mov`, etc.) behind your desktop icons using `libmpv` with optional audio and hardware-acceleration.
+- **Fade Transitions**: Crossfade smoothly between wallpapers at 30 FPS using GDI WorkerW rendering—no desktop flicker.
+- **Auto-Rotation**: Watch cycles automatically rotate your backgrounds at set intervals.
+- **Window Transparency**: Focus adjustments allowing slider control, toggle hotkeys (`Alt+A`), or Scroll adjustments (modifiers like `Alt`, `Ctrl`, `Shift`, `Win`) for any window.
+- **Global Hotkeys**: Control next/previous wallpaper, effect configurations, and video controls (mute, playlist traversal) globally.
+- **System Tray**: Hides to the notification area with full right-click context menu options.
+- **Auto-Save Settings**: Settings persist on every apply automatically.
+- **Start with Windows**: Silently runs at login directly into the tray.
+- **Windows Installer**: One-click installer with language and startup options.
 
-1. Download **`WallpaperChanger_Setup.exe`** from the [Releases](https://github.com/klysman08/wallpaper-changer-windows/releases) page
-2. Run the installer — choose your language, shortcuts, and startup preference
-3. Launch the app and point it at your wallpapers folder
+---
 
-### Option B — From source
+## 🚀 Quick Start
 
+### Option A — Installer (Recommended)
+1. Download **`WallpaperChanger_Setup.exe`** from the [GitHub Releases](https://github.com/klysman08/wallpaper-changer-windows/releases) page.
+2. Run the installer (pick your default language, desktop shortcut, and startup options).
+3. Point the application to your wallpapers directory or video directory and hit **Start Watch / Play**.
+
+### Option B — From Source (Requires `uv`)
 ```powershell
 # 1. Clone the repository
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
 cd wallpaper-changer-windows/wallpaper-changer
 
-# 2. Install dependencies
+# 2. Sync dependencies
 uv sync
 
-# 3. Start the GUI
+# 3. Launch GUI
 uv run wallpaper-changer-gui
 ```
 
-### Prerequisites (source only)
-
-| Tool | Min Version | Link |
-|---|---|---|
-| Windows | 10 / 11 | — |
-| Python | 3.11+ | https://python.org |
-| uv | 0.4+ | https://docs.astral.sh/uv/ |
-
----
-
-## Graphical Interface
-
-### Monitor Detection
-
-WallpaperChanger automatically detects all connected monitors, showing a live preview with resolution and position. Click **Detect** to refresh after plugging in a display.
-
-### Collage
-
-Each monitor is divided into an automatic grid with **1 to 8 images**.
-
-- Choose the number of images with the numeric buttons
-- Enable **"Same images on all monitors"** to replicate the same set across all screens
-
-### Settings
-
-- **Image selection** — `Random` or `Sequential`
-- **Screen fit** — `Fill`, `Fit`, `Stretch`, `Center`, `Span`
-- **Image effect** — `Normal`, `Black & White`, `Vintage`, `HDR`
-- **Auto rotation** — set the interval in seconds and click **Start Watch**
-
-### Fade Transition
-
-Every wallpaper change is animated with a smooth **crossfade at 30 fps**. The transition is rendered directly onto the Windows desktop layer (WorkerW) using GDI blitting — no flicker, no abrupt cuts.
-
-### Auto-Save
-
-Settings are **saved automatically on every Apply** — including image effect, fit mode, folder, and all hotkeys. Restarting the app or the computer will always restore the last configuration. The explicit "Save Config" button is still available but is no longer required.
-
-### Start with Windows
-
-When this option is enabled, the app registers itself to launch at login. On startup it goes **directly to the system tray** and automatically begins the wallpaper rotation — no window pops up, no interaction needed.
-
-### Language
-
-Switch between **English**, **Português (Brasil)**, and **日本語** from the Language section inside the app. The change is saved immediately; restart the app to apply it fully. The installer also lets you pick the default language during installation.
-
-### Wallpapers Folder
-
-Define the source folder for images.  
-Supported formats: `jpg`, `jpeg`, `png`, `bmp`, `webp`.
-
-### Global Hotkeys
-
-| Action | Default shortcut |
-|---|---|
-| Next wallpaper | `Ctrl+Alt+Right` |
-| Previous wallpaper | `Ctrl+Alt+Left` |
-| Stop/Start Watch | `Ctrl+Alt+S` |
-| Default wallpaper | `Ctrl+Alt+D` |
-| Toggle transparency | `Alt+A` |
-| Open/Close app window | `Ctrl+Alt+W` |
-| **Effect: Normal** | `Ctrl+Alt+1` |
-| **Effect: Black & White** | `Ctrl+Alt+2` |
-| **Effect: Vintage** | `Ctrl+Alt+3` |
-| **Effect: HDR** | `Ctrl+Alt+4` |
-
-All shortcuts are fully customizable from the **Hotkeys** section in the GUI. Effect hotkeys switch the active effect and immediately apply the wallpaper.
-
-### Window Transparency
-
-Control the opacity of any open window directly from the app:
-
-- **ComboBox** — select any visible window from a filterable list
-- **Slider** — adjust opacity in real-time (range 50–255)
-- **Toggle shortcut** (`Alt+A`) — press once for 50% transparency, press again to restore
-- **Scroll shortcut** — hold the configured modifier key and scroll to gradually adjust the focused window's opacity
-- **Configurable modifier** — choose which key activates scroll transparency (`Alt`, `Ctrl`, `Shift`, or `Win`) in the Hotkeys section
-- **Persistence** — opacity settings are saved to `config/transparency.json` and restored on next launch
-
-### System Tray
-
-Closing the window (✕) or clicking **Tray** minimizes the app to the notification area. Right-click the tray icon for: **Show**, **Apply Now**, **Quit**.
+#### Prerequisites for Building
+| Tool | Minimum Version | Reference |
+| :--- | :--- | :--- |
+| **Windows** | 10 / 11 | — |
+| **Python** | 3.11+ | [python.org](https://python.org) |
+| **uv** | 0.4+ | [docs.astral.sh/uv/](https://docs.astral.sh/uv/) |
 
 ---
 
-## CLI
+## 🎛️ Detailed Configuration
+
+### 1. Video Wallpapers (v3.3)
+Points directly to a directory of background videos. libmpv ensures highly optimized, hardware-accelerated playback rendering to the desktop `WorkerW` layer.
+- Supports loop vs single playback.
+- Optional track audio playback toggle.
+- Aspect ratio preservation (preserves 9:16 vertical clips on horizontal displays without stretching).
+
+### 2. Image Effects
+Switch rendering mode styles instantly on the current wallpaper collage:
+- **Normal**
+- **Black & White** (Greyscale conversion)
+- **Vintage** (Sepia styling)
+- **HDR** (Dynamic contrast enhancements)
+
+### 3. Window Transparency
+- Adjust alpha transparency (50 to 255) for active windows.
+- Scroll opacity adjustments: hold your chosen modifier key (`Alt`/`Ctrl`/`Shift`/`Win`) and scroll the mouse wheel to dynamically fade/reveal the window under your cursor.
+- Opacity configurations persist automatically inside `config/transparency.json`.
+
+---
+
+## ⌨️ Global Hotkeys
+
+| Action | Default Shortcut | Customisable |
+| :--- | :--- | :---: |
+| **Next Wallpaper** | `Ctrl+Alt+Right` | Yes |
+| **Previous Wallpaper** | `Ctrl+Alt+Left` | Yes |
+| **Stop/Start Watch** | `Ctrl+Alt+S` | Yes |
+| **Default Wallpaper** | `Ctrl+Alt+D` | Yes |
+| **Toggle Window GUI** | `Ctrl+Alt+W` | Yes |
+| **Toggle Active Opacity** | `Alt+A` | Yes |
+| **Effect: Normal** | `Ctrl+Alt+1` | Yes |
+| **Effect: Black & White** | `Ctrl+Alt+2` | Yes |
+| **Effect: Vintage** | `Ctrl+Alt+3` | Yes |
+| **Effect: HDR** | `Ctrl+Alt+4` | Yes |
+| **Toggle Video Wallpaper** | `Ctrl+Alt+V` | Yes |
+| **Toggle Video Sound** | `Ctrl+Alt+M` | Yes |
+| **Next Video** | `Ctrl+Alt+.` | Yes |
+| **Previous Video** | `Ctrl+Alt+,` | Yes |
+
+---
+
+## 💻 Command Line Interface (CLI)
+
+Execute core wallpaper routines from PowerShell or script pipelines:
 
 ```powershell
 # Apply wallpaper immediately
 uv run wallpaper-changer apply
 
-# Apply with options
+# Apply collage with 6 images per monitor randomly selected
 uv run wallpaper-changer apply --collage-count 6 --selection random
 
-# Apply with image effect
+# Apply with a custom image effect
 uv run wallpaper-changer apply --effect vintage
 
-# Watch mode (auto change at configured interval)
+# Enable watch mode (auto rotation)
 uv run wallpaper-changer watch
+
+# Launch video wallpaper playback loop
+uv run wallpaper-changer video --folder "C:\Videos\live" --loop
 ```
 
 ---
 
-## Configuration (`config/settings.toml`)
+## ⚙️ Configuration Properties (`config/settings.toml`)
 
 ```toml
 [general]
@@ -206,68 +165,75 @@ next_wallpaper    = "ctrl+alt+right"
 prev_wallpaper    = "ctrl+alt+left"
 stop_watch        = "ctrl+alt+s"
 default_wallpaper = "ctrl+alt+d"
+toggle_transparency = "alt+a"
 toggle_window     = "ctrl+alt+w"
 scroll_modifier   = "alt"        # alt | ctrl | shift | win
 effect_normal     = "ctrl+alt+1"
 effect_bw         = "ctrl+alt+2"
 effect_vintage    = "ctrl+alt+3"
 effect_hdr        = "ctrl+alt+4"
+toggle_video      = "ctrl+alt+v"
+toggle_video_sound = "ctrl+alt+m"
+next_video        = "ctrl+alt+."
+prev_video        = "ctrl+alt+,"
+
+[video]
+enabled = false
+folder  = "C:/Users/klysm/Videos/wuwa"
+loop    = false
+sound   = true
 ```
 
 ---
 
-## Build
+## 🏗️ Build Pipelines
 
-### Portable executable (PyInstaller)
-
+### Portable Executable (PyInstaller)
+Compile WallpaperChanger into a portable folder bundle:
 ```powershell
 .\scripts\build_exe.ps1 -NoInstaller
 ```
+Target directory output: `dist\WallpaperChanger\`
 
-Result in `dist\WallpaperChanger\`.
-
-### Windows Installer (Inno Setup)
-
-Prerequisite: [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed.
-
+### Windows Installer (Inno Setup 6)
+Build the standalone language-aware executable installer:
 ```powershell
 .\scripts\build_exe.ps1
 ```
-
-Result: `dist\WallpaperChanger_Setup.exe`.
+Target installer output: `dist\WallpaperChanger_Setup.exe`
 
 ---
 
-## Project Structure
+## 📂 Project Structure
 
 ```
 wallpaper-changer/
-├── main.py                  # PyInstaller entry point
-├── pyproject.toml           # Dependencies and metadata
-├── wallpaper_changer.spec   # PyInstaller spec
-├── installer.iss            # Inno Setup script
+├── main.py                  # CLI & GUI entry point
+├── pyproject.toml           # Dependecy & builds metadata
+├── wallpaper_changer.spec   # PyInstaller specifications
+├── installer.iss            # Inno Setup 6 scripting
 ├── config/
-│   ├── settings.toml        # App settings (language, paths, fit/effect, hotkeys…)
-│   └── transparency.json    # Persisted window opacity settings
+│   ├── settings.toml        # Application configurations
+│   └── transparency.json    # Opacity cache
 ├── scripts/
-│   └── build_exe.ps1        # Build script
+│   └── build_exe.ps1        # Execution script
 └── src/wallpaper_changer/
     ├── __init__.py
-    ├── cli.py               # Command-line interface
-    ├── config.py            # Config read/write (TOML)
-    ├── gui.py               # Graphical interface (ttkbootstrap)
-    ├── hotkeys.py           # Global hotkey registration
-    ├── i18n.py              # Internationalization (en, pt_BR, ja)
-    ├── image_utils.py       # Image selection and resizing
-    ├── monitor.py           # Monitor detection (Win32)
-    ├── startup.py           # Windows startup registration
-    ├── transition.py        # Fade transition engine (WorkerW + GDI)
-    ├── transparency.py      # Window transparency control (Win32 + persistence)
-    └── wallpaper.py         # Wallpaper assembly and application
+    ├── cli.py               # Command-line router
+    ├── config.py            # TOML parser
+    ├── gui.py               # tkBootstrap visual layout
+    ├── hotkeys.py           # Win32 global hotkeys register
+    ├── i18n.py              # i18n locales (en, pt_BR, ja)
+    ├── image_utils.py       # Grids, sizes & effect modifiers
+    ├── monitor.py           # Win32 screen positioning
+    ├── startup.py           # Login registers
+    ├── transition.py        # WorkerW GDI blender
+    ├── transparency.py      # Win32 active transparency
+    └── wallpaper.py         # Canvas rendering
 ```
 
 ---
 
-## License
+## 📄 License
 
-MIT — free for personal and commercial use.
+MIT © [WallpaperChanger Contributors](LICENSE) — free for personal and commercial usage.
