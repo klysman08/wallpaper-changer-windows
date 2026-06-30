@@ -44,7 +44,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Pixelify+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet" />
 </head>
 
@@ -54,7 +54,14 @@
   <nav id="navbar">
     <div class="nav-inner">
       <a href="#" class="nav-logo">
-        <span class="logo-icon">⬛</span>
+        <span class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" stroke-width="2" stroke-linecap="square">
+            <rect x="2" y="3" width="20" height="13" rx="1" fill="var(--primary)" stroke="var(--border-color)" stroke-width="2"/>
+            <rect x="5" y="6" width="14" height="7" fill="var(--accent-light)"/>
+            <path d="M10 16v3h4v-3" stroke="var(--border-color)" stroke-width="2" fill="none"/>
+            <path d="M8 19h8" stroke="var(--border-color)" stroke-width="2"/>
+          </svg>
+        </span>
         <span class="logo-text">WallpaperChanger</span>
       </a>
       <ul class="nav-links">
@@ -82,45 +89,48 @@
 
   <!-- ─── HERO ─── -->
   <section id="hero">
-    <div class="hero-bg">
-      <div class="hero-grid"></div>
-      <div class="hero-glow hero-glow-1"></div>
-      <div class="hero-glow hero-glow-2"></div>
-    </div>
-    <div class="container hero-content">
-      <div class="badge">v3.3 · MIT License · Free Forever</div>
-      <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
-      <p class="hero-sub">
-        Multi-monitor collage mode, <strong>live video wallpapers</strong>, auto-rotation, global hotkeys, system tray —
-        completely free and open-source. No subscriptions. No ads. No telemetry.
-      </p>
-      <div class="hero-actions">
-        <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
-          target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download Installer
-        </a>
-        <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline" target="_blank"
-          rel="noopener">
-          View on GitHub
-        </a>
+    <div class="container hero-container">
+      <div class="hero-text">
+        <div class="badge">v3.3 · MIT License · Free Forever</div>
+        <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
+        <p class="hero-sub">
+          Multi-monitor collage mode, <strong>live video wallpapers</strong>, auto-rotation, global hotkeys, system tray —
+          completely free and open-source. No subscriptions. No ads. No telemetry.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
+            target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Installer
+          </a>
+          <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline" target="_blank"
+            rel="noopener">
+            View on GitHub
+          </a>
+        </div>
+        <div class="hero-badges">
+          <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white"
+            alt="Python 3.11+" />
+          <img
+            src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white"
+            alt="Windows 10/11" />
+          <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License" />
+        </div>
       </div>
-      <div class="hero-badges">
-        <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white"
-          alt="Python 3.11+" />
-        <img
-          src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white"
-          alt="Windows 10/11" />
-        <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License" />
+      <div class="hero-visual">
+        <div class="retro-monitor-casing">
+          <div class="monitor-screen-bezel">
+            <img src="hero-preview.png" alt="WallpaperChanger Cozy Pixel Art Setup" class="hero-illustration" />
+            <div class="crt-scanlines"></div>
+          </div>
+          <div class="monitor-stand-neck"></div>
+          <div class="monitor-stand-base"></div>
+        </div>
       </div>
-    </div>
-    <div class="hero-scroll-hint">
-      <span>Scroll to explore</span>
-      <div class="scroll-arrow"></div>
     </div>
   </section>
 
@@ -282,8 +292,15 @@
         <div class="preview-panel active" id="tab-monitors">
           <div class="mock-window">
             <div class="mock-titlebar">
-              <div class="mock-dots"><span></span><span></span><span></span></div>
-              <span class="mock-title">WallpaperChanger — Monitor Detection</span>
+              <div class="mock-titlebar-left">
+                <div class="mock-dots"><span></span><span></span><span></span></div>
+                <span class="mock-title">WallpaperChanger — Monitor Detection</span>
+              </div>
+              <div class="mock-window-actions">
+                <span class="mock-window-action" title="Minimize">_</span>
+                <span class="mock-window-action" title="Maximize">□</span>
+                <span class="mock-window-action" title="Close">X</span>
+              </div>
             </div>
             <div class="mock-body mock-monitors">
               <div class="mock-monitor-grid">
@@ -312,8 +329,15 @@
         <div class="preview-panel" id="tab-collage">
           <div class="mock-window">
             <div class="mock-titlebar">
-              <div class="mock-dots"><span></span><span></span><span></span></div>
-              <span class="mock-title">WallpaperChanger — Collage</span>
+              <div class="mock-titlebar-left">
+                <div class="mock-dots"><span></span><span></span><span></span></div>
+                <span class="mock-title">WallpaperChanger — Collage</span>
+              </div>
+              <div class="mock-window-actions">
+                <span class="mock-window-action" title="Minimize">_</span>
+                <span class="mock-window-action" title="Maximize">□</span>
+                <span class="mock-window-action" title="Close">X</span>
+              </div>
             </div>
             <div class="mock-body mock-collage">
               <div class="collage-grid grid-4">
@@ -337,8 +361,15 @@
         <div class="preview-panel" id="tab-video">
           <div class="mock-window">
             <div class="mock-titlebar">
-              <div class="mock-dots"><span></span><span></span><span></span></div>
-              <span class="mock-title">WallpaperChanger — Video Wallpaper</span>
+              <div class="mock-titlebar-left">
+                <div class="mock-dots"><span></span><span></span><span></span></div>
+                <span class="mock-title">WallpaperChanger — Video Wallpaper</span>
+              </div>
+              <div class="mock-window-actions">
+                <span class="mock-window-action" title="Minimize">_</span>
+                <span class="mock-window-action" title="Maximize">□</span>
+                <span class="mock-window-action" title="Close">X</span>
+              </div>
             </div>
             <div class="mock-body mock-settings">
               <div class="mock-setting-row">
@@ -374,8 +405,15 @@
         <div class="preview-panel" id="tab-settings">
           <div class="mock-window">
             <div class="mock-titlebar">
-              <div class="mock-dots"><span></span><span></span><span></span></div>
-              <span class="mock-title">WallpaperChanger — Settings</span>
+              <div class="mock-titlebar-left">
+                <div class="mock-dots"><span></span><span></span><span></span></div>
+                <span class="mock-title">WallpaperChanger — Settings</span>
+              </div>
+              <div class="mock-window-actions">
+                <span class="mock-window-action" title="Minimize">_</span>
+                <span class="mock-window-action" title="Maximize">□</span>
+                <span class="mock-window-action" title="Close">X</span>
+              </div>
             </div>
             <div class="mock-body mock-settings">
               <div class="mock-setting-row">
@@ -422,8 +460,15 @@
         <div class="preview-panel" id="tab-tray">
           <div class="mock-window tray-window">
             <div class="mock-titlebar">
-              <div class="mock-dots"><span></span><span></span><span></span></div>
-              <span class="mock-title">System Tray — Right-click menu</span>
+              <div class="mock-titlebar-left">
+                <div class="mock-dots"><span></span><span></span><span></span></div>
+                <span class="mock-title">System Tray — Right-click menu</span>
+              </div>
+              <div class="mock-window-actions">
+                <span class="mock-window-action" title="Minimize">_</span>
+                <span class="mock-window-action" title="Maximize">□</span>
+                <span class="mock-window-action" title="Close">X</span>
+              </div>
             </div>
             <div class="mock-body mock-tray">
               <div class="mock-taskbar">
