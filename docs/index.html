@@ -113,7 +113,7 @@
   <section id="hero">
     <div class="container hero-container">
       <div class="hero-text">
-        <div class="badge">v3.3 · MIT License · Free Forever</div>
+        <div class="badge">v4.0 · MIT License · Free Forever</div>
         <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
         <p class="hero-sub">
           Multi-monitor collage mode, <strong>live video wallpapers</strong>, auto-rotation, global hotkeys, system tray —
@@ -735,8 +735,23 @@ uv run wallpaper-changer-gui</code></pre>
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
-              <span class="version-tag">v3.3</span>
+              <span class="version-tag">v4.0</span>
               <span class="version-label current-label">Latest</span>
+            </div>
+            <ul class="change-list">
+              <li>New tabbed control panel with focused Wallpaper, Video, and Tools views</li>
+              <li>Reliable main-thread dispatch for global shortcuts, tray actions, and background work</li>
+              <li>Shortcut normalization, duplicate detection, and safer record mode</li>
+              <li>Serialized wallpaper changes prevent overlapping render and apply jobs</li>
+              <li>Atomic settings saves and rotating diagnostic logs improve crash recovery</li>
+            </ul>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v3.3</span>
             </div>
             <ul class="change-list">
               <li>Video wallpaper — play any video (MP4/MKV/WebM/MOV…) behind your desktop icons via libmpv + WORKERW</li>

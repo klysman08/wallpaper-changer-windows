@@ -9,7 +9,7 @@
 ;   "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 
 #define MyAppName "WallpaperChanger"
-#define MyAppVersion "3.0.0"
+#define MyAppVersion "4.0.0"
 #define MyAppPublisher "WallpaperChanger"
 #define MyAppExeName "WallpaperChanger.exe"
 

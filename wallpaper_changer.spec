@@ -24,6 +24,7 @@ for _dll in ("libmpv-2.dll", "mpv-2.dll", "mpv-1.dll"):
 
 # ── Imports ocultos ───────────────────────────────────────────────────────────
 hidden = [
+    "logging.handlers",
     "ttkbootstrap",
     "PIL._tkinter_finder",
     "screeninfo",
@@ -52,7 +53,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         "tkinter.test", "unittest", "email", "html", "http",
-        "xml", "xmlrpc", "logging.handlers", "distutils",
+        "xml", "xmlrpc", "distutils",
     ],
     noarchive=False,
     optimize=1,

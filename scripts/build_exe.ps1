@@ -89,6 +89,19 @@ if (Test-Path $ExePath) {
     $sizeMB = [math]::Round((Get-Item $ExePath).Length / 1MB, 1)
     Write-Host "  Executavel : $ExePath" -ForegroundColor Green
     Write-Host "  Tamanho    : ${sizeMB} MB" -ForegroundColor Green
+
+    # Importa o mesmo entry point do aplicativo e sai antes de criar a janela.
+    # Isso detecta modulos ausentes no bundle antes de gerar o instalador.
+    $SmokeProcess = Start-Process `
+        -FilePath $ExePath `
+        -ArgumentList "--self-test" `
+        -WindowStyle Hidden `
+        -Wait `
+        -PassThru
+    if ($SmokeProcess.ExitCode -ne 0) {
+        throw "O executavel compilado falhou no teste de inicializacao (codigo $($SmokeProcess.ExitCode))."
+    }
+    Write-Host "  Teste de inicializacao: OK" -ForegroundColor Green
 } else {
     Write-Warning "Executavel nao encontrado em $ExePath"
     exit 1

@@ -3,26 +3,28 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
+import queue
 import threading
-import time
 import tkinter as tk
+from collections.abc import Callable
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import pystray
-import schedule
 import ttkbootstrap as ttk
-from PIL import Image as PILImage, ImageDraw
+from PIL import Image as PILImage
+from PIL import ImageDraw
 from ttkbootstrap.constants import *
 
-from .config import load_config, save_config, resolve_path
-from .hotkeys import HotkeyManager, read_hotkey, is_available as hotkeys_available
-from .i18n import t, set_language, get_language, SUPPORTED_LANGUAGES
+from .config import load_config, resolve_path, save_config
+from .hotkeys import HotkeyManager, read_hotkey
+from .hotkeys import is_available as hotkeys_available
+from .i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
 from .monitor import Monitor, get_monitors
 from .notifications import send_windows_notification
 from .startup import is_startup_enabled, is_startup_launch, set_startup_enabled
-from .wallpaper import apply_wallpaper, apply_single_wallpaper
-from .video_wallpaper import VideoWallpaperPlayer, scan_video_folder, has_mpv
 from .transparency import (
     get_foreground_window,
     list_visible_windows,
@@ -31,6 +33,8 @@ from .transparency import (
     save_opacity_settings,
     set_window_opacity,
 )
+from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
+from .wallpaper import apply_single_wallpaper, apply_wallpaper
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 _MON_COLORS = ["#3a7bd5", "#e05252", "#3dba5a", "#d4a027", "#9b59b6"]
@@ -94,9 +98,12 @@ class WallpaperChangerApp(ttk.Window):
 
         self._monitors: list[Monitor] = []
         self._watching = False
-        self._watch_thr: threading.Thread | None = None
+        self._watch_after_id: str | None = None
         self._tray_icon: pystray.Icon | None = None
         self._startup_launch = is_startup_launch()
+        self._closing = False
+        self._apply_in_progress = False
+        self._ui_queue: queue.SimpleQueue[tuple[Callable, tuple, dict]] = queue.SimpleQueue()
 
         # ── Variaveis de estado ───────────────────────────────────────────────
         self._fit_var    = tk.StringVar(value=self._cfg["display"]["fit_mode"])
@@ -125,6 +132,7 @@ class WallpaperChangerApp(ttk.Window):
         self._hk_transp_var = tk.StringVar(value=hk.get("toggle_transparency", "alt+a"))
         self._hk_toggle_window_var = tk.StringVar(value=hk.get("toggle_window", "ctrl+alt+w"))
         self._scroll_modifier_var   = tk.StringVar(value=hk.get("scroll_modifier",  "alt"))
+        self._scroll_modifier = self._scroll_modifier_var.get()
         self._hk_effect_normal_var  = tk.StringVar(value=hk.get("effect_normal",   "ctrl+alt+1"))
         self._hk_effect_bw_var      = tk.StringVar(value=hk.get("effect_bw",       "ctrl+alt+2"))
         self._hk_effect_vintage_var = tk.StringVar(value=hk.get("effect_vintage",  "ctrl+alt+3"))
@@ -159,6 +167,8 @@ class WallpaperChangerApp(ttk.Window):
 
         # ── Construcao da UI ──────────────────────────────────────────────────
         self._build_ui()
+        self.report_callback_exception = self._report_callback_exception
+        self.after(50, self._drain_ui_queue)
         self._setup_tray()
         self._refresh_monitors()
         self.after(200, self._draw_monitors)
@@ -189,74 +199,97 @@ class WallpaperChangerApp(ttk.Window):
             
         self.after(2000, auto_apply)
 
+    def _post_ui(self, callback: Callable, *args, **kwargs) -> None:
+        """Queue work for Tk's main thread without calling Tk from a worker."""
+        if not self._closing:
+            self._ui_queue.put((callback, args, kwargs))
+
+    def _drain_ui_queue(self) -> None:
+        """Run queued callbacks on the Tk thread."""
+        if self._closing:
+            return
+        while True:
+            try:
+                callback, args, kwargs = self._ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                callback(*args, **kwargs)
+            except Exception:
+                log.exception("Unhandled error in queued UI callback")
+        self.after(50, self._drain_ui_queue)
+
+    def _report_callback_exception(self, exc_type, exc, tb) -> None:
+        """Log Tk callback failures and keep the application responsive."""
+        log.error("Unhandled Tk callback error", exc_info=(exc_type, exc, tb))
+        if hasattr(self, "_status_lbl"):
+            self._set_status(t("error_prefix", msg=exc), error=True)
+
     # ══════════════════════════════════════════════════════════════════════════
     #   UI Construction
     # ══════════════════════════════════════════════════════════════════════════
 
     def _build_ui(self) -> None:
-        # Main scrollable container
-        container = ttk.Frame(self, padding=0)
+        container = ttk.Frame(self)
         container.pack(fill=BOTH, expand=True)
+        container.columnconfigure(0, weight=1)
+        container.rowconfigure(1, weight=1)
 
-        # Canvas + scrollbar for scrolling
-        self._scroll_canvas = tk.Canvas(container, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(container, orient=VERTICAL, command=self._scroll_canvas.yview)
-        self._scroll_frame = ttk.Frame(self._scroll_canvas)
+        self._build_header(container)
+        notebook = ttk.Notebook(container)
+        notebook.grid(row=1, column=0, sticky=NSEW, padx=12, pady=4)
 
-        self._scroll_frame.bind(
-            "<Configure>",
-            lambda _: self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all")),
-        )
-        self._scroll_win = self._scroll_canvas.create_window(
-            (0, 0), window=self._scroll_frame, anchor="nw",
-        )
-        self._scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        wallpaper = self._make_scroll_page(notebook, t("tab_wallpaper"))
+        video = self._make_scroll_page(notebook, t("tab_video"))
+        tools = self._make_scroll_page(notebook, t("tab_tools"))
 
-        # Keep inner frame width in sync with the canvas
-        self._scroll_canvas.bind(
-            "<Configure>",
-            self._on_canvas_configure,
-        )
-
-        self._scroll_canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        scrollbar.pack(side=RIGHT, fill=Y)
-
-        # Mouse wheel — only when hovering over the scroll canvas, not the treeview
-        self._scroll_canvas.bind("<Enter>", lambda _: self._bind_mousewheel(True))
-        self._scroll_canvas.bind("<Leave>", lambda _: self._bind_mousewheel(False))
-
-        main = self._scroll_frame
-        main.columnconfigure(0, weight=1)
-
-        self._build_header(main)
-        self._build_monitor_panel(main)
-        self._build_collage_section(main)
-        self._build_selection_section(main)
-        self._build_fit_section(main)
-        self._build_effect_section(main)
-        self._build_rotation_section(main)
-        self._build_hotkeys_section(main)
-        self._build_transparency_section(main)
-        self._build_default_wp_section(main)
-        self._build_folder_section(main)
-        self._build_language_section(main)
-        self._build_video_section(main)
-        self._build_action_bar(main)
+        self._build_monitor_panel(wallpaper)
+        self._build_collage_section(wallpaper)
+        self._build_selection_section(wallpaper)
+        self._build_fit_section(wallpaper)
+        self._build_effect_section(wallpaper)
+        self._build_rotation_section(wallpaper)
+        self._build_default_wp_section(wallpaper)
+        self._build_folder_section(wallpaper)
+        self._build_video_section(video)
+        self._build_hotkeys_section(tools)
+        self._build_transparency_section(tools)
+        self._build_language_section(tools)
+        self._build_action_bar(container)
         self._build_status_bar()
 
     # ── Scroll helpers ────────────────────────────────────────────────────────
-    def _on_canvas_configure(self, event: tk.Event) -> None:
-        """Stretch the inner frame to fill the canvas width."""
-        self._scroll_canvas.itemconfigure(self._scroll_win, width=event.width)
+    def _make_scroll_page(self, notebook: ttk.Notebook, title: str) -> ttk.Frame:
+        page = ttk.Frame(notebook)
+        notebook.add(page, text=title)
+        canvas = tk.Canvas(page, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(page, orient=VERTICAL, command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.columnconfigure(0, weight=1)
+        window = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind(
+            "<Configure>",
+            lambda _, c=canvas: c.configure(scrollregion=c.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event, c=canvas, w=window: c.itemconfigure(w, width=event.width),
+        )
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        scrollbar.pack(side=RIGHT, fill=Y)
+        canvas.bind("<Enter>", lambda _, c=canvas: self._bind_mousewheel(c, True))
+        canvas.bind("<Leave>", lambda _, c=canvas: self._bind_mousewheel(c, False))
+        return inner
 
-    def _bind_mousewheel(self, bind: bool) -> None:
+    def _bind_mousewheel(self, canvas: tk.Canvas, bind: bool) -> None:
         if bind:
-            self._scroll_canvas.bind_all(
+            canvas.bind_all(
                 "<MouseWheel>",
-                lambda e: self._scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"),
+                lambda e, c=canvas: c.yview_scroll(int(-1 * (e.delta / 120)), "units"),
             )
         else:
-            self._scroll_canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<MouseWheel>")
 
     # ── Header ────────────────────────────────────────────────────────────────
     def _build_header(self, parent: ttk.Frame) -> None:
@@ -307,7 +340,7 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Collage Settings ──────────────────────────────────────────────────────
     def _build_collage_section(self, parent: ttk.Frame) -> None:
-        frame = ttk.Labelframe(parent, text="Collage — Imagens por Monitor", padding=10)
+        frame = ttk.Labelframe(parent, text=t("collage_title"), padding=10)
         frame.grid(row=2, column=0, sticky=EW, padx=12, pady=4)
         frame.columnconfigure(0, weight=1)
 
@@ -328,7 +361,7 @@ class WallpaperChangerApp(ttk.Window):
 
         # Same images checkbox
         ttk.Checkbutton(
-            frame, text="Mesmas imagens em todos os monitores",
+            frame, text=t("collage_same"),
             variable=self._collage_same_var,
             style="Roundtoggle.Toolbutton",
         ).grid(row=1, column=0, sticky=W, pady=(4, 0))
@@ -651,8 +684,8 @@ class WallpaperChangerApp(ttk.Window):
         # Also persist it immediately since shortcuts should save state automatically
         self._save_transparency_settings()
 
-        self.after(0, lambda: self._set_status(t("transp_applied", alpha=new_alpha)))
-        self.after(0, self._sync_transp_slider_if_match, hwnd)
+        self._set_status(t("transp_applied", alpha=new_alpha))
+        self._sync_transp_slider_if_match(hwnd)
 
     # VK codes for supported modifier keys
     _MODIFIER_VK: dict[str, int] = {
@@ -673,7 +706,7 @@ class WallpaperChangerApp(ttk.Window):
             from pynput import mouse
 
             def _modifier_is_down() -> bool:
-                vk = self._MODIFIER_VK.get(self._scroll_modifier_var.get(), 0x12)
+                vk = self._MODIFIER_VK.get(self._scroll_modifier, 0x12)
                 return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
             def on_scroll(_x, _y, _dx, dy):
@@ -694,10 +727,10 @@ class WallpaperChangerApp(ttk.Window):
                 set_window_opacity(hwnd, new_alpha)
                 self._save_transparency_settings()
 
-                self.after(0, lambda a=new_alpha: self._set_status(
+                self._post_ui(lambda a=new_alpha: self._set_status(
                     t("transp_applied", alpha=a),
                 ))
-                self.after(0, self._sync_transp_slider_if_match, hwnd)
+                self._post_ui(self._sync_transp_slider_if_match, hwnd)
 
             self._pynput_mouse_listener = mouse.Listener(on_scroll=on_scroll)
             self._pynput_mouse_listener.start()
@@ -997,7 +1030,9 @@ class WallpaperChangerApp(ttk.Window):
         # for the WORKERW desktop layer. Stop watch first.
         if self._watching:
             self._watching = False
-            schedule.clear()
+            if self._watch_after_id:
+                self.after_cancel(self._watch_after_id)
+                self._watch_after_id = None
             self._watch_btn.configure(text=t("start_watch"), style="info.TButton")
 
         if self._video_player and self._video_player.is_running():
@@ -1009,8 +1044,8 @@ class WallpaperChangerApp(ttk.Window):
             loop=bool(self._video_loop_var.get()),
             sound=bool(self._video_sound_var.get()),
             monitors=self._monitors,
-            on_status=lambda s: self.after(
-                0, lambda v=s: self._video_status_lbl.configure(text=v, foreground="gray")
+            on_status=lambda s: self._post_ui(
+                self._video_status_lbl.configure, text=s, foreground="gray"
             ),
         )
         try:
@@ -1157,7 +1192,7 @@ class WallpaperChangerApp(ttk.Window):
             from .image_utils import list_images_sorted_by_date
             images = list_images_sorted_by_date(folder)
             # Schedule UI update back on the main thread
-            self.after(0, lambda: self._populate_folder_tree(images))
+            self._post_ui(self._populate_folder_tree, images)
 
         threading.Thread(target=_scan, daemon=True).start()
 
@@ -1305,44 +1340,54 @@ class WallpaperChangerApp(ttk.Window):
 
     # ── Actions ───────────────────────────────────────────────────────────────
     def _apply_now(self) -> None:
+        if self._apply_in_progress:
+            self._set_status(t("apply_already_running"))
+            return
         if not self._monitors:
             self._set_status(t("no_monitor_action"), error=True)
             return
         # Image and video wallpaper are mutually exclusive — stop the video player.
         if self._video_player and self._video_player.is_running():
             self._video_stop()
+        cfg = self._collect_config()
+        monitors = list(self._monitors)
+        self._apply_in_progress = True
         self._apply_btn.configure(state=DISABLED, text=t("applying"))
         self._set_status(t("applying"))
 
         def _work() -> None:
             try:
-                cfg = self._collect_config()
-                self.after(0, lambda c=cfg: save_config(c))  # persist on main thread — avoids race conditions
+                save_config(cfg)
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                out, images_used = apply_wallpaper(cfg, self._monitors, out_dir)
-                # Track history
-                if self._wp_hist_idx < len(self._wp_history) - 1:
-                    self._wp_history = self._wp_history[: self._wp_hist_idx + 1]
-                self._wp_history.append(images_used)
-                self._wp_hist_idx = len(self._wp_history) - 1
-                self.after(0, lambda: self._set_status(
-                    t("wallpaper_applied", name=Path(str(out)).name),
-                ))
+                out, images_used = apply_wallpaper(cfg, monitors, out_dir)
+                self._post_ui(self._apply_succeeded, out, images_used, cfg)
             except Exception as exc:
-                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
+                log.exception("Wallpaper apply failed")
+                self._post_ui(self._set_status, t("error_prefix", msg=exc), True)
             finally:
-                self.after(0, lambda: self._apply_btn.configure(
-                    state=NORMAL, text=t("apply_now"),
-                ))
+                self._post_ui(self._finish_apply)
 
         threading.Thread(target=_work, daemon=True).start()
+
+    def _apply_succeeded(self, out: Path, images_used: list[str], cfg: dict) -> None:
+        if self._wp_hist_idx < len(self._wp_history) - 1:
+            self._wp_history = self._wp_history[: self._wp_hist_idx + 1]
+        self._wp_history.append(images_used)
+        self._wp_hist_idx = len(self._wp_history) - 1
+        self._cfg = cfg
+        self._set_status(t("wallpaper_applied", name=Path(str(out)).name))
+
+    def _finish_apply(self) -> None:
+        self._apply_in_progress = False
+        self._apply_btn.configure(state=NORMAL, text=t("apply_now"))
 
     def _save_config(self) -> None:
         try:
             cfg = self._collect_config()
             save_config(cfg)
             self._cfg = cfg
+            self._scroll_modifier = self._scroll_modifier_var.get()
             self._register_hotkeys()
             self._save_transparency_settings()
             self._set_status(t("config_saved"))
@@ -1352,7 +1397,9 @@ class WallpaperChangerApp(ttk.Window):
     def _toggle_watch(self) -> None:
         if self._watching:
             self._watching = False
-            schedule.clear()
+            if self._watch_after_id:
+                self.after_cancel(self._watch_after_id)
+                self._watch_after_id = None
             self._watch_btn.configure(text=t("start_watch"), style="info.TButton")
             self._set_status(t("watch_disabled"))
             send_windows_notification("WallpaperChanger", t("notif_watch_stopped"))
@@ -1366,15 +1413,15 @@ class WallpaperChangerApp(ttk.Window):
             self._watch_btn.configure(text=t("stop_watch"), style="danger.TButton")
             self._set_status(t("watch_active", n=interval))
             send_windows_notification("WallpaperChanger", t("notif_watch_started", n=interval))
-            schedule.every(interval).seconds.do(self._apply_now)
+            self._watch_after_id = self.after(interval * 1000, self._watch_tick)
 
-            def _loop() -> None:
-                while self._watching:
-                    schedule.run_pending()
-                    time.sleep(1)
-
-            self._watch_thr = threading.Thread(target=_loop, daemon=True)
-            self._watch_thr.start()
+    def _watch_tick(self) -> None:
+        self._watch_after_id = None
+        if not self._watching:
+            return
+        self._apply_now()
+        interval = self._collect_config()["general"]["interval"]
+        self._watch_after_id = self.after(interval * 1000, self._watch_tick)
 
     # ── Hotkey actions ────────────────────────────────────────────────────────
 
@@ -1389,18 +1436,20 @@ class WallpaperChangerApp(ttk.Window):
             return
         self._wp_hist_idx -= 1
         images = self._wp_history[self._wp_hist_idx]
+        cfg = self._collect_config()
+        monitors = list(self._monitors)
 
         def _work() -> None:
             try:
-                cfg = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
-                out, _ = apply_wallpaper(cfg, self._monitors, out_dir, preset_images=images)
-                self.after(0, lambda: self._set_status(
-                    t("prev_applied", name=Path(str(out)).name),
-                ))
+                out, _ = apply_wallpaper(cfg, monitors, out_dir, preset_images=images)
+                self._post_ui(
+                    self._set_status, t("prev_applied", name=Path(str(out)).name)
+                )
             except Exception as exc:
-                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
+                log.exception("Previous wallpaper apply failed")
+                self._post_ui(self._set_status, t("error_prefix", msg=exc), True)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -1413,26 +1462,29 @@ class WallpaperChangerApp(ttk.Window):
         if not self._monitors:
             self._set_status(t("no_monitor_error"), error=True)
             return
+        cfg = self._collect_config()
+        monitors = list(self._monitors)
 
         def _work() -> None:
             try:
-                cfg = self._collect_config()
                 out_dir = resolve_path(cfg["paths"]["output_folder"])
                 out_dir.mkdir(parents=True, exist_ok=True)
                 fit        = cfg["display"]["fit_mode"]
                 effect     = cfg["display"].get("effect", "normal")
                 out = apply_single_wallpaper(
-                    path, self._monitors, out_dir, fit, effect,
+                    path, monitors, out_dir, fit, effect,
                 )
-                self.after(0, lambda: self._set_status(
+                self._post_ui(
+                    self._set_status,
                     t("default_wp_applied", name=Path(str(out)).name),
-                ))
+                )
                 send_windows_notification(
                     "WallpaperChanger",
                     t("notif_default_applied", name=Path(str(out)).name),
                 )
             except Exception as exc:
-                self.after(0, lambda: self._set_status(t("error_prefix", msg=exc), error=True))
+                log.exception("Default wallpaper apply failed")
+                self._post_ui(self._set_status, t("error_prefix", msg=exc), True)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -1460,22 +1512,24 @@ class WallpaperChangerApp(ttk.Window):
 
     def _register_hotkeys(self) -> None:
         """Register (or re-register) all global hotkeys."""
-        self._hk_manager.update({
-            self._hk_next_var.get(): lambda: self.after(0, self._hotkey_next),
-            self._hk_prev_var.get(): lambda: self.after(0, self._hotkey_prev),
-            self._hk_stop_var.get(): lambda: self.after(0, self._toggle_watch),
-            self._hk_default_var.get(): lambda: self.after(0, self._hotkey_default),
-            self._hk_transp_var.get(): lambda: self.after(0, self._hotkey_half_opacity),
-            self._hk_toggle_window_var.get(): lambda: self.after(0, self._toggle_window_visibility),
-            self._hk_effect_normal_var.get():  lambda: self.after(0, lambda: self._hotkey_set_effect("normal")),
-            self._hk_effect_bw_var.get():      lambda: self.after(0, lambda: self._hotkey_set_effect("bw")),
-            self._hk_effect_vintage_var.get(): lambda: self.after(0, lambda: self._hotkey_set_effect("vintage")),
-            self._hk_effect_hdr_var.get():     lambda: self.after(0, lambda: self._hotkey_set_effect("hdr")),
-            self._hk_video_var.get():          lambda: self.after(0, self._hotkey_toggle_video),
-            self._hk_video_sound_var.get():    lambda: self.after(0, self._hotkey_toggle_video_sound),
-            self._hk_video_next_var.get():     lambda: self.after(0, self._video_next),
-            self._hk_video_prev_var.get():     lambda: self.after(0, self._video_prev),
-        })
+        result = self._hk_manager.update([
+            (self._hk_next_var.get(), lambda: self._post_ui(self._hotkey_next)),
+            (self._hk_prev_var.get(), lambda: self._post_ui(self._hotkey_prev)),
+            (self._hk_stop_var.get(), lambda: self._post_ui(self._toggle_watch)),
+            (self._hk_default_var.get(), lambda: self._post_ui(self._hotkey_default)),
+            (self._hk_transp_var.get(), lambda: self._post_ui(self._hotkey_half_opacity)),
+            (self._hk_toggle_window_var.get(), lambda: self._post_ui(self._toggle_window_visibility)),
+            (self._hk_effect_normal_var.get(), lambda: self._post_ui(self._hotkey_set_effect, "normal")),
+            (self._hk_effect_bw_var.get(), lambda: self._post_ui(self._hotkey_set_effect, "bw")),
+            (self._hk_effect_vintage_var.get(), lambda: self._post_ui(self._hotkey_set_effect, "vintage")),
+            (self._hk_effect_hdr_var.get(), lambda: self._post_ui(self._hotkey_set_effect, "hdr")),
+            (self._hk_video_var.get(), lambda: self._post_ui(self._hotkey_toggle_video)),
+            (self._hk_video_sound_var.get(), lambda: self._post_ui(self._hotkey_toggle_video_sound)),
+            (self._hk_video_next_var.get(), lambda: self._post_ui(self._video_next)),
+            (self._hk_video_prev_var.get(), lambda: self._post_ui(self._video_prev)),
+        ])
+        if result.errors and hasattr(self, "_status_lbl"):
+            self._set_status(t("hk_registration_error", msg=result.errors[0]), error=True)
 
     def _record_hotkey(self, var: tk.StringVar, btn_idx: int) -> None:
         """Start recording a hotkey combo in a background thread."""
@@ -1486,13 +1540,14 @@ class WallpaperChangerApp(ttk.Window):
         btn.configure(text="...", state=DISABLED)
         old_val = var.get()
         var.set(t("hk_recording"))
+        self._hk_manager.unregister_all()
 
         def _do_record() -> None:
             try:
                 combo = read_hotkey()
             except Exception:
                 combo = old_val
-            self.after(0, lambda: self._finish_record(var, btn, combo))
+            self._post_ui(self._finish_record, var, btn, combo)
 
         threading.Thread(target=_do_record, daemon=True).start()
 
@@ -1547,10 +1602,10 @@ class WallpaperChangerApp(ttk.Window):
         self.withdraw()
 
         menu = pystray.Menu(
-            pystray.MenuItem(t("tray_show"), lambda: self.after(0, self._show_from_tray), default=True),
-            pystray.MenuItem(t("tray_apply"), lambda: self.after(0, self._apply_now)),
+            pystray.MenuItem(t("tray_show"), lambda: self._post_ui(self._show_from_tray), default=True),
+            pystray.MenuItem(t("tray_apply"), lambda: self._post_ui(self._apply_now)),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(t("tray_quit"), lambda: self.after(0, self._quit_app)),
+            pystray.MenuItem(t("tray_quit"), lambda: self._post_ui(self._quit_app)),
         )
 
         self._tray_icon = pystray.Icon(
@@ -1575,7 +1630,10 @@ class WallpaperChangerApp(ttk.Window):
 
     def _quit_app(self) -> None:
         self._watching = False
-        schedule.clear()
+        self._closing = True
+        if self._watch_after_id:
+            self.after_cancel(self._watch_after_id)
+            self._watch_after_id = None
         self._hk_manager.unregister_all()
         # Stop video wallpaper playback before exit
         if self._video_player:
@@ -1607,8 +1665,33 @@ class WallpaperChangerApp(ttk.Window):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+def _configure_logging() -> None:
+    """Write actionable crash details without growing the log indefinitely."""
+    data_root = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "WallpaperChanger"
+    log_dir = data_root / "logs"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    root_logger = logging.getLogger()
+    if any(isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
+        return
+    handler = RotatingFileHandler(
+        log_dir / "wallpaper-changer.log",
+        maxBytes=1_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
+
 def run() -> None:
     """Inicia a interface grafica."""
+    _configure_logging()
     # Load language early so even the "already running" message is translated
     try:
         cfg = load_config()

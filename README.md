@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white&style=flat-square)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white&style=flat-square)](https://microsoft.com)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.3-orange&style=flat-square)](https://github.com/klysman08/wallpaper-changer-windows/releases)
+[![Version](https://img.shields.io/badge/Version-4.0-orange&style=flat-square)](https://github.com/klysman08/wallpaper-changer-windows/releases)
 [![Docs](https://img.shields.io/badge/Docs-Live%20Site-df7356?style=flat-square)](https://wallpaper.astrofocus.app/)
 
 ---
@@ -28,6 +28,11 @@ Most wallpaper utilities are either simplistic slideshows that can't handle mult
 ---
 
 ## ✨ Features
+
+Version 4.0 adds a tabbed control panel, reliable main-thread shortcut dispatch,
+shortcut conflict validation, serialized wallpaper changes, atomic settings saves,
+and rotating diagnostic logs. See [the v4 plan](docs/V4_PLAN.md) for the architecture
+review and delivered reliability work.
 
 - **Collage Grid**: Automatic grid layouts of 1 to 8 images per monitor.
 - **Video Wallpaper (New v3.3)**: Render any video format (`.mp4`, `.mkv`, `.webm`, `.mov`, etc.) behind your desktop icons using `libmpv` with optional audio and hardware-acceleration.

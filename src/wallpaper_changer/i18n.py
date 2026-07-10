@@ -18,6 +18,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "window_title": "WallpaperChanger",
         "header_subtitle": "Control Panel  |  Windows",
         "detecting": "detecting...",
+        "tab_wallpaper": "Wallpaper",
+        "tab_video": "Video",
+        "tab_tools": "Tools & Shortcuts",
 
         # Monitor panel
         "monitors": "Monitors",
@@ -105,6 +108,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Actions
         "apply_now": "Apply Now",
         "applying": "Applying...",
+        "apply_already_running": "A wallpaper change is already in progress.",
         "save_config": "Save Config",
         "start_watch": "Start Watch",
         "stop_watch": "Stop Watch",
@@ -128,6 +132,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "Default wallpaper not configured or file not found.",
         "no_monitor_error": "No monitor detected.",
         "hk_lib_unavailable": "'keyboard' library not available.",
+        "hk_registration_error": "Shortcut error: {msg}",
         "notif_watch_started": "Auto-rotation started ({n}s interval).",
         "notif_watch_stopped": "Auto-rotation stopped.",
         "notif_default_set": "Default wallpaper set to {name}.",
@@ -181,6 +186,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "window_title": "WallpaperChanger",
         "header_subtitle": "Painel de controle  |  Windows",
         "detecting": "detectando...",
+        "tab_wallpaper": "Wallpaper",
+        "tab_video": "Vídeo",
+        "tab_tools": "Ferramentas e Atalhos",
 
         # Monitor panel
         "monitors": "Monitores",
@@ -268,6 +276,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Actions
         "apply_now": "Aplicar Agora",
         "applying": "Aplicando...",
+        "apply_already_running": "Uma troca de wallpaper já está em andamento.",
         "save_config": "Salvar Config",
         "start_watch": "Iniciar Watch",
         "stop_watch": "Parar Watch",
@@ -291,6 +300,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "Wallpaper padrão não configurado ou arquivo não encontrado.",
         "no_monitor_error": "Nenhum monitor detectado.",
         "hk_lib_unavailable": "Biblioteca 'keyboard' não disponível.",
+        "hk_registration_error": "Erro no atalho: {msg}",
         "notif_watch_started": "Rotação automática iniciada (intervalo de {n}s).",
         "notif_watch_stopped": "Rotação automática parada.",
         "notif_default_set": "Wallpaper padrão definido para {name}.",
@@ -344,6 +354,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "window_title": "WallpaperChanger",
         "header_subtitle": "コントロールパネル  |  Windows",
         "detecting": "検出中...",
+        "tab_wallpaper": "壁紙",
+        "tab_video": "動画",
+        "tab_tools": "ツールとショートカット",
 
         # Monitor panel
         "monitors": "モニター",
@@ -431,6 +444,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # Actions
         "apply_now": "今すぐ適用",
         "applying": "適用中...",
+        "apply_already_running": "壁紙の変更はすでに実行中です。",
         "save_config": "設定を保存",
         "start_watch": "監視を開始",
         "stop_watch": "監視を停止",
@@ -454,6 +468,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_not_found": "デフォルト壁紙が未設定またはファイルが見つかりません。",
         "no_monitor_error": "モニターが検出されませんでした。",
         "hk_lib_unavailable": "'keyboard'ライブラリが利用できません。",
+        "hk_registration_error": "ショートカットエラー: {msg}",
         "notif_watch_started": "自動ローテーションを開始しました（間隔 {n}秒）。",
         "notif_watch_stopped": "自動ローテーションを停止しました。",
         "notif_default_set": "デフォルト壁紙を {name} に設定しました。",

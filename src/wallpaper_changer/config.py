@@ -1,6 +1,11 @@
 """Leitura, validacao e persistencia das configuracoes do projeto."""
+
 from __future__ import annotations
+
+import os
 import sys
+import tempfile
+import threading
 from pathlib import Path
 
 if sys.version_info >= (3, 11):
@@ -17,6 +22,7 @@ if getattr(sys, "frozen", False):
 else:
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "settings.toml"
+_SAVE_LOCK = threading.Lock()
 
 
 def get_project_root() -> Path:
@@ -73,4 +79,21 @@ def save_config(cfg: dict, path: Path | None = None) -> None:
             lines.append(f"{k} = {_fmt(v)}")
         lines.append("")
 
-    target.write_text("\n".join(lines), encoding="utf-8")
+    content = "\n".join(lines)
+    # A process interruption must never leave settings.toml half-written.
+    with _SAVE_LOCK:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{target.name}.", suffix=".tmp", dir=target.parent
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as tmp:
+                tmp.write(content)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            os.replace(tmp_name, target)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
