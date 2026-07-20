@@ -1634,7 +1634,7 @@ class WallpaperChangerApp(ttk.Window):
         if self._watch_after_id:
             self.after_cancel(self._watch_after_id)
             self._watch_after_id = None
-        self._hk_manager.unregister_all()
+        self._hk_manager.close()
         # Stop video wallpaper playback before exit
         if self._video_player:
             self._video_player.stop()

@@ -88,7 +88,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "video_next": "⏭  Next",
         "hk_record": "Record",
         "hk_recording": "Press...",
-        "hk_disabled_warning": "\u26a0 'keyboard' library not installed. Hotkeys disabled.",
+        "hk_disabled_warning": "\u26a0 Native Windows hotkeys are unavailable.",
 
         # Default wallpaper
         "default_wp_title": "Default Wallpaper",
@@ -131,7 +131,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_applied": "Default wallpaper applied: {name}",
         "default_wp_not_found": "Default wallpaper not configured or file not found.",
         "no_monitor_error": "No monitor detected.",
-        "hk_lib_unavailable": "'keyboard' library not available.",
+        "hk_lib_unavailable": "Native Windows hotkeys are unavailable.",
         "hk_registration_error": "Shortcut error: {msg}",
         "notif_watch_started": "Auto-rotation started ({n}s interval).",
         "notif_watch_stopped": "Auto-rotation stopped.",
@@ -256,7 +256,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "video_next": "⏭  Próximo",
         "hk_record": "Gravar",
         "hk_recording": "Pressione...",
-        "hk_disabled_warning": "\u26a0 Biblioteca 'keyboard' não instalada. Atalhos desativados.",
+        "hk_disabled_warning": "\u26a0 Atalhos nativos do Windows indisponíveis.",
 
         # Default wallpaper
         "default_wp_title": "Wallpaper Padrão",
@@ -299,7 +299,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_applied": "Wallpaper padrão aplicado: {name}",
         "default_wp_not_found": "Wallpaper padrão não configurado ou arquivo não encontrado.",
         "no_monitor_error": "Nenhum monitor detectado.",
-        "hk_lib_unavailable": "Biblioteca 'keyboard' não disponível.",
+        "hk_lib_unavailable": "Atalhos nativos do Windows indisponíveis.",
         "hk_registration_error": "Erro no atalho: {msg}",
         "notif_watch_started": "Rotação automática iniciada (intervalo de {n}s).",
         "notif_watch_stopped": "Rotação automática parada.",
@@ -424,7 +424,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "video_next": "⏭  次へ",
         "hk_record": "記録",
         "hk_recording": "押してください...",
-        "hk_disabled_warning": "\u26a0 'keyboard'ライブラリ未インストール。ホットキー無効。",
+        "hk_disabled_warning": "\u26a0 Windowsのホットキーが利用できません。",
 
         # Default wallpaper
         "default_wp_title": "デフォルト壁紙",
@@ -467,7 +467,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "default_wp_applied": "デフォルト壁紙を適用しました: {name}",
         "default_wp_not_found": "デフォルト壁紙が未設定またはファイルが見つかりません。",
         "no_monitor_error": "モニターが検出されませんでした。",
-        "hk_lib_unavailable": "'keyboard'ライブラリが利用できません。",
+        "hk_lib_unavailable": "Windowsのホットキーが利用できません。",
         "hk_registration_error": "ショートカットエラー: {msg}",
         "notif_watch_started": "自動ローテーションを開始しました（間隔 {n}秒）。",
         "notif_watch_stopped": "自動ローテーションを停止しました。",

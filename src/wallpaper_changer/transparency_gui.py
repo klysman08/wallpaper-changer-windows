@@ -7,6 +7,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import BOTH, BOTTOM, DISABLED, EW, LEFT, NORMAL, RIGHT, W, X, Y
 
+from .hotkeys import HotkeyManager
 from .transparency import (
     get_foreground_window,
     list_visible_windows,
@@ -50,7 +51,7 @@ class TransparencyApp(ttk.Window):
 
         self._windows: list[tuple[int, str, str]] = []
         self._listener_thread: threading.Thread | None = None
-        self._shortcut_thread: threading.Thread | None = None
+        self._hotkey_manager = HotkeyManager()
 
         self._build_ui()
         self._refresh_window_list()
@@ -233,25 +234,18 @@ class TransparencyApp(ttk.Window):
     # ── Global Shortcuts ─────────────────────────────────────────────────────
 
     def _start_global_shortcuts(self) -> None:
-        """Register Alt+A via *keyboard* and Alt+Scroll via *pynput*."""
-        # --- keyboard: Alt+A ---
-        self._shortcut_thread = threading.Thread(
-            target=self._register_keyboard_shortcuts, daemon=True,
+        """Register Alt+A natively and Alt+Scroll via *pynput*."""
+        result = self._hotkey_manager.update(
+            {"alt+a": self._hotkey_half_opacity}
         )
-        self._shortcut_thread.start()
+        if result.errors:
+            self._set_status(f"⚠ Could not register Alt+A: {result.errors[0]}")
 
         # --- pynput: Alt+Scroll ---
         self._listener_thread = threading.Thread(
             target=self._start_mouse_listener, daemon=True,
         )
         self._listener_thread.start()
-
-    def _register_keyboard_shortcuts(self) -> None:
-        try:
-            import keyboard
-            keyboard.add_hotkey("alt+a", self._hotkey_half_opacity, suppress=False)
-        except Exception:
-            self.after(0, lambda: self._set_status("⚠ Could not register Alt+A"))
 
     def _hotkey_half_opacity(self) -> None:
         """Set the currently focused window to 50% opacity."""
@@ -314,11 +308,7 @@ class TransparencyApp(ttk.Window):
 
     def _on_close(self) -> None:
         """Clean up listeners and close."""
-        try:
-            import keyboard
-            keyboard.remove_hotkey("alt+a")
-        except Exception:
-            pass
+        self._hotkey_manager.close()
         try:
             if hasattr(self, "_mouse_listener"):
                 self._mouse_listener.stop()
