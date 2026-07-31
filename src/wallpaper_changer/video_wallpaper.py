@@ -33,6 +33,22 @@ log = logging.getLogger(__name__)
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v"}
 
+# Windows crash reports from the packaged application show native access
+# violations in dxgi.dll while a video wallpaper is running. Those faults happen
+# below Python and therefore cannot be caught. Keep the D3D11 presentation path
+# because it is the only bundled mpv backend that paints reliably into Explorer's
+# WORKERW child windows, but disable D3D11VA hardware decoding and its shared DXGI
+# surfaces. A fixed 8-bit output also avoids swap-chain format changes when a video
+# or display reports HDR. ``fast`` offsets most of the software-decoding cost.
+_MPV_SAFE_VIDEO_OPTIONS = {
+    "vo": "gpu",
+    "gpu_api": "d3d11",
+    "gpu_context": "d3d11",
+    "hwdec": "no",
+    "d3d11_output_format": "rgba8",
+    "profile": "fast",
+}
+
 user32 = ctypes.windll.user32
 
 # ── Win32 constants for borderless child host windows ─────────────────────────
@@ -191,6 +207,13 @@ def _refresh_desktop(parent: int | None) -> None:
         pass
 
 
+def _handle_mpv_log(level: str, component: str, message: str) -> None:
+    """Route native-player warnings to the application's rotating log."""
+    message = message.strip()
+    if message:
+        log.warning("mpv [%s] %s: %s", level, component, message)
+
+
 # ── Player ────────────────────────────────────────────────────────────────────
 
 class VideoWallpaperPlayer:
@@ -300,14 +323,15 @@ class VideoWallpaperPlayer:
         """Create one mpv instance bound to *hwnd* and load the playlist."""
         player = mpv.MPV(
             wid=str(int(hwnd)),
-            vo="gpu",
-            hwdec="auto",
+            **_MPV_SAFE_VIDEO_OPTIONS,
             keepaspect=True,                        # preserve aspect ratio (letterbox)
             loop_playlist="inf" if self._loop else "no",
             mute=not audio,
             osc=False,
             input_default_bindings=False,
             input_vo_keyboard=False,
+            log_handler=_handle_mpv_log,
+            loglevel="warn",
         )
         try:
             for i, video in enumerate(self._videos):

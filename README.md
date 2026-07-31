@@ -4,13 +4,13 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white&style=flat-square)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white&style=flat-square)](https://microsoft.com)
-[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](https://opensource.org/license/mit)
 [![Version](https://img.shields.io/badge/Version-4.0-orange&style=flat-square)](https://github.com/klysman08/wallpaper-changer-windows/releases)
 [![Docs](https://img.shields.io/badge/Docs-Live%20Site-df7356?style=flat-square)](https://wallpaper.astrofocus.app/)
 
 ---
 
-![WallpaperChanger Hero Setup](docs/hero-preview.png)
+![WallpaperChanger managing collage and live video wallpapers across three monitors](docs/wallpaper-changer-hero.webp)
 
 ## 🌟 Why WallpaperChanger?
 
@@ -19,8 +19,8 @@ Most wallpaper utilities are either simplistic slideshows that can't handle mult
 | Feature | Other Wallpaper Utilities | WallpaperChanger Solution |
 | :--- | :--- | :--- |
 | **Multi-Monitor Layouts** | ✗ Single image stretched or forced per screen | ✓ **Collage Mode**: Custom grid of 1–8 images per monitor |
-| **Live Wallpapers** | ✗ Restricted, resource-heavy, or paid | ✓ **Video Wallpaper**: Aspect-correct, hardware-accelerated play via `libmpv` |
-| **Transitions** | ✗ Instant, jarring cuts | ✓ **Smooth Fade**: 30 FPS crossfade transition |
+| **Live Wallpapers** | ✗ Restricted, resource-heavy, or paid | ✓ **Video Wallpaper**: Stable, aspect-correct playback via `libmpv` |
+| **Transitions** | ✗ Instant, jarring cuts | ✓ **Native Fade**: Uses Windows' built-in wallpaper transition |
 | **System Footprint** | ✗ Taskbar hog, telemetry, ads, account required | ✓ **Zero Bloat**: Runs silently in the system tray, 100% telemetry-free |
 | **Language Support** | ✗ English only | ✓ **Multi-Language**: Full English, Português, and Japanese UI |
 | **Automation & Scripts** | ✗ GUI-only configuration | ✓ **CLI Console**: Execute transitions, play videos, and run watch cycles |
@@ -29,14 +29,16 @@ Most wallpaper utilities are either simplistic slideshows that can't handle mult
 
 ## ✨ Features
 
-Version 4.0 adds a tabbed control panel, reliable main-thread shortcut dispatch,
-shortcut conflict validation, serialized wallpaper changes, atomic settings saves,
-and rotating diagnostic logs. See [the v4 plan](docs/V4_PLAN.md) for the architecture
-review and delivered reliability work.
+Version 4.0 adds a tabbed control panel, stable multi-monitor video playback,
+reliable main-thread shortcut dispatch, shortcut conflict validation, serialized
+wallpaper changes, atomic settings saves, and rotating diagnostic logs. See
+[the v4 plan](docs/V4_PLAN.md) for the architecture review and delivered
+reliability work.
 
 - **Collage Grid**: Automatic grid layouts of 1 to 8 images per monitor.
-- **Video Wallpaper (New v3.3)**: Render any video format (`.mp4`, `.mkv`, `.webm`, `.mov`, etc.) behind your desktop icons using `libmpv` with optional audio and hardware-acceleration.
-- **Fade Transitions**: Crossfade smoothly between wallpapers at 30 FPS using GDI WorkerW rendering—no desktop flicker.
+- **Video Wallpaper**: Render `.mp4`, `.mkv`, `.webm`, `.mov`, and other common video formats behind your desktop icons using `libmpv`, with optional audio, looping, and playlist controls.
+- **Stable Video Rendering**: Uses D3D11 presentation with stability-focused software decoding, avoiding fragile hardware-decoder surfaces while retaining smooth GPU composition.
+- **Native Fade Transitions**: Lets Windows apply its built-in wallpaper fade with no custom animation loop or desktop flicker.
 - **Auto-Rotation**: Watch cycles automatically rotate your backgrounds at set intervals.
 - **Window Transparency**: Focus adjustments allowing slider control, toggle hotkeys (`Alt+A`), or Scroll adjustments (modifiers like `Alt`, `Ctrl`, `Shift`, `Win`) for any window.
 - **Global Hotkeys**: Control next/previous wallpaper, effect configurations, and video controls (mute, playlist traversal) globally.
@@ -78,11 +80,15 @@ uv run wallpaper-changer-gui
 
 ## 🎛️ Detailed Configuration
 
-### 1. Video Wallpapers (v3.3)
-Points directly to a directory of background videos. libmpv ensures highly optimized, hardware-accelerated playback rendering to the desktop `WorkerW` layer.
+### 1. Video Wallpapers
+Point the app at a directory of background videos. `libmpv` renders each display
+into the desktop `WorkerW` layer while the app keeps playback controls responsive
+and tears down native resources safely.
+
 - Supports loop vs single playback.
 - Optional track audio playback toggle.
 - Aspect ratio preservation (preserves 9:16 vertical clips on horizontal displays without stretching).
+- Previous/next controls keep every monitor on the same playlist item.
 
 ### 2. Image Effects
 Switch rendering mode styles instantly on the current wallpaper collage:
@@ -161,9 +167,6 @@ default_wallpaper = ""
 [display]
 fit_mode            = "fill"
 effect              = "normal"   # normal | bw | vintage | hdr
-transition          = "fade"
-transition_duration = 0.6
-transition_fps      = 30
 
 [hotkeys]
 next_wallpaper    = "ctrl+alt+right"
@@ -184,7 +187,7 @@ prev_video        = "ctrl+alt+,"
 
 [video]
 enabled = false
-folder  = "C:/Users/klysm/Videos/wuwa"
+folder  = "C:/Users/YourName/Videos/Wallpapers"
 loop    = false
 sound   = true
 ```
@@ -232,8 +235,10 @@ wallpaper-changer/
     ├── image_utils.py       # Grids, sizes & effect modifiers
     ├── monitor.py           # Win32 screen positioning
     ├── startup.py           # Login registers
-    ├── transition.py        # WorkerW GDI blender
+    ├── transition.py        # Native Windows wallpaper transition
     ├── transparency.py      # Win32 active transparency
+    ├── video_wallpaper.py   # libmpv video player lifecycle
+    ├── workerw.py           # Desktop WorkerW discovery
     └── wallpaper.py         # Canvas rendering
 ```
 
@@ -241,4 +246,4 @@ wallpaper-changer/
 
 ## 📄 License
 
-MIT © [WallpaperChanger Contributors](LICENSE) — free for personal and commercial usage.
+MIT © WallpaperChanger Contributors — free for personal and commercial usage.

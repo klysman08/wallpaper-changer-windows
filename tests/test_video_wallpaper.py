@@ -140,6 +140,16 @@ def test_player_start_creates_one_mpv_per_monitor(monkeypatch):
     ]
     # Looping the whole playlist forever.
     assert _FakeMPV.instances[0].kwargs["loop_playlist"] == "inf"
+    # Retain the D3D11 renderer required for WORKERW embedding, but keep decoding
+    # away from D3D11VA/DXGI surfaces that can crash below Python's boundary.
+    assert _FakeMPV.instances[0].kwargs["vo"] == "gpu"
+    assert _FakeMPV.instances[0].kwargs["gpu_api"] == "d3d11"
+    assert _FakeMPV.instances[0].kwargs["gpu_context"] == "d3d11"
+    assert _FakeMPV.instances[0].kwargs["hwdec"] == "no"
+    assert _FakeMPV.instances[0].kwargs["d3d11_output_format"] == "rgba8"
+    assert _FakeMPV.instances[0].kwargs["profile"] == "fast"
+    assert _FakeMPV.instances[0].kwargs["log_handler"] is vw._handle_mpv_log
+    assert _FakeMPV.instances[0].kwargs["loglevel"] == "warn"
 
 
 def test_player_stop_terminates_and_destroys(monkeypatch):
