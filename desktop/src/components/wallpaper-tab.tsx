@@ -1,6 +1,5 @@
 import * as React from "react"
 import { open } from "@tauri-apps/plugin-dialog"
-import { toast } from "sonner"
 
 import { MonitorLayout } from "@/components/monitor-layout"
 import { Button } from "@/components/ui/button"
@@ -50,13 +49,7 @@ interface Props {
 export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
   const { t } = i18n
   const preview = usePreview(config)
-  const [applying, setApplying] = React.useState(false)
-  const [watching, setWatching] = React.useState(false)
   const [imageCount, setImageCount] = React.useState<number | null>(null)
-
-  React.useEffect(() => {
-    void engine.watchStatus().then((s) => setWatching(s.watching)).catch(() => {})
-  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -72,34 +65,6 @@ export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
   async function browseFolder() {
     const picked = await open({ directory: true, defaultPath: config.paths.wallpapers_folder })
     if (typeof picked === "string") onChange("paths", "wallpapers_folder", picked)
-  }
-
-  async function applyNow() {
-    setApplying(true)
-    try {
-      const result = await engine.applyWallpaper(config)
-      toast.success(t("wallpaper_applied"), {
-        description: `${result.images.length} ${t("images")}`,
-      })
-    } catch (e) {
-      toast.error(t("apply_failed"), { description: (e as Error).message })
-    } finally {
-      setApplying(false)
-    }
-  }
-
-  async function toggleWatch() {
-    try {
-      if (watching) {
-        await engine.watchStop()
-        setWatching(false)
-      } else {
-        const r = await engine.watchStart(config.general.interval)
-        setWatching(r.watching)
-      }
-    } catch (e) {
-      toast.error((e as Error).message)
-    }
   }
 
   return (
@@ -265,15 +230,6 @@ export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
             </Field>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={applyNow} disabled={applying}>
-          {applying ? t("applying") : t("apply_now")}
-        </Button>
-        <Button variant={watching ? "destructive" : "outline"} onClick={toggleWatch}>
-          {watching ? t("stop_rotation") : t("start_rotation")}
-        </Button>
       </div>
     </div>
   )

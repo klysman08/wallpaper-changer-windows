@@ -1,4 +1,5 @@
 import * as React from "react"
+import { X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -79,23 +80,47 @@ export function HotkeysTab({ config, i18n, onChange }: Props) {
         <CardTitle>{t("hotkeys")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        <p className="mb-2 text-sm text-muted-foreground">{t("hotkey_hint")}</p>
+        <p className="text-sm text-muted-foreground">{t("hotkey_hint")}</p>
+        <p className="mb-2 text-sm text-muted-foreground">{t("hotkey_none_hint")}</p>
         {BINDINGS.map(({ key, labelKey }) => {
           const isRecording = recording === key
+          const combo = config.hotkeys[key] ?? ""
           return (
             <div key={key} className="flex items-center justify-between gap-4">
               {/* Several of these keys are shared with the old GUI, whose layout
                   baked a trailing colon into the label text. */}
               <Label className="font-normal">{t(labelKey).replace(/:$/, "")}</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("min-w-40 font-mono", isRecording && "ring-2 ring-ring")}
-                onClick={() => setRecording(isRecording ? null : key)}
-                onKeyDown={(e) => isRecording && onKeyDown(key, e)}
-              >
-                {isRecording ? t("press_keys") : config.hotkeys[key] || "—"}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "min-w-40 font-mono",
+                    isRecording && "ring-2 ring-ring",
+                    !combo && !isRecording && "font-sans text-muted-foreground",
+                  )}
+                  onClick={() => setRecording(isRecording ? null : key)}
+                  onKeyDown={(e) => isRecording && onKeyDown(key, e)}
+                >
+                  {isRecording ? t("press_keys") : combo || t("hotkey_not_set")}
+                </Button>
+                {/* Nothing is bound by default, so unbinding has to be reachable
+                    too — otherwise a shortcut can only ever be replaced. */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  aria-label={t("hotkey_clear")}
+                  title={t("hotkey_clear")}
+                  disabled={!combo}
+                  onClick={() => {
+                    setRecording(null)
+                    onChange(key, "")
+                  }}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
             </div>
           )
         })}

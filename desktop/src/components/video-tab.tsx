@@ -1,6 +1,5 @@
 import * as React from "react"
 import { open } from "@tauri-apps/plugin-dialog"
-import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,13 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { engine, onEngineEvent, type Config, type VideoStatus } from "@/lib/engine"
+import { engine, type Config } from "@/lib/engine"
+import type { Actions } from "@/lib/use-actions"
 import type { I18n } from "@/lib/use-i18n"
 
 interface Props {
   config: Config
   hasMpv: boolean
   i18n: I18n
+  /** Shared with the footer bar, so the two transports cannot disagree. */
+  actions: Actions
   onChange: <S extends keyof Config, K extends keyof Config[S]>(
     section: S,
     key: K,
@@ -22,25 +24,11 @@ interface Props {
   ) => void
 }
 
-export function VideoTab({ config, hasMpv, i18n, onChange }: Props) {
+export function VideoTab({ config, hasMpv, i18n, actions, onChange }: Props) {
   const { t } = i18n
-  const [status, setStatus] = React.useState<VideoStatus | null>(null)
+  const status = actions.video
+  const busy = actions.videoBusy
   const [videoCount, setVideoCount] = React.useState<number | null>(null)
-  const [busy, setBusy] = React.useState(false)
-
-  React.useEffect(() => {
-    void engine.videoStatus().then(setStatus).catch(() => {})
-    // The engine announces track changes itself (hotkeys, playlist wrap), so the
-    // transport stays correct even when the change did not originate here.
-    const unlisten = onEngineEvent((event) => {
-      if (event.event === "video_status") {
-        setStatus((prev) => (prev ? { ...prev, current: event.data.current } : prev))
-      }
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -52,17 +40,6 @@ export function VideoTab({ config, hasMpv, i18n, onChange }: Props) {
       cancelled = true
     }
   }, [config.video.folder])
-
-  async function run(action: () => Promise<VideoStatus>) {
-    setBusy(true)
-    try {
-      setStatus(await action())
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function browse() {
     const picked = await open({ directory: true, defaultPath: config.video.folder })
@@ -118,19 +95,17 @@ export function VideoTab({ config, hasMpv, i18n, onChange }: Props) {
           </p>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={busy} onClick={() => run(engine.videoPrev)}>
+            <Button variant="outline" disabled={busy} onClick={actions.videoPrev}>
               {t("previous")}
             </Button>
-            {running ? (
-              <Button variant="destructive" disabled={busy} onClick={() => run(engine.videoStop)}>
-                {t("stop")}
-              </Button>
-            ) : (
-              <Button disabled={busy} onClick={() => run(() => engine.videoStart(config))}>
-                {t("play")}
-              </Button>
-            )}
-            <Button variant="outline" disabled={busy} onClick={() => run(engine.videoNext)}>
+            <Button
+              variant={running ? "destructive" : "default"}
+              disabled={busy}
+              onClick={actions.toggleVideo}
+            >
+              {running ? t("stop") : t("play")}
+            </Button>
+            <Button variant="outline" disabled={busy} onClick={actions.videoNext}>
               {t("next")}
             </Button>
           </div>
@@ -152,7 +127,7 @@ export function VideoTab({ config, hasMpv, i18n, onChange }: Props) {
               onCheckedChange={(v) => {
                 onChange("video", "sound", v)
                 // Audio can be toggled live; no need to restart playback.
-                if (running) void engine.videoSetSound(v).then(setStatus).catch(() => {})
+                if (running) void actions.setVideoSound(v)
               }}
             />
           </div>

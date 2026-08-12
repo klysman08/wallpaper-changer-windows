@@ -131,6 +131,9 @@ export const engine = {
   applyWallpaper: (config?: Partial<Config>) => call<ApplyResult>("apply_wallpaper", { config }),
   applyDefaultWallpaper: (config?: Partial<Config>) =>
     call<ApplyResult>("apply_default_wallpaper", { config }),
+  /** Replay the previous image set exactly, rather than picking a new one. */
+  applyPreviousWallpaper: (config?: Partial<Config>) =>
+    call<ApplyResult>("apply_previous_wallpaper", { config }),
 
   /**
    * Render the collage without touching the desktop.

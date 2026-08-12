@@ -83,3 +83,7 @@ When adding a dependency that uses dynamic imports, update `hiddenimports` in th
 Installers come from Tauri's bundler (MSI + NSIS) — there is no Inno Setup step. "Start with Windows" is a runtime toggle via `tauri-plugin-autostart`, **not** `startup.py`: that module registers `sys.executable`, which inside the frozen sidecar is the headless engine.
 
 Rust owns the global hotkeys (`hotkeys.rs`) so they survive an engine restart and can reach the window. Bindings keep the old GUI's syntax (`ctrl+alt+right`); `parse_shortcut` translates it. Windows grants a global hotkey to one owner, so a binding held by another app (including the legacy GUI, if it is running) will fail to register and is surfaced in the UI.
+
+**No shortcut ships bound.** Every `[hotkeys]` entry in `config/settings.toml` is `""` except `scroll_modifier`, which is not a shortcut. Claiming a dozen combinations on first run steals them from whatever the user already runs, and Windows gives no warning to the loser. Empty means "not registered" everywhere: `register_all` skips it, and `HotkeyManager.update` skips it rather than reporting it as a malformed shortcut.
+
+The app icon is generated, not hand-edited: `assets/icon/wpaper-logo.png` is the source, `uv run python scripts/make_icon.py` squares and pads it into `desktop/app-icon.png` plus `desktop/public/icon.png`, and `cd desktop; bunx tauri icon app-icon.png` regenerates the platform set under `desktop/src-tauri/icons/`.

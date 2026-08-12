@@ -1,7 +1,8 @@
 import * as React from "react"
-import { Image, KeyRound, Layers, Settings2, Video } from "lucide-react"
+import { Code2, Heart, Image, KeyRound, Layers, Settings2, Video } from "lucide-react"
 import { Toaster, toast } from "sonner"
 
+import { ActionBar } from "@/components/action-bar"
 import { HotkeysTab } from "@/components/hotkeys-tab"
 import { SettingsTab } from "@/components/settings-tab"
 import { TransparencyTab } from "@/components/transparency-tab"
@@ -33,6 +34,7 @@ import {
   type Capabilities,
   type MonitorsResult,
 } from "@/lib/engine"
+import { useActions } from "@/lib/use-actions"
 import { useConfig } from "@/lib/use-config"
 import { useI18n } from "@/lib/use-i18n"
 
@@ -46,6 +48,10 @@ const SECTIONS: { id: SectionId; icon: React.ComponentType<{ className?: string 
   { id: "settings", icon: Settings2 },
 ]
 
+const REPO_URL = "https://github.com/klysman08/wallpaper-changer-windows"
+const AUTHOR_URL = "https://github.com/klysman08"
+const SUPPORT_URL = "https://buy.stripe.com/4gMdRa7XW6dt8Ph9KX9Ve01"
+
 export function App() {
   const cfg = useConfig()
   const i18n = useI18n(cfg.config?.general.language)
@@ -54,6 +60,8 @@ export function App() {
   const [engineDown, setEngineDown] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [section, setSection] = React.useState<SectionId>("wallpaper")
+  // One copy of the running state, shared by the footer bar and the tabs.
+  const actions = useActions(cfg.config, i18n.t)
 
   React.useEffect(() => {
     void engine.getCapabilities().then(setCaps).catch(() => setEngineDown(true))
@@ -159,8 +167,40 @@ export function App() {
         </SidebarContent>
 
         <SidebarFooter>
-          <div className="px-1 pb-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
-            {caps ? `protocol v${caps.protocol}` : "—"}
+          {/* Plain anchors: ExternalLinkGuard intercepts them and hands the URL to
+              the system browser, so nothing ever navigates inside the webview. */}
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={t("support_project")}
+                className="text-rose-600 dark:text-rose-400"
+                render={<a href={SUPPORT_URL} target="_blank" rel="noreferrer noopener" />}
+              >
+                <Heart />
+                <span>{t("support_project")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={t("source_code")}
+                render={<a href={REPO_URL} target="_blank" rel="noreferrer noopener" />}
+              >
+                <Code2 />
+                <span>{t("source_code")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          <div className="px-2 pb-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+            {t("made_by")}{" "}
+            <a
+              href={AUTHOR_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              klysman08
+            </a>
+            {caps ? ` · protocol v${caps.protocol}` : ""}
           </div>
         </SidebarFooter>
         <SidebarRail />
@@ -186,6 +226,7 @@ export function App() {
               config={config}
               hasMpv={caps?.has_mpv ?? false}
               i18n={i18n}
+              actions={actions}
               onChange={cfg.set}
             />
           )}
@@ -208,6 +249,8 @@ export function App() {
             />
           )}
         </div>
+
+        <ActionBar actions={actions} hasMpv={caps?.has_mpv ?? false} i18n={i18n} />
       </SidebarInset>
       <Toaster position="bottom-right" richColors />
     </SidebarProvider>
