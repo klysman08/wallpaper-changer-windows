@@ -179,9 +179,14 @@ export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
                 onValueChange={(v) => v && onChange("display", "fit_mode", v as FitMode)}
               >
                 <SelectTrigger>
-                  {/* Base UI renders the raw value unless given a formatter. */}
+                  {/* Base UI renders the raw value unless given a formatter. A value
+                      we have no label for (older config, newer engine) shows as-is
+                      rather than as an empty trigger. */}
                   <SelectValue>
-                    {(v) => t(FIT_MODES.find((m) => m.value === v)?.labelKey ?? "")}
+                    {(v) => {
+                      const key = FIT_MODES.find((m) => m.value === v)?.labelKey
+                      return key ? t(key) : String(v ?? "")
+                    }}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -217,7 +222,10 @@ export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
               >
                 <SelectTrigger>
                   <SelectValue>
-                    {(v) => t(EFFECTS.find((e) => e.value === v)?.labelKey ?? "")}
+                    {(v) => {
+                      const key = EFFECTS.find((e) => e.value === v)?.labelKey
+                      return key ? t(key) : String(v ?? "")
+                    }}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>

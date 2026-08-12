@@ -33,6 +33,8 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
   const [nonce, setNonce] = React.useState(0)
 
   const pinned = React.useRef<string[] | null>(null)
+  // Which selection settings the pinned images were chosen under.
+  const pinnedFor = React.useRef<string | null>(null)
   // Guards against an older, slower response overwriting a newer one.
   const latest = React.useRef(0)
 
@@ -41,21 +43,33 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
     setNonce((n) => n + 1)
   }, [])
 
-  // Only the fields that actually change the picture belong here; watching the whole
-  // config would re-render the preview when an unrelated hotkey changes.
-  const signature = config
+  // Settings that decide *which* images get picked. When one of them changes the pin
+  // has to be dropped: reusing it would keep showing pictures the new settings would
+  // never choose, and after a folder change the paths may not even exist any more.
+  const selectionSignature = config
     ? JSON.stringify([
         config.paths.wallpapers_folder,
-        config.display.fit_mode,
-        config.display.effect,
         config.general.collage_count,
         config.general.collage_same_for_all,
         config.general.selection,
       ])
     : null
 
+  // Settings that only change how those images are drawn. Only the fields that
+  // actually change the picture belong here; watching the whole config would
+  // re-render the preview when an unrelated hotkey changes.
+  const signature = config
+    ? JSON.stringify([selectionSignature, config.display.fit_mode, config.display.effect])
+    : null
+
   React.useEffect(() => {
     if (!config || !signature) return
+
+    if (pinnedFor.current !== selectionSignature) {
+      pinned.current = null
+      pinnedFor.current = selectionSignature
+    }
+
     const ticket = ++latest.current
     setLoading(true)
 

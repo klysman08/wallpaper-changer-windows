@@ -32,8 +32,19 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         ],
     )?;
 
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(app.default_window_icon().unwrap().clone())
+    // A missing or mispackaged icon must not take the whole app down on startup: the
+    // tray is still usable without one, and the window is the thing people need.
+    let icon = app.default_window_icon().cloned();
+    if icon.is_none() {
+        log::warn!("no default window icon; the tray will fall back to the platform default");
+    }
+
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID);
+    if let Some(icon) = icon {
+        builder = builder.icon(icon);
+    }
+
+    builder
         .tooltip("Wallpaper Changer")
         .menu(&menu)
         // Left click should open the window; without this the icon only responds

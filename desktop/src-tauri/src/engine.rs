@@ -230,10 +230,9 @@ fn dispatch_line(line: &str, pending: &Pending, app: &AppHandle) {
 ///   3. `uv run` against the repo checkout, so `tauri dev` needs no packaging step.
 fn engine_command(app: &AppHandle) -> Result<Command, String> {
     if let Ok(raw) = std::env::var("WALLPAPER_ENGINE_CMD") {
-        let mut parts = raw.split_whitespace();
-        let program = parts.next().ok_or("WALLPAPER_ENGINE_CMD is empty")?;
+        let (program, args) = parse_engine_override(&raw)?;
         let mut cmd = Command::new(program);
-        cmd.args(parts);
+        cmd.args(args);
         log::info!("engine: using WALLPAPER_ENGINE_CMD override");
         return Ok(cmd);
     }
@@ -266,4 +265,58 @@ fn engine_command(app: &AppHandle) -> Result<Command, String> {
         .arg(&repo_root)
         .arg("wallpaper-changer-rpc");
     Ok(cmd)
+}
+
+/// Split `WALLPAPER_ENGINE_CMD` into a program and its arguments.
+///
+/// Two accepted forms, because splitting on whitespace would mangle the common case
+/// of a path under `C:\Program Files\...`:
+///
+///   - a bare path, taken whole and run with no arguments:
+///     `C:\Program Files\WallpaperChanger\engine\wallpaper-changer-rpc.exe`
+///   - a JSON array when arguments are needed, which needs no quoting rules of its
+///     own: `["uv", "run", "--directory", "C:\\src\\wallpaper", "wallpaper-changer-rpc"]`
+fn parse_engine_override(raw: &str) -> Result<(String, Vec<String>), String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("WALLPAPER_ENGINE_CMD is empty".into());
+    }
+
+    if trimmed.starts_with('[') {
+        let parts: Vec<String> = serde_json::from_str(trimmed)
+            .map_err(|e| format!("WALLPAPER_ENGINE_CMD is not a valid JSON array: {e}"))?;
+        let mut parts = parts.into_iter();
+        let program = parts
+            .next()
+            .ok_or("WALLPAPER_ENGINE_CMD is an empty JSON array")?;
+        return Ok((program, parts.collect()));
+    }
+
+    Ok((trimmed.to_string(), Vec::new()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_engine_override;
+
+    #[test]
+    fn keeps_a_path_with_spaces_intact() {
+        let raw = r"C:\Program Files\WallpaperChanger\engine\wallpaper-changer-rpc.exe";
+        assert_eq!(parse_engine_override(raw).unwrap(), (raw.to_string(), vec![]));
+    }
+
+    #[test]
+    fn reads_arguments_from_a_json_array() {
+        let raw = r#"["uv", "run", "--directory", "C:\\src\\wp", "wallpaper-changer-rpc"]"#;
+        let (program, args) = parse_engine_override(raw).unwrap();
+        assert_eq!(program, "uv");
+        assert_eq!(args, ["run", "--directory", r"C:\src\wp", "wallpaper-changer-rpc"]);
+    }
+
+    #[test]
+    fn rejects_input_it_cannot_turn_into_a_command() {
+        assert!(parse_engine_override("   ").is_err());
+        assert!(parse_engine_override("[]").is_err());
+        assert!(parse_engine_override("[not json]").is_err());
+    }
 }
