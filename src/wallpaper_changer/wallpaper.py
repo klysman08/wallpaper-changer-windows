@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-from .config import resolve_path, get_project_root
+from .config import resolve_path, get_state_file
 from .image_utils import fit_image, pick_images, build_canvas
 from .monitor import Monitor
 from .transition import apply_transition
@@ -72,7 +72,7 @@ def _get_folder(cfg: dict) -> Path:
 
 
 def _get_state_file(cfg: dict) -> Path:
-    return get_project_root() / "config" / "state.json"
+    return get_state_file()
 
 
 def apply_effect(canvas: Image.Image, effect: str = "normal") -> Image.Image:
@@ -138,22 +138,26 @@ def _compute_grid_layout(n: int, w: int, h: int) -> list[tuple[int, int, int, in
 
 # ── Collage ───────────────────────────────────────────────────────────────────
 
-def _apply_collage(
+def compose_collage(
     cfg: dict,
     monitors: list[Monitor],
-    output_dir: Path,
     preset_images: list[str] | None = None,
-) -> tuple[Path, list[str]]:
-    """
-    Collage: cada monitor e preenchido com N imagens em grade automatica.
-    N = cfg['general']['collage_count'] (padrao 4, range 1-8).
-    O layout e calculado por _compute_grid_layout().
+    state_file: Path | None = None,
+) -> tuple[Image.Image, list[str]]:
+    """Compose the collage canvas *without* touching the desktop.
+
+    Split out of ``_apply_collage`` so the same pipeline can serve a preview.
+    Callers that must not disturb the selection history (preview) pass a throwaway
+    ``state_file``; ``None`` means the real one, i.e. normal rotation behaviour.
+
+    Returns:
+        (canvas_with_effect_applied, list_of_image_paths_used)
     """
     folder = _get_folder(cfg)
     fit_mode = cfg["display"]["fit_mode"]
     effect = cfg["display"].get("effect", "normal")
     selection = cfg["general"].get("selection", "random")
-    sf = _get_state_file(cfg)
+    sf = state_file if state_file is not None else _get_state_file(cfg)
     count = max(1, int(cfg["general"].get("collage_count", 4)))
     same_for_all = bool(cfg["general"].get("collage_same_for_all", False))
 
@@ -188,10 +192,24 @@ def _apply_collage(
             if not same_for_all:
                 img_idx += 1
 
+    return apply_effect(canvas, effect), [str(p) for p in imgs]
+
+
+def _apply_collage(
+    cfg: dict,
+    monitors: list[Monitor],
+    output_dir: Path,
+    preset_images: list[str] | None = None,
+) -> tuple[Path, list[str]]:
+    """
+    Collage: cada monitor e preenchido com N imagens em grade automatica.
+    N = cfg['general']['collage_count'] (padrao 4, range 1-8).
+    O layout e calculado por _compute_grid_layout().
+    """
+    canvas, used = compose_collage(cfg, monitors, preset_images)
     out = output_dir / "wallpaper_collage.bmp"
-    canvas = apply_effect(canvas, effect)
     apply_transition(canvas, out, set_wallpaper_win)
-    return out, [str(p) for p in imgs]
+    return out, used
 
 
 # ── Wallpaper padrao (imagem unica) ──────────────────────────────────────────

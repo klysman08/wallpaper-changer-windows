@@ -25,6 +25,12 @@ def list_images_sorted_by_date(folder: str | Path) -> list[Path]:
 
 # ── Selecao ───────────────────────────────────────────────────────────────────
 
+def _default_state_file() -> Path:
+    """Fallback state path when a caller does not supply one."""
+    from .config import get_state_file
+    return get_state_file()
+
+
 def _load_state(state_file: Path) -> dict:
     if state_file.exists():
         try:
@@ -57,7 +63,7 @@ def pick_images(
         images = list_images_sorted_by_date(folder)
         if not images:
             raise FileNotFoundError(f"Nenhuma imagem em: {folder}")
-        sf = state_file or (Path(folder).parent.parent / "config" / "state.json")
+        sf = state_file or _default_state_file()
         state = _load_state(sf)
         folder_key = str(Path(folder).resolve())
         idx = state.get(folder_key, 0)
@@ -73,7 +79,7 @@ def pick_images(
         if not images:
             raise FileNotFoundError(f"Nenhuma imagem em: {folder}")
 
-        sf = state_file or (Path(folder).parent.parent / "config" / "state.json")
+        sf = state_file or _default_state_file()
         state = _load_state(sf)
         folder_key = str(Path(folder).resolve())
         history_key = folder_key + ":random_history"

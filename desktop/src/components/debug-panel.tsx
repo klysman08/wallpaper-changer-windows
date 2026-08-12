@@ -1,0 +1,2041 @@
+"use client"
+
+import * as React from "react"
+import {
+  getIdentifier,
+  getName,
+  getTauriVersion,
+  getVersion,
+} from "@tauri-apps/api/app"
+import { appConfigDir, appDataDir, resourceDir } from "@tauri-apps/api/path"
+import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window"
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow"
+import { attachConsole } from "@tauri-apps/plugin-log"
+import {
+  AlertTriangleIcon,
+  CopyIcon,
+  EllipsisIcon,
+  ExternalLinkIcon,
+  PinIcon,
+  RefreshCwIcon,
+  TerminalSquareIcon,
+  XIcon,
+} from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  DEBUG_EVENT_NAME,
+  type DebugEvent,
+  type LogDebugEvent,
+  type RuntimeEventDebugEvent,
+  emitDebugEvent,
+  serializeError,
+} from "@/lib/debug-events"
+import { trackedEmit, isTauri } from "@/lib/tauri"
+import { cn } from "@/lib/utils"
+
+type AppDiagnostics = {
+  name: string | null
+  version: string | null
+  identifier: string | null
+  tauriVersion: string | null
+}
+
+type WindowDiagnostics = {
+  label: string
+  title: string | null
+  viewportSize: { width: number; height: number } | null
+  tauriInnerSize: { width: number; height: number } | null
+  outerSize: { width: number; height: number } | null
+  outerPosition: { x: number; y: number } | null
+  scaleFactor: number | null
+  visible: boolean | null
+  focused: boolean | null
+  maximized: boolean | null
+  fullscreen: boolean | null
+  decorated: boolean | null
+  monitor: {
+    name: string | null
+    size: { width: number; height: number }
+    scaleFactor: number
+  } | null
+}
+
+type ThemeDiagnostics = {
+  system: "dark" | "light"
+  current: "dark" | "light"
+  htmlClass: string
+}
+
+type PathDiagnostics = {
+  appDataDir: string | null
+  appConfigDir: string | null
+  resourceDir: string | null
+}
+
+type LocaleDefaultsDiagnostics = {
+  localeChain: string[]
+  navigatorLanguage: string
+  intlLocale: string
+  region: string | null
+  timeZone: string
+  calendar: string
+  numberingSystem: string
+  hourCycle: string
+  hour12: boolean | null
+  firstDayOfWeek: string
+  documentLang: string
+  documentDir: string
+}
+
+type AccessibilityDefaultsDiagnostics = {
+  colorScheme: "dark" | "light"
+  reducedMotion: "reduce" | "no-preference"
+  contrast: "more" | "less" | "custom" | "no-preference"
+  forcedColors: "active" | "none"
+  invertedColors: "inverted" | "none"
+  reducedTransparency: "reduce" | "no-preference"
+}
+
+type InputDefaultsDiagnostics = {
+  platform: string
+  userAgent: string
+  maxTouchPoints: number
+  touchCapable: boolean
+  pointer: "fine" | "coarse" | "none"
+  anyPointer: "fine" | "coarse" | "none"
+  hover: boolean
+  anyHover: boolean
+  hardwareConcurrency: number | null
+  deviceMemory: number | null
+}
+
+type DisplayDefaultsDiagnostics = {
+  viewport: string
+  screen: string
+  availableScreen: string
+  devicePixelRatio: number
+  orientation: string
+  colorGamut: "rec2020" | "p3" | "srgb" | "unknown"
+  dynamicRange: "high" | "standard"
+  monochrome: boolean
+}
+
+type NetworkDefaultsDiagnostics = {
+  online: boolean
+  effectiveType: string
+  saveData: boolean | null
+  downlink: number | null
+  rtt: number | null
+}
+
+type NetworkInformationLike = EventTarget & {
+  effectiveType?: string
+  saveData?: boolean
+  downlink?: number
+  rtt?: number
+}
+
+type ExtendedNavigator = Navigator & {
+  connection?: NetworkInformationLike
+  mozConnection?: NetworkInformationLike
+  webkitConnection?: NetworkInformationLike
+  deviceMemory?: number
+  userAgentData?: {
+    platform?: string
+  }
+}
+
+type SourceOrigin = "web" | "tauri"
+
+type GridEntryMeta = {
+  code: string
+  origin: SourceOrigin
+}
+
+type GridEntry =
+  | [label: string, value: React.ReactNode]
+  | [label: string, value: React.ReactNode, meta: GridEntryMeta]
+
+type ErrorLog = {
+  id: string
+  timestamp: string
+  source: "error" | "unhandledrejection"
+  message: string
+}
+
+type LocationState = {
+  pathname: string
+  href: string
+  search: string
+  hash: string
+}
+
+type DebugPanelSide = "left" | "right" | "bottom"
+type DebugPanelTab = "overview" | "runtime" | "system" | "errors"
+
+const MAX_LOG_ITEMS = 10
+const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)"
+const DEBUG_PANEL_SIDE_KEY = "ctui-debug-panel-side"
+const DEBUG_PANEL_TAB_KEY = "ctui-debug-panel-tab"
+const DEBUG_PANEL_ATTACH_KEY = "ctui-debug-panel-attach"
+const SIDE_PANEL_WIDTH = 480
+const BOTTOM_PANEL_HEIGHT = 360
+const DEBUG_PANEL_THEME_STYLE_LIGHT = {
+  colorScheme: "light",
+  "--background": "oklch(0.955 0.006 250)",
+  "--foreground": "oklch(0.255 0.015 250)",
+  "--card": "oklch(0.985 0.004 250)",
+  "--card-foreground": "oklch(0.255 0.015 250)",
+  "--popover": "oklch(0.955 0.006 250)",
+  "--popover-foreground": "oklch(0.255 0.015 250)",
+  "--primary": "oklch(0.56 0.1 235)",
+  "--primary-foreground": "oklch(0.985 0 0)",
+  "--secondary": "oklch(0.925 0.008 250)",
+  "--secondary-foreground": "oklch(0.31 0.015 250)",
+  "--muted": "oklch(0.935 0.006 250)",
+  "--muted-foreground": "oklch(0.52 0.014 250)",
+  "--accent": "oklch(0.925 0.01 250)",
+  "--accent-foreground": "oklch(0.255 0.015 250)",
+  "--destructive": "oklch(0.63 0.20 24)",
+  "--destructive-foreground": "oklch(0.985 0 0)",
+  "--border": "oklch(0.86 0.008 250)",
+  "--input": "oklch(0.86 0.008 250)",
+  "--ring": "oklch(0.62 0.08 235)",
+  "--radius": "0.5rem",
+} as React.CSSProperties
+
+const DEBUG_PANEL_THEME_STYLE_DARK = {
+  colorScheme: "dark",
+  "--background": "oklch(0.205 0.012 250)",
+  "--foreground": "oklch(0.92 0.008 250)",
+  "--card": "oklch(0.235 0.012 250)",
+  "--card-foreground": "oklch(0.92 0.008 250)",
+  "--popover": "oklch(0.205 0.012 250)",
+  "--popover-foreground": "oklch(0.92 0.008 250)",
+  "--primary": "oklch(0.74 0.085 230)",
+  "--primary-foreground": "oklch(0.19 0.01 250)",
+  "--secondary": "oklch(0.28 0.012 250)",
+  "--secondary-foreground": "oklch(0.9 0.008 250)",
+  "--muted": "oklch(0.255 0.012 250)",
+  "--muted-foreground": "oklch(0.7 0.012 250)",
+  "--accent": "oklch(0.28 0.012 250)",
+  "--accent-foreground": "oklch(0.92 0.008 250)",
+  "--destructive": "oklch(0.66 0.19 24)",
+  "--destructive-foreground": "oklch(0.98 0 0)",
+  "--border": "oklch(0.36 0.01 250)",
+  "--input": "oklch(0.36 0.01 250)",
+  "--ring": "oklch(0.68 0.07 230)",
+  "--radius": "0.5rem",
+} as React.CSSProperties
+
+function isDebugPanelSide(value: string): value is DebugPanelSide {
+  return value === "left" || value === "right" || value === "bottom"
+}
+
+function isDebugPanelTab(value: string): value is DebugPanelTab {
+  return (
+    value === "overview" ||
+    value === "runtime" ||
+    value === "system" ||
+    value === "errors"
+  )
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  )
+}
+
+function readLocationState(): LocationState {
+  return {
+    pathname: window.location.pathname,
+    href: window.location.href,
+    search: window.location.search,
+    hash: window.location.hash,
+  }
+}
+
+function formatTimestamp(value: string) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(value))
+  } catch {
+    return value
+  }
+}
+
+function parsePluginLogMessage(message: string) {
+  const match = message.match(
+    /^\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]\[([A-Z]+)\]\s*(.*)$/
+  )
+
+  if (!match) {
+    return null
+  }
+
+  const [, date, time, target, level, text] = match
+
+  return {
+    date,
+    time,
+    target,
+    level: level.toLowerCase(),
+    text,
+  }
+}
+
+function getLogLevelClasses(level: string) {
+  switch (level) {
+    case "error":
+      return "border-destructive/25 bg-destructive/15 text-destructive"
+    case "warn":
+      return "border-amber-500/25 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+    case "info":
+      return "border-emerald-500/25 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+    case "debug":
+      return "border-sky-500/25 bg-sky-500/15 text-sky-600 dark:text-sky-400"
+    case "trace":
+      return "border-border/25 bg-muted text-muted-foreground"
+    default:
+      return "border-border/25 bg-muted text-foreground"
+  }
+}
+
+function createMediaQueryList(query: string) {
+  try {
+    return window.matchMedia(query)
+  } catch {
+    return null
+  }
+}
+
+function matchesMediaQuery(query: string) {
+  return createMediaQueryList(query)?.matches ?? false
+}
+
+function getLocaleChain() {
+  const candidates = [...navigator.languages]
+
+  if (navigator.language) {
+    candidates.push(navigator.language)
+  }
+
+  return [...new Set(candidates.filter(Boolean))]
+}
+
+function getFirstDayOfWeek(locale: string) {
+  try {
+    const intlLocale = new Intl.Locale(locale) as Intl.Locale & {
+      weekInfo?: {
+        firstDay: number
+      }
+    }
+
+    return intlLocale.weekInfo?.firstDay?.toString() ?? "Unavailable"
+  } catch {
+    return "Unavailable"
+  }
+}
+
+function getContrastPreference() {
+  if (matchesMediaQuery("(prefers-contrast: more)")) return "more"
+  if (matchesMediaQuery("(prefers-contrast: less)")) return "less"
+  if (matchesMediaQuery("(prefers-contrast: custom)")) return "custom"
+  return "no-preference"
+}
+
+function getColorGamut() {
+  if (matchesMediaQuery("(color-gamut: rec2020)")) return "rec2020"
+  if (matchesMediaQuery("(color-gamut: p3)")) return "p3"
+  if (matchesMediaQuery("(color-gamut: srgb)")) return "srgb"
+  return "unknown"
+}
+
+function getPointerPrecision(query: "(pointer: fine)" | "(pointer: coarse)") {
+  if (matchesMediaQuery(query)) {
+    return query.includes("fine") ? "fine" : "coarse"
+  }
+
+  return "none"
+}
+
+function getAnyPointerPrecision() {
+  if (matchesMediaQuery("(any-pointer: fine)")) return "fine"
+  if (matchesMediaQuery("(any-pointer: coarse)")) return "coarse"
+  return "none"
+}
+
+function getConnectionInfo() {
+  const extendedNavigator = navigator as ExtendedNavigator
+
+  return (
+    extendedNavigator.connection ??
+    extendedNavigator.mozConnection ??
+    extendedNavigator.webkitConnection ??
+    null
+  )
+}
+
+function pushRecent<T>(items: T[], nextItem: T) {
+  return [nextItem, ...items].slice(0, MAX_LOG_ITEMS)
+}
+
+function newestFirst<T extends { timestamp: string }>(items: T[]) {
+  return [...items].sort(
+    (left, right) =>
+      new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
+  )
+}
+
+function DebugSection({
+  title,
+  description,
+  children,
+  className,
+  bodyClassName,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+  className?: string
+  bodyClassName?: string
+}) {
+  return (
+    <section
+      className={cn(
+        "min-h-0 overflow-hidden rounded-lg border border-border/25 bg-card",
+        className
+      )}
+    >
+      <div className="border-b border-border/20 px-3 py-2">
+        <h3 className="text-[12px] font-semibold tracking-tight text-foreground">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      <div className={cn("min-h-0 p-3", bodyClassName)}>{children}</div>
+    </section>
+  )
+}
+
+const DebugPanelThemeContext = React.createContext<React.CSSProperties | undefined>(
+  undefined
+)
+
+function SourceOriginChip({ origin }: { origin: SourceOrigin }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-3.5 items-center rounded-sm border px-1 text-[9px] font-semibold uppercase tracking-wide",
+        origin === "tauri"
+          ? "border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+          : "border-sky-500/30 bg-sky-500/15 text-sky-600 dark:text-sky-400"
+      )}
+    >
+      {origin} API
+    </span>
+  )
+}
+
+function GridLabel({ label, meta }: { label: string; meta?: GridEntryMeta }) {
+  const themeStyle = React.useContext(DebugPanelThemeContext)
+  const [copied, setCopied] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!copied) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCopied(false)
+    }, 1200)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [copied])
+
+  if (!meta) {
+    return <span>{label}</span>
+  }
+
+  const handleCopySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(meta.code)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-4" />
+        }
+      >
+        {label}
+      </TooltipTrigger>
+      <TooltipContent
+        side="right"
+        align="start"
+        style={themeStyle}
+        className="max-w-[320px] border border-border/40 bg-popover p-2 text-popover-foreground shadow-md [&>:last-child]:hidden"
+      >
+        <div className="flex items-center gap-2">
+          <SourceOriginChip origin={meta.origin} />
+          <button
+            type="button"
+            onClick={handleCopySnippet}
+            title={copied ? "Copied!" : "Click to copy"}
+            className="group relative flex-1 overflow-hidden rounded-sm bg-muted px-1.5 py-1 text-left font-mono text-[10px] leading-4 text-foreground transition-colors hover:bg-muted/70 active:bg-muted/50"
+          >
+            <pre className="whitespace-pre-wrap break-all">{meta.code}</pre>
+            <span
+              className={cn(
+                "pointer-events-none absolute inset-0 flex items-center justify-center rounded-sm bg-popover/95 text-[10px] font-semibold text-foreground transition-opacity",
+                copied ? "opacity-100" : "opacity-0"
+              )}
+            >
+              Copied!
+            </span>
+          </button>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function KeyValueGrid({
+  entries,
+}: {
+  entries: ReadonlyArray<GridEntry>
+}) {
+  return (
+    <dl className="grid text-[11px] leading-5">
+      {entries.map((entry, index) => {
+        const [label, value] = entry
+        const meta = entry.length === 3 ? entry[2] : undefined
+
+        return (
+          <div
+            key={label}
+            className={cn(
+              "grid grid-cols-[92px_minmax(0,1fr)] items-start gap-3 py-1",
+              index > 0 && "border-t border-border/20"
+            )}
+          >
+            <dt className="text-muted-foreground/90">
+              <GridLabel label={label} meta={meta} />
+            </dt>
+            <dd className="font-mono break-all text-foreground">{value}</dd>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
+function EntryHighlight() {
+  const [visible, setVisible] = React.useState(true)
+
+  React.useEffect(() => {
+    const fadeTimer = window.setTimeout(() => {
+      setVisible(false)
+    }, 180)
+
+    return () => {
+      window.clearTimeout(fadeTimer)
+    }
+  }, [])
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute inset-0 rounded-lg ring-1 ring-primary/50 transition-opacity duration-700",
+        visible ? "opacity-100" : "opacity-0"
+      )}
+    />
+  )
+}
+
+export function DebugPanel() {
+  const [open, setOpen] = React.useState(false)
+  const [panelSide, setPanelSide] = React.useState<DebugPanelSide>("right")
+  const [activeTab, setActiveTab] = React.useState<DebugPanelTab>("overview")
+  const [attached, setAttached] = React.useState(false)
+  const [tauriReady, setTauriReady] = React.useState(false)
+  const [appInfo, setAppInfo] = React.useState<AppDiagnostics>({
+    name: null,
+    version: null,
+    identifier: null,
+    tauriVersion: null,
+  })
+  const [windowInfo, setWindowInfo] = React.useState<WindowDiagnostics>({
+    label: "main",
+    title: null,
+    viewportSize: null,
+    tauriInnerSize: null,
+    outerSize: null,
+    outerPosition: null,
+    scaleFactor: null,
+    visible: null,
+    focused: null,
+    maximized: null,
+    fullscreen: null,
+    decorated: null,
+    monitor: null,
+  })
+  const [themeInfo, setThemeInfo] = React.useState<ThemeDiagnostics>({
+    system: "light",
+    current: "light",
+    htmlClass: "",
+  })
+  const [pathInfo, setPathInfo] = React.useState<PathDiagnostics>({
+    appDataDir: null,
+    appConfigDir: null,
+    resourceDir: null,
+  })
+  const [localeDefaults, setLocaleDefaults] = React.useState<LocaleDefaultsDiagnostics>({
+    localeChain: [],
+    navigatorLanguage: "",
+    intlLocale: "Unavailable",
+    region: null,
+    timeZone: "Unavailable",
+    calendar: "Unavailable",
+    numberingSystem: "Unavailable",
+    hourCycle: "Unavailable",
+    hour12: null,
+    firstDayOfWeek: "Unavailable",
+    documentLang: "",
+    documentDir: "",
+  })
+  const [accessibilityDefaults, setAccessibilityDefaults] =
+    React.useState<AccessibilityDefaultsDiagnostics>({
+      colorScheme: "light",
+      reducedMotion: "no-preference",
+      contrast: "no-preference",
+      forcedColors: "none",
+      invertedColors: "none",
+      reducedTransparency: "no-preference",
+    })
+  const [inputDefaults, setInputDefaults] = React.useState<InputDefaultsDiagnostics>({
+    platform: "Unavailable",
+    userAgent: "",
+    maxTouchPoints: 0,
+    touchCapable: false,
+    pointer: "none",
+    anyPointer: "none",
+    hover: false,
+    anyHover: false,
+    hardwareConcurrency: null,
+    deviceMemory: null,
+  })
+  const [displayDefaults, setDisplayDefaults] = React.useState<DisplayDefaultsDiagnostics>({
+    viewport: "Unavailable",
+    screen: "Unavailable",
+    availableScreen: "Unavailable",
+    devicePixelRatio: 1,
+    orientation: "Unavailable",
+    colorGamut: "unknown",
+    dynamicRange: "standard",
+    monochrome: false,
+  })
+  const [networkDefaults, setNetworkDefaults] = React.useState<NetworkDefaultsDiagnostics>({
+    online: true,
+    effectiveType: "Unavailable",
+    saveData: null,
+    downlink: null,
+    rtt: null,
+  })
+  const [externalLinks, setExternalLinks] = React.useState<string[]>([])
+  const [invokeLogs, setInvokeLogs] = React.useState<DebugEvent[]>([])
+  const [runtimeEvents, setRuntimeEvents] = React.useState<RuntimeEventDebugEvent[]>([])
+  const [logEntries, setLogEntries] = React.useState<LogDebugEvent[]>([])
+  const [highlightedRuntimeEventIds, setHighlightedRuntimeEventIds] = React.useState<string[]>([])
+  const [highlightedLogIds, setHighlightedLogIds] = React.useState<string[]>([])
+  const [errors, setErrors] = React.useState<ErrorLog[]>([])
+  const [copied, setCopied] = React.useState(false)
+  const [locationState, setLocationState] = React.useState<LocationState>({
+    pathname: "",
+    href: "",
+    search: "",
+    hash: "",
+  })
+  const highlightTimeoutsRef = React.useRef<number[]>([])
+
+  React.useEffect(() => {
+    setTauriReady(isTauri())
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      for (const timeoutId of highlightTimeoutsRef.current) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const savedSide = window.sessionStorage.getItem(DEBUG_PANEL_SIDE_KEY)
+
+    if (savedSide && isDebugPanelSide(savedSide)) {
+      setPanelSide(savedSide)
+    }
+
+    const savedTab = window.sessionStorage.getItem(DEBUG_PANEL_TAB_KEY)
+
+    if (savedTab && isDebugPanelTab(savedTab)) {
+      setActiveTab(savedTab)
+    }
+
+    setAttached(window.sessionStorage.getItem(DEBUG_PANEL_ATTACH_KEY) === "true")
+  }, [])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    window.sessionStorage.setItem(DEBUG_PANEL_SIDE_KEY, panelSide)
+  }, [panelSide])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    window.sessionStorage.setItem(DEBUG_PANEL_TAB_KEY, activeTab)
+  }, [activeTab])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    window.sessionStorage.setItem(DEBUG_PANEL_ATTACH_KEY, String(attached))
+  }, [attached])
+
+  React.useEffect(() => {
+    function updateThemeInfo() {
+      const htmlClass = document.documentElement.className
+      const system = window.matchMedia(COLOR_SCHEME_QUERY).matches ? "dark" : "light"
+
+      setThemeInfo({
+        system,
+        current: document.documentElement.classList.contains("dark") ? "dark" : "light",
+        htmlClass,
+      })
+    }
+
+    updateThemeInfo()
+
+    const mediaQuery = window.matchMedia(COLOR_SCHEME_QUERY)
+    const observer = new MutationObserver(() => {
+      updateThemeInfo()
+    })
+    const handleMediaChange = () => {
+      updateThemeInfo()
+    }
+
+    mediaQuery.addEventListener("change", handleMediaChange)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleMediaChange)
+      observer.disconnect()
+    }
+  }, [])
+
+  React.useEffect(() => {
+    async function loadAppInfo() {
+      if (!tauriReady) {
+        return
+      }
+
+      const [name, version, identifier, tauriVersion] = await Promise.all([
+        getName(),
+        getVersion(),
+        getIdentifier(),
+        getTauriVersion(),
+      ])
+
+      setAppInfo({
+        name,
+        version,
+        identifier,
+        tauriVersion,
+      })
+    }
+
+    void loadAppInfo()
+  }, [tauriReady])
+
+  React.useEffect(() => {
+    async function loadPaths() {
+      if (!tauriReady) {
+        return
+      }
+
+      const [dataPath, configPath, resourcesPath] = await Promise.all([
+        appDataDir(),
+        appConfigDir(),
+        resourceDir(),
+      ])
+
+      setPathInfo({
+        appDataDir: dataPath,
+        appConfigDir: configPath,
+        resourceDir: resourcesPath,
+      })
+    }
+
+    void loadPaths()
+  }, [tauriReady])
+
+  React.useEffect(() => {
+    function refreshSystemDefaults() {
+      const resolved = new Intl.DateTimeFormat().resolvedOptions()
+      const localeChain = getLocaleChain()
+      let region: string | null = null
+
+      try {
+        region = new Intl.Locale(resolved.locale).region ?? null
+      } catch {
+        region = null
+      }
+
+      setLocaleDefaults({
+        localeChain,
+        navigatorLanguage: navigator.language || "Unavailable",
+        intlLocale: resolved.locale,
+        region,
+        timeZone: resolved.timeZone ?? "Unavailable",
+        calendar: resolved.calendar ?? "Unavailable",
+        numberingSystem: resolved.numberingSystem ?? "Unavailable",
+        hourCycle: resolved.hourCycle ?? "Unavailable",
+        hour12: resolved.hour12 ?? null,
+        firstDayOfWeek: getFirstDayOfWeek(resolved.locale),
+        documentLang: document.documentElement.lang || "(unset)",
+        documentDir: document.documentElement.dir || "(unset)",
+      })
+
+      const extendedNavigator = navigator as ExtendedNavigator
+
+      setAccessibilityDefaults({
+        colorScheme: matchesMediaQuery(COLOR_SCHEME_QUERY) ? "dark" : "light",
+        reducedMotion: matchesMediaQuery("(prefers-reduced-motion: reduce)")
+          ? "reduce"
+          : "no-preference",
+        contrast: getContrastPreference(),
+        forcedColors: matchesMediaQuery("(forced-colors: active)") ? "active" : "none",
+        invertedColors: matchesMediaQuery("(inverted-colors: inverted)")
+          ? "inverted"
+          : "none",
+        reducedTransparency: matchesMediaQuery("(prefers-reduced-transparency: reduce)")
+          ? "reduce"
+          : "no-preference",
+      })
+
+      setInputDefaults({
+        platform:
+          extendedNavigator.userAgentData?.platform ??
+          navigator.platform ??
+          "Unavailable",
+        userAgent: navigator.userAgent || "Unavailable",
+        maxTouchPoints: navigator.maxTouchPoints ?? 0,
+        touchCapable:
+          navigator.maxTouchPoints > 0 ||
+          matchesMediaQuery("(pointer: coarse)") ||
+          "ontouchstart" in window,
+        pointer:
+          getPointerPrecision("(pointer: fine)") === "fine"
+            ? "fine"
+            : getPointerPrecision("(pointer: coarse)"),
+        anyPointer: getAnyPointerPrecision(),
+        hover: matchesMediaQuery("(hover: hover)"),
+        anyHover: matchesMediaQuery("(any-hover: hover)"),
+        hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+        deviceMemory: extendedNavigator.deviceMemory ?? null,
+      })
+
+      setDisplayDefaults({
+        viewport: `${window.innerWidth} × ${window.innerHeight}`,
+        screen: `${window.screen.width} × ${window.screen.height}`,
+        availableScreen: `${window.screen.availWidth} × ${window.screen.availHeight}`,
+        devicePixelRatio: window.devicePixelRatio,
+        orientation:
+          window.screen.orientation?.type ??
+          (window.innerWidth >= window.innerHeight ? "landscape" : "portrait"),
+        colorGamut: getColorGamut(),
+        dynamicRange: matchesMediaQuery("(dynamic-range: high)") ? "high" : "standard",
+        monochrome: matchesMediaQuery("(monochrome)"),
+      })
+
+      const connection = getConnectionInfo()
+
+      setNetworkDefaults({
+        online: navigator.onLine,
+        effectiveType: connection?.effectiveType ?? "Unavailable",
+        saveData: connection?.saveData ?? null,
+        downlink: connection?.downlink ?? null,
+        rtt: connection?.rtt ?? null,
+      })
+    }
+
+    refreshSystemDefaults()
+
+    const mediaQueries = [
+      COLOR_SCHEME_QUERY,
+      "(prefers-reduced-motion: reduce)",
+      "(prefers-contrast: more)",
+      "(prefers-contrast: less)",
+      "(prefers-contrast: custom)",
+      "(forced-colors: active)",
+      "(inverted-colors: inverted)",
+      "(prefers-reduced-transparency: reduce)",
+      "(pointer: fine)",
+      "(pointer: coarse)",
+      "(any-pointer: fine)",
+      "(any-pointer: coarse)",
+      "(hover: hover)",
+      "(any-hover: hover)",
+      "(color-gamut: rec2020)",
+      "(color-gamut: p3)",
+      "(color-gamut: srgb)",
+      "(dynamic-range: high)",
+      "(monochrome)",
+    ]
+      .map((query) => createMediaQueryList(query))
+      .filter((query): query is MediaQueryList => query !== null)
+
+    const handleChange = () => {
+      refreshSystemDefaults()
+    }
+
+    for (const mediaQuery of mediaQueries) {
+      mediaQuery.addEventListener("change", handleChange)
+    }
+
+    window.addEventListener("resize", handleChange)
+    window.addEventListener("online", handleChange)
+    window.addEventListener("offline", handleChange)
+    window.screen.orientation?.addEventListener?.("change", handleChange)
+    document.documentElement.addEventListener(
+      "languagechange",
+      handleChange as EventListener
+    )
+
+    const connection = getConnectionInfo()
+    connection?.addEventListener?.("change", handleChange)
+
+    return () => {
+      for (const mediaQuery of mediaQueries) {
+        mediaQuery.removeEventListener("change", handleChange)
+      }
+
+      window.removeEventListener("resize", handleChange)
+      window.removeEventListener("online", handleChange)
+      window.removeEventListener("offline", handleChange)
+      window.screen.orientation?.removeEventListener?.("change", handleChange)
+      document.documentElement.removeEventListener(
+        "languagechange",
+        handleChange as EventListener
+      )
+      connection?.removeEventListener?.("change", handleChange)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (!tauriReady || !locationState.pathname) {
+      return
+    }
+
+    void trackedEmit("ctui://debug-panel-mounted", {
+      route: locationState.pathname,
+    })
+  }, [locationState.pathname, tauriReady])
+
+  React.useEffect(() => {
+    function updateLocationState() {
+      const nextState = readLocationState()
+
+      setLocationState((current) => {
+        if (
+          current.pathname === nextState.pathname &&
+          current.href === nextState.href &&
+          current.search === nextState.search &&
+          current.hash === nextState.hash
+        ) {
+          return current
+        }
+
+        return nextState
+      })
+    }
+
+    updateLocationState()
+
+    const intervalId = window.setInterval(updateLocationState, 250)
+    window.addEventListener("hashchange", updateLocationState)
+    window.addEventListener("popstate", updateLocationState)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener("hashchange", updateLocationState)
+      window.removeEventListener("popstate", updateLocationState)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    async function refreshWindowInfo() {
+      if (!tauriReady) {
+        return
+      }
+
+      const currentWindow = getCurrentWindow()
+      const currentWebviewWindow = getCurrentWebviewWindow()
+      const [
+        title,
+        tauriInnerSize,
+        outerSize,
+        outerPosition,
+        scaleFactor,
+        visible,
+        focused,
+        maximized,
+        fullscreen,
+        decorated,
+        monitor,
+      ] = await Promise.all([
+        currentWindow.title(),
+        currentWindow.innerSize(),
+        currentWindow.outerSize(),
+        currentWindow.outerPosition(),
+        currentWindow.scaleFactor(),
+        currentWindow.isVisible(),
+        currentWindow.isFocused(),
+        currentWindow.isMaximized(),
+        currentWindow.isFullscreen(),
+        currentWindow.isDecorated(),
+        currentMonitor(),
+      ])
+
+      setWindowInfo({
+        label: currentWebviewWindow.label,
+        title,
+        viewportSize: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+        tauriInnerSize,
+        outerSize,
+        outerPosition,
+        scaleFactor,
+        visible,
+        focused,
+        maximized,
+        fullscreen,
+        decorated,
+        monitor: monitor
+          ? {
+              name: monitor.name,
+              size: monitor.size,
+              scaleFactor: monitor.scaleFactor,
+            }
+          : null,
+      })
+    }
+
+    void refreshWindowInfo()
+
+    if (!tauriReady) {
+      return
+    }
+
+    const currentWindow = getCurrentWindow()
+    let unlistenFocus: (() => void) | undefined
+    let unlistenResize: (() => void) | undefined
+    let unlistenMove: (() => void) | undefined
+
+    void currentWindow
+      .onFocusChanged(() => {
+        emitDebugEvent({
+          id: crypto.randomUUID(),
+          kind: "runtime-event",
+          name: "window:focus-changed",
+          source: "window",
+          timestamp: new Date().toISOString(),
+        })
+        void refreshWindowInfo()
+      })
+      .then((unlisten) => {
+        unlistenFocus = unlisten
+      })
+
+    void currentWindow
+      .onResized(() => {
+        emitDebugEvent({
+          id: crypto.randomUUID(),
+          kind: "runtime-event",
+          name: "window:resized",
+          source: "window",
+          timestamp: new Date().toISOString(),
+        })
+        void refreshWindowInfo()
+      })
+      .then((unlisten) => {
+        unlistenResize = unlisten
+      })
+
+    void currentWindow
+      .onMoved(() => {
+        emitDebugEvent({
+          id: crypto.randomUUID(),
+          kind: "runtime-event",
+          name: "window:moved",
+          source: "window",
+          timestamp: new Date().toISOString(),
+        })
+        void refreshWindowInfo()
+      })
+      .then((unlisten) => {
+        unlistenMove = unlisten
+      })
+
+    return () => {
+      unlistenFocus?.()
+      unlistenResize?.()
+      unlistenMove?.()
+    }
+  }, [locationState.pathname, tauriReady])
+
+  React.useEffect(() => {
+    function queueHighlight(
+      id: string,
+      setIds: React.Dispatch<React.SetStateAction<string[]>>
+    ) {
+      setIds((current) => (current.includes(id) ? current : [id, ...current]))
+
+      const timeoutId = window.setTimeout(() => {
+        setIds((current) => current.filter((currentId) => currentId !== id))
+        highlightTimeoutsRef.current = highlightTimeoutsRef.current.filter(
+          (currentTimeoutId) => currentTimeoutId !== timeoutId
+        )
+      }, 900)
+
+      highlightTimeoutsRef.current.push(timeoutId)
+    }
+
+    function handleDebugEvent(event: Event) {
+      const debugEvent = (event as CustomEvent<DebugEvent>).detail
+
+      if (debugEvent.kind === "external-link") {
+        setExternalLinks((current) => pushRecent(current, debugEvent.href))
+        return
+      }
+
+      if (debugEvent.kind === "runtime-event") {
+        setRuntimeEvents((current) => pushRecent(current, debugEvent))
+        queueHighlight(debugEvent.id, setHighlightedRuntimeEventIds)
+        return
+      }
+
+      if (debugEvent.kind === "log") {
+        setLogEntries((current) => pushRecent(current, debugEvent))
+        queueHighlight(debugEvent.id, setHighlightedLogIds)
+        return
+      }
+
+      setInvokeLogs((current) => pushRecent(current, debugEvent))
+    }
+
+    function handleError(event: ErrorEvent) {
+      setErrors((current) =>
+        pushRecent(current, {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          source: "error",
+          message: event.message || "Unknown runtime error",
+        })
+      )
+    }
+
+    function handleRejection(event: PromiseRejectionEvent) {
+      const reason = serializeError(event.reason)
+
+      setErrors((current) =>
+        pushRecent(current, {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          source: "unhandledrejection",
+          message: reason.message,
+        })
+      )
+    }
+
+    window.addEventListener(DEBUG_EVENT_NAME, handleDebugEvent as EventListener)
+    window.addEventListener("error", handleError)
+    window.addEventListener("unhandledrejection", handleRejection)
+
+    return () => {
+      window.removeEventListener(DEBUG_EVENT_NAME, handleDebugEvent as EventListener)
+      window.removeEventListener("error", handleError)
+      window.removeEventListener("unhandledrejection", handleRejection)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    const originalConsole = {
+      log: window.console.log,
+      info: window.console.info,
+      warn: window.console.warn,
+      error: window.console.error,
+      debug: window.console.debug,
+    }
+
+    function capture(
+      level: LogDebugEvent["level"],
+      args: unknown[],
+      originalMethod: (...data: unknown[]) => void
+    ) {
+      const message = args
+        .map((value) => {
+          if (typeof value === "string") {
+            return value
+          }
+
+          try {
+            return JSON.stringify(value)
+          } catch {
+            return String(value)
+          }
+        })
+        .join(" ")
+
+      emitDebugEvent({
+        id: crypto.randomUUID(),
+        kind: "log",
+        level,
+        message,
+        timestamp: new Date().toISOString(),
+      })
+
+      originalMethod(...args)
+    }
+
+    window.console.log = (...args: unknown[]) => {
+      capture("log", args, originalConsole.log)
+    }
+
+    window.console.info = (...args: unknown[]) => {
+      capture("info", args, originalConsole.info)
+    }
+
+    window.console.warn = (...args: unknown[]) => {
+      capture("warn", args, originalConsole.warn)
+    }
+
+    window.console.error = (...args: unknown[]) => {
+      capture("error", args, originalConsole.error)
+    }
+
+    window.console.debug = (...args: unknown[]) => {
+      capture("debug", args, originalConsole.debug)
+    }
+
+    let detachConsole: (() => void) | undefined
+
+    if (tauriReady) {
+      void attachConsole().then((detach) => {
+        detachConsole = detach
+      })
+    }
+
+    return () => {
+      detachConsole?.()
+      window.console.log = originalConsole.log
+      window.console.info = originalConsole.info
+      window.console.warn = originalConsole.warn
+      window.console.error = originalConsole.error
+      window.console.debug = originalConsole.debug
+    }
+  }, [tauriReady])
+
+  React.useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.repeat) {
+        return
+      }
+
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+        return
+      }
+
+      if (event.key.toLowerCase() !== "d") {
+        return
+      }
+
+      if (isTypingTarget(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      setOpen((current) => !current)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    const mainElement = document.querySelector("[data-ui-scroll-container]")
+
+    if (!(mainElement instanceof HTMLElement)) {
+      return
+    }
+
+    mainElement.style.paddingLeft = ""
+    mainElement.style.paddingRight = ""
+    mainElement.style.paddingBottom = ""
+
+    if (open && attached) {
+      if (panelSide === "left") {
+        mainElement.style.paddingLeft = `${SIDE_PANEL_WIDTH}px`
+      }
+
+      if (panelSide === "right") {
+        mainElement.style.paddingRight = `${SIDE_PANEL_WIDTH}px`
+      }
+
+      if (panelSide === "bottom") {
+        mainElement.style.paddingBottom = `${BOTTOM_PANEL_HEIGHT}px`
+      }
+    }
+
+    return () => {
+      mainElement.style.paddingLeft = ""
+      mainElement.style.paddingRight = ""
+      mainElement.style.paddingBottom = ""
+    }
+  }, [attached, open, panelSide])
+
+  async function handleCopyText(value: string) {
+    await navigator.clipboard.writeText(value)
+  }
+
+  async function handleCopySnapshot() {
+    const snapshot = {
+      tauriReady,
+      panelSide,
+      attached,
+      appInfo,
+      locationState,
+      windowInfo,
+      themeInfo,
+      pathInfo,
+      externalLinks,
+      invokeLogs,
+      runtimeEvents,
+      logEntries,
+      errors,
+      capturedAt: new Date().toISOString(),
+    }
+
+    await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2))
+    setCopied(true)
+    window.setTimeout(() => {
+      setCopied(false)
+    }, 1200)
+  }
+
+  const isBottomDock = panelSide === "bottom"
+  const runtimeCount =
+    invokeLogs.length + externalLinks.length + runtimeEvents.length + logEntries.length
+  const overviewLayoutClassName = isBottomDock
+    ? "grid min-h-full content-start gap-3 pr-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]"
+    : "h-full space-y-3 overflow-y-auto pr-1"
+  const runtimeLayoutClassName = isBottomDock
+    ? "grid min-h-full content-start gap-3 pr-1 xl:grid-cols-2"
+    : "h-full space-y-3 overflow-y-auto pr-1"
+  const systemLayoutClassName = isBottomDock
+    ? "grid min-h-full content-start gap-3 pr-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]"
+    : "h-full space-y-3 overflow-y-auto pr-1"
+  const debugPanelThemeStyle =
+    themeInfo.current === "light"
+      ? DEBUG_PANEL_THEME_STYLE_LIGHT
+      : DEBUG_PANEL_THEME_STYLE_DARK
+
+  const panelContent = (
+    <>
+      <div className="border-b px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-foreground">
+              <TerminalSquareIcon className="size-3.5" />
+              Development Debug Panel
+            </h2>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant={attached ? "secondary" : "outline"}
+              size="icon-sm"
+              className="size-7"
+              onClick={() => setAttached((current) => !current)}
+              aria-pressed={attached}
+              aria-label={attached ? "Detach debug panel" : "Attach debug panel"}
+              title={attached ? "Detach debug panel" : "Attach debug panel"}
+            >
+              <PinIcon className="size-3.5" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-7"
+                    aria-label="Debug panel options"
+                  />
+                }
+              >
+                <EllipsisIcon className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={() => void handleCopySnapshot()}>
+                  <CopyIcon className="size-3.5" />
+                  {copied ? "Copied snapshot" : "Copy snapshot"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.reload()}>
+                  <RefreshCwIcon className="size-3.5" />
+                  Reload app
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={panelSide}
+                  onValueChange={(value) => {
+                    if (isDebugPanelSide(value)) {
+                      setPanelSide(value)
+                    }
+                  }}
+                >
+                  <DropdownMenuLabel>Dock</DropdownMenuLabel>
+                  <DropdownMenuRadioItem value="left">Left</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled>
+                  Toggle panel
+                <DropdownMenuShortcut>⌘/Ctrl+D</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-7"
+              onClick={() => setOpen(false)}
+              aria-label="Close debug panel"
+            >
+              <XIcon className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          if (isDebugPanelTab(value)) {
+            setActiveTab(value)
+          }
+        }}
+        className="min-h-0 flex-1 gap-0 px-3"
+      >
+        <TabsList className="-mx-3 grid h-9 w-[calc(100%+1.5rem)] grid-cols-4 justify-start border-y border-border/20 bg-muted p-0">
+          <TabsTrigger value="overview" className="h-9 rounded-none border-r border-border/20 px-2 text-[12px] font-medium">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="runtime" className="h-9 rounded-none border-r border-border/20 px-2 text-[12px] font-medium">
+            Runtime
+            {runtimeCount ? (
+              <Badge variant="secondary" className="ml-1 h-4 min-w-4 rounded-sm px-1 text-[10px]">
+                {runtimeCount}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="system" className="h-9 rounded-none border-r border-border/20 px-2 text-[12px] font-medium">
+            System
+          </TabsTrigger>
+          <TabsTrigger value="errors" className="h-9 rounded-none px-2 text-[12px] font-medium">
+            Errors
+            {errors.length ? (
+              <Badge variant="destructive" className="ml-1 h-4 min-w-4 rounded-sm px-1 text-[10px]">
+                {errors.length}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent
+          value="overview"
+          className={cn("min-h-0 flex-1 pt-2", isBottomDock ? "overflow-y-auto" : "overflow-hidden")}
+        >
+          <div className={overviewLayoutClassName}>
+            <DebugSection
+              title="App"
+              description="Static application metadata and current route."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Route", locationState.pathname || "/", { code: "window.location.pathname", origin: "web" }],
+                  ["URL", locationState.href || "Unavailable", { code: "window.location.href", origin: "web" }],
+                  ["Search", locationState.search || "(none)", { code: "window.location.search", origin: "web" }],
+                  ["Hash", locationState.hash || "(none)", { code: "window.location.hash", origin: "web" }],
+                  ["Bridge", tauriReady ? "Tauri" : "Web", { code: "isTauri()", origin: "tauri" }],
+                  ["Name", appInfo.name ?? "Unavailable", { code: "await getName()", origin: "tauri" }],
+                  ["Version", appInfo.version ?? "Unavailable", { code: "await getVersion()", origin: "tauri" }],
+                  ["Identifier", appInfo.identifier ?? "Unavailable", { code: "await getIdentifier()", origin: "tauri" }],
+                  ["Tauri", appInfo.tauriVersion ?? "Unavailable", { code: "await getTauriVersion()", origin: "tauri" }],
+                  ["Webview", windowInfo.label, { code: "getCurrentWebviewWindow().label", origin: "tauri" }],
+                  ["Shortcut", "Cmd/Ctrl + D"],
+                ]}
+              />
+            </DebugSection>
+
+            <DebugSection
+              title="Window"
+              description="Current Tauri window and monitor state."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Label", windowInfo.label, { code: "getCurrentWindow().label", origin: "tauri" }],
+                  ["Title", windowInfo.title ?? "Unavailable", { code: "await getCurrentWindow().title()", origin: "tauri" }],
+                  [
+                    "Viewport",
+                    windowInfo.viewportSize
+                      ? `${windowInfo.viewportSize.width} × ${windowInfo.viewportSize.height}`
+                      : "Unavailable",
+                    { code: "window.innerWidth × window.innerHeight", origin: "web" },
+                  ],
+                  [
+                    "Tauri inner",
+                    windowInfo.tauriInnerSize
+                      ? `${windowInfo.tauriInnerSize.width} × ${windowInfo.tauriInnerSize.height}`
+                      : "Unavailable",
+                    { code: "await getCurrentWindow().innerSize()", origin: "tauri" },
+                  ],
+                  [
+                    "Window outer",
+                    windowInfo.outerSize
+                      ? `${windowInfo.outerSize.width} × ${windowInfo.outerSize.height}`
+                      : "Unavailable",
+                    { code: "await getCurrentWindow().outerSize()", origin: "tauri" },
+                  ],
+                  [
+                    "Position",
+                    windowInfo.outerPosition
+                      ? `${windowInfo.outerPosition.x}, ${windowInfo.outerPosition.y}`
+                      : "Unavailable",
+                    { code: "await getCurrentWindow().outerPosition()", origin: "tauri" },
+                  ],
+                  ["Scale", windowInfo.scaleFactor ?? "Unavailable", { code: "await getCurrentWindow().scaleFactor()", origin: "tauri" }],
+                  ["Focused", String(windowInfo.focused), { code: "await getCurrentWindow().isFocused()", origin: "tauri" }],
+                  ["Visible", String(windowInfo.visible), { code: "await getCurrentWindow().isVisible()", origin: "tauri" }],
+                  ["Maximized", String(windowInfo.maximized), { code: "await getCurrentWindow().isMaximized()", origin: "tauri" }],
+                  ["Fullscreen", String(windowInfo.fullscreen), { code: "await getCurrentWindow().isFullscreen()", origin: "tauri" }],
+                  ["Decorated", String(windowInfo.decorated), { code: "await getCurrentWindow().isDecorated()", origin: "tauri" }],
+                  [
+                    "Monitor",
+                    windowInfo.monitor
+                      ? `${windowInfo.monitor.name ?? "Unknown"} (${windowInfo.monitor.size.width} × ${windowInfo.monitor.size.height})`
+                      : "Unavailable",
+                    { code: "await currentMonitor()", origin: "tauri" },
+                  ],
+                ]}
+              />
+            </DebugSection>
+
+            <DebugSection
+              title="Theme & A11y"
+              description="Theme state plus accessibility preferences from media queries."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Current", themeInfo.current, { code: 'document.documentElement.classList.contains("dark")', origin: "web" }],
+                  ["System", themeInfo.system, { code: 'matchMedia("(prefers-color-scheme: dark)")', origin: "web" }],
+                  ["HTML class", themeInfo.htmlClass || "(none)", { code: "document.documentElement.className", origin: "web" }],
+                  ["Color scheme", accessibilityDefaults.colorScheme, { code: 'matchMedia("(prefers-color-scheme: dark)")', origin: "web" }],
+                  ["Reduced motion", accessibilityDefaults.reducedMotion, { code: 'matchMedia("(prefers-reduced-motion: reduce)")', origin: "web" }],
+                  ["Contrast", accessibilityDefaults.contrast, { code: 'matchMedia("(prefers-contrast: more | less | custom)")', origin: "web" }],
+                  ["Forced colors", accessibilityDefaults.forcedColors, { code: 'matchMedia("(forced-colors: active)")', origin: "web" }],
+                  ["Inverted colors", accessibilityDefaults.invertedColors, { code: 'matchMedia("(inverted-colors: inverted)")', origin: "web" }],
+                  ["Transparency", accessibilityDefaults.reducedTransparency, { code: 'matchMedia("(prefers-reduced-transparency: reduce)")', origin: "web" }],
+                ]}
+              />
+            </DebugSection>
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="runtime"
+          className={cn("min-h-0 flex-1 pt-2", isBottomDock ? "overflow-y-auto" : "overflow-hidden")}
+        >
+          <div className={runtimeLayoutClassName}>
+            <DebugSection
+              title="Recent invoke() calls"
+              description="Calls captured through the tracked Tauri helper."
+              bodyClassName="min-h-0"
+            >
+              {invokeLogs.length ? (
+                <div
+                  className={cn(
+                    "space-y-1.5 overflow-y-auto pr-1",
+                    isBottomDock ? "h-full" : "max-h-72"
+                  )}
+                >
+                  {invokeLogs.map((entry) => {
+                    if (entry.kind !== "invoke") {
+                      return null
+                    }
+
+                    return (
+                      <div key={entry.id} className="rounded-md border border-border/20 bg-card p-2.5">
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <div className="font-mono text-[11px]">{entry.command}</div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={entry.status === "success" ? "secondary" : "destructive"}
+                              className="h-4 rounded-sm px-1 text-[10px]"
+                            >
+                              {entry.status}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {entry.durationMs} ms
+                            </span>
+                          </div>
+                        </div>
+                        <pre className="overflow-x-auto rounded-md bg-muted p-2 text-[10px] leading-4 break-words whitespace-pre-wrap">
+                          {JSON.stringify(
+                            {
+                              args: entry.args,
+                              result: entry.result,
+                              error: entry.error,
+                            },
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No tracked Tauri invocations yet.
+                </p>
+              )}
+            </DebugSection>
+
+            <DebugSection
+              title="Runtime events"
+              description="Recent Tauri window and emitted event activity."
+              bodyClassName="min-h-0"
+            >
+              {runtimeEvents.length ? (
+                <ul
+                  className={cn(
+                    "space-y-1.5 overflow-y-auto pr-1 text-[11px]",
+                    isBottomDock ? "h-full" : "max-h-72"
+                  )}
+                >
+                  {newestFirst(runtimeEvents).map((entry) => (
+                    <li key={entry.id} className="relative rounded-md border border-border/20 bg-card p-2.5">
+                      {highlightedRuntimeEventIds.includes(entry.id) ? <EntryHighlight /> : null}
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <span className="font-mono">{entry.name}</span>
+                        <Badge variant="outline" className="h-4 rounded-sm px-1 text-[10px]">
+                          {entry.source}
+                        </Badge>
+                      </div>
+                      <div className="mb-1.5 text-[10px] text-muted-foreground">
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                      {entry.payload !== undefined ? (
+                        <pre className="overflow-x-auto rounded-md bg-muted p-2 text-[10px] leading-4 break-words whitespace-pre-wrap">
+                          {JSON.stringify(entry.payload, null, 2)}
+                        </pre>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No captured runtime events yet.
+                </p>
+              )}
+            </DebugSection>
+
+            <DebugSection
+              title="Plugin logs"
+              description="Recent logs surfaced through the browser console and Tauri log plugin."
+              bodyClassName="min-h-0"
+            >
+              {logEntries.length ? (
+                <ul
+                  className={cn(
+                    "space-y-1.5 overflow-y-auto pr-1 text-[11px]",
+                    isBottomDock ? "h-full" : "max-h-72"
+                  )}
+                >
+                  {newestFirst(logEntries).map((entry) => {
+                    const parsed = parsePluginLogMessage(entry.message)
+
+                    return (
+                      <li key={entry.id} className="relative rounded-md border border-border/20 bg-card p-2.5">
+                        {highlightedLogIds.includes(entry.id) ? <EntryHighlight /> : null}
+                        {parsed ? (
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      "inline-flex rounded-sm border px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                      getLogLevelClasses(parsed.level)
+                                    )}
+                                  >
+                                    {parsed.level}
+                                  </span>
+                                  <span className="truncate font-mono text-[10px] text-muted-foreground">
+                                    {parsed.target}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right text-[10px] text-muted-foreground">
+                                <div>{parsed.time}</div>
+                                <div>{parsed.date}</div>
+                              </div>
+                            </div>
+                            <p className="font-mono break-words text-[11px] text-foreground">{parsed.text}</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mb-1 flex items-center justify-between gap-3">
+                              <Badge variant="outline" className="h-4 rounded-sm px-1 text-[10px]">
+                                {entry.level}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">
+                                {formatTimestamp(entry.timestamp)}
+                              </span>
+                            </div>
+                            <p className="font-mono break-words text-[11px] text-foreground">
+                              {entry.message}
+                            </p>
+                          </>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No captured plugin logs yet.
+                </p>
+              )}
+            </DebugSection>
+
+            <DebugSection
+              title="External links"
+              description="URLs intercepted by the external-link guard."
+              bodyClassName="min-h-0"
+            >
+              {externalLinks.length ? (
+                <ul
+                  className={cn(
+                    "space-y-1.5 overflow-y-auto pr-1 text-[11px]",
+                    isBottomDock ? "h-full" : "max-h-56"
+                  )}
+                >
+                  {externalLinks.map((href, index) => (
+                    <li key={`${href}-${index}`} className="flex gap-2 rounded-md border border-border/20 bg-card p-2">
+                      <ExternalLinkIcon className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+                      <span className="font-mono break-all">{href}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No external links opened yet.
+                </p>
+              )}
+            </DebugSection>
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="system"
+          className={cn("min-h-0 flex-1 pt-2", isBottomDock ? "overflow-y-auto" : "overflow-hidden")}
+        >
+          <div className={systemLayoutClassName}>
+            <DebugSection
+              title="Paths"
+              description="Resolved Tauri application directories."
+            >
+              <div className="space-y-1.5">
+                {([
+                  ["App data", pathInfo.appDataDir, "await appDataDir()"],
+                  ["App config", pathInfo.appConfigDir, "await appConfigDir()"],
+                  ["Resources", pathInfo.resourceDir, "await resourceDir()"],
+                ] as const).map(([label, value, code]) => (
+                  <div
+                    key={label}
+                    className="grid grid-cols-[92px_minmax(0,1fr)_auto] items-start gap-3 border-t border-border/20 py-1 text-[11px] first:border-t-0 first:pt-0"
+                  >
+                    <div className="text-muted-foreground">
+                      <GridLabel label={label} meta={{ code, origin: "tauri" }} />
+                    </div>
+                    <div className="font-mono break-all text-foreground">
+                      {value ?? "Unavailable"}
+                    </div>
+                    <Button variant="ghost" size="sm" disabled={!value} onClick={() => value && void handleCopyText(value)}>
+                      <CopyIcon className="size-3.5" />
+                      Copy
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </DebugSection>
+
+            <DebugSection
+              title="Display"
+              description="Viewport, screen, and media capability signals."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Viewport", displayDefaults.viewport, { code: "window.innerWidth × window.innerHeight", origin: "web" }],
+                  ["Screen", displayDefaults.screen, { code: "window.screen.width × window.screen.height", origin: "web" }],
+                  ["Available", displayDefaults.availableScreen, { code: "window.screen.availWidth × window.screen.availHeight", origin: "web" }],
+                  ["DPR", displayDefaults.devicePixelRatio, { code: "window.devicePixelRatio", origin: "web" }],
+                  ["Orientation", displayDefaults.orientation, { code: "window.screen.orientation?.type", origin: "web" }],
+                  ["Color gamut", displayDefaults.colorGamut, { code: 'matchMedia("(color-gamut: rec2020 | p3 | srgb)")', origin: "web" }],
+                  ["Dynamic range", displayDefaults.dynamicRange, { code: 'matchMedia("(dynamic-range: high)")', origin: "web" }],
+                  ["Monochrome", String(displayDefaults.monochrome), { code: 'matchMedia("(monochrome)")', origin: "web" }],
+                ]}
+              />
+            </DebugSection>
+
+            <DebugSection
+              title="Locale"
+              description="Host locale, timezone, calendar, and Intl formatting defaults."
+            >
+              <KeyValueGrid
+                entries={[
+                  [
+                    "Locale chain",
+                    localeDefaults.localeChain.length
+                      ? localeDefaults.localeChain.join(", ")
+                      : "Unavailable",
+                    { code: "[...navigator.languages, navigator.language]", origin: "web" },
+                  ],
+                  ["Navigator", localeDefaults.navigatorLanguage, { code: "navigator.language", origin: "web" }],
+                  ["Intl locale", localeDefaults.intlLocale, { code: "new Intl.DateTimeFormat().resolvedOptions().locale", origin: "web" }],
+                  ["Region", localeDefaults.region ?? "Unavailable", { code: "new Intl.Locale(locale).region", origin: "web" }],
+                  ["Time zone", localeDefaults.timeZone, { code: "new Intl.DateTimeFormat().resolvedOptions().timeZone", origin: "web" }],
+                  ["Calendar", localeDefaults.calendar, { code: "new Intl.DateTimeFormat().resolvedOptions().calendar", origin: "web" }],
+                  ["Numbering", localeDefaults.numberingSystem, { code: "new Intl.DateTimeFormat().resolvedOptions().numberingSystem", origin: "web" }],
+                  ["Hour cycle", localeDefaults.hourCycle, { code: "new Intl.DateTimeFormat().resolvedOptions().hourCycle", origin: "web" }],
+                  [
+                    "12-hour",
+                    localeDefaults.hour12 === null
+                      ? "Unavailable"
+                      : String(localeDefaults.hour12),
+                    { code: "new Intl.DateTimeFormat().resolvedOptions().hour12", origin: "web" },
+                  ],
+                  ["First day", localeDefaults.firstDayOfWeek, { code: "new Intl.Locale(locale).weekInfo?.firstDay", origin: "web" }],
+                  ["HTML lang", localeDefaults.documentLang, { code: "document.documentElement.lang", origin: "web" }],
+                  ["HTML dir", localeDefaults.documentDir, { code: "document.documentElement.dir", origin: "web" }],
+                ]}
+              />
+            </DebugSection>
+
+            <DebugSection
+              title="Input"
+              description="Pointer, touch, hover, and hardware defaults."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Platform", inputDefaults.platform, { code: "navigator.userAgentData?.platform ?? navigator.platform", origin: "web" }],
+                  ["Pointer", inputDefaults.pointer, { code: 'matchMedia("(pointer: fine | coarse)")', origin: "web" }],
+                  ["Any pointer", inputDefaults.anyPointer, { code: 'matchMedia("(any-pointer: fine | coarse)")', origin: "web" }],
+                  ["Hover", String(inputDefaults.hover), { code: 'matchMedia("(hover: hover)")', origin: "web" }],
+                  ["Any hover", String(inputDefaults.anyHover), { code: 'matchMedia("(any-hover: hover)")', origin: "web" }],
+                  ["Touch points", inputDefaults.maxTouchPoints, { code: "navigator.maxTouchPoints", origin: "web" }],
+                  ["Touch capable", String(inputDefaults.touchCapable), { code: 'maxTouchPoints > 0 || matchMedia("(pointer: coarse)") || "ontouchstart" in window', origin: "web" }],
+                  [
+                    "CPU threads",
+                    inputDefaults.hardwareConcurrency ?? "Unavailable",
+                    { code: "navigator.hardwareConcurrency", origin: "web" },
+                  ],
+                  [
+                    "Device memory",
+                    inputDefaults.deviceMemory === null
+                      ? "Unavailable"
+                      : `${inputDefaults.deviceMemory} GB`,
+                    { code: "navigator.deviceMemory", origin: "web" },
+                  ],
+                  ["User agent", inputDefaults.userAgent, { code: "navigator.userAgent", origin: "web" }],
+                ]}
+              />
+            </DebugSection>
+
+            <DebugSection
+              title="Network"
+              description="Online state and connection quality hints from the browser."
+            >
+              <KeyValueGrid
+                entries={[
+                  ["Online", String(networkDefaults.online), { code: "navigator.onLine", origin: "web" }],
+                  ["Effective type", networkDefaults.effectiveType, { code: "navigator.connection?.effectiveType", origin: "web" }],
+                  [
+                    "Save-Data",
+                    networkDefaults.saveData === null
+                      ? "Unavailable"
+                      : String(networkDefaults.saveData),
+                    { code: "navigator.connection?.saveData", origin: "web" },
+                  ],
+                  [
+                    "Downlink",
+                    networkDefaults.downlink === null
+                      ? "Unavailable"
+                      : `${networkDefaults.downlink} Mbps`,
+                    { code: "navigator.connection?.downlink", origin: "web" },
+                  ],
+                  [
+                    "RTT",
+                    networkDefaults.rtt === null
+                      ? "Unavailable"
+                      : `${networkDefaults.rtt} ms`,
+                    { code: "navigator.connection?.rtt", origin: "web" },
+                  ],
+                ]}
+              />
+            </DebugSection>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="errors" className="min-h-0 flex-1 overflow-hidden pt-2">
+          <div className="h-full overflow-y-auto pr-1">
+            <DebugSection
+              title="Recent errors"
+              description="Uncaught runtime errors and unhandled promise rejections."
+            >
+              {errors.length ? (
+                <ul className="space-y-1.5 text-[11px]">
+                  {errors.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="rounded-md border border-border/20 bg-card p-2.5"
+                    >
+                      <div className="mb-1 flex items-center gap-2">
+                        <AlertTriangleIcon className="size-3.5 text-destructive" />
+                        <span className="font-medium">{entry.source}</span>
+                        <span className="text-muted-foreground">
+                          {formatTimestamp(entry.timestamp)}
+                        </span>
+                      </div>
+                      <p className="break-words text-muted-foreground">
+                        {entry.message}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No captured runtime errors.
+                </p>
+              )}
+            </DebugSection>
+          </div>
+        </TabsContent>
+
+      </Tabs>
+    </>
+  )
+
+  const panelFrameClassName = cn(
+    "ui-selectable fixed z-50 flex overflow-hidden border border-border/25 bg-background text-[12px] text-foreground",
+    panelSide === "bottom"
+      ? "inset-x-0 bottom-0 flex-col border-t"
+      : panelSide === "left"
+        ? "top-0 left-0 h-full flex-col border-r"
+        : "top-0 right-0 h-full flex-col border-l"
+  )
+
+  return (
+    <TooltipProvider delay={200}>
+      <DebugPanelThemeContext.Provider value={debugPanelThemeStyle}>
+        {open ? (
+          <div
+            className={panelFrameClassName}
+            style={
+              panelSide === "bottom"
+                ? { ...debugPanelThemeStyle, height: `${BOTTOM_PANEL_HEIGHT}px` }
+                : { ...debugPanelThemeStyle, width: `${SIDE_PANEL_WIDTH}px` }
+            }
+          >
+            {panelContent}
+          </div>
+        ) : null}
+      </DebugPanelThemeContext.Provider>
+    </TooltipProvider>
+  )
+}

@@ -8,7 +8,7 @@ language = "en"
 
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
-output_folder = "assets/output"
+output_folder = "output"
 default_wallpaper = ""
 
 [display]

@@ -18,7 +18,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw
 from ttkbootstrap.constants import *
 
-from .config import load_config, resolve_path, save_config
+from .config import load_config, resolve_output_dir, resolve_path, save_config
 from .hotkeys import HotkeyManager, read_hotkey
 from .hotkeys import is_available as hotkeys_available
 from .i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
@@ -1358,7 +1358,7 @@ class WallpaperChangerApp(ttk.Window):
         def _work() -> None:
             try:
                 save_config(cfg)
-                out_dir = resolve_path(cfg["paths"]["output_folder"])
+                out_dir = resolve_output_dir(cfg)
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, images_used = apply_wallpaper(cfg, monitors, out_dir)
                 self._post_ui(self._apply_succeeded, out, images_used, cfg)
@@ -1441,7 +1441,7 @@ class WallpaperChangerApp(ttk.Window):
 
         def _work() -> None:
             try:
-                out_dir = resolve_path(cfg["paths"]["output_folder"])
+                out_dir = resolve_output_dir(cfg)
                 out_dir.mkdir(parents=True, exist_ok=True)
                 out, _ = apply_wallpaper(cfg, monitors, out_dir, preset_images=images)
                 self._post_ui(
@@ -1467,7 +1467,7 @@ class WallpaperChangerApp(ttk.Window):
 
         def _work() -> None:
             try:
-                out_dir = resolve_path(cfg["paths"]["output_folder"])
+                out_dir = resolve_output_dir(cfg)
                 out_dir.mkdir(parents=True, exist_ok=True)
                 fit        = cfg["display"]["fit_mode"]
                 effect     = cfg["display"].get("effect", "normal")
