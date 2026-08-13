@@ -38,7 +38,7 @@
     },
     "description": "Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed.",
     "url": "https://wallpaper.astrofocus.app/",
-    "softwareVersion": "5.0",
+    "softwareVersion": "5.1",
     "downloadUrl": "https://github.com/klysman08/wallpaper-changer-windows/releases",
     "license": "https://opensource.org/licenses/MIT"
   }
@@ -117,7 +117,7 @@
   <section id="hero">
     <div class="container hero-container">
       <div class="hero-text">
-        <div class="badge">v5.0 · MIT License · Free Forever</div>
+        <div class="badge">v5.1 · MIT License · Free Forever</div>
         <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
         <p class="hero-sub">
           Multi-monitor collage mode, <strong>live video wallpapers</strong>, a preview you can zoom into monitor by
@@ -649,7 +649,7 @@
             <div class="step-num">1</div>
             <div class="step-body">
               <h4>Download the installer</h4>
-              <p>Grab the latest <code>Wallpaper Changer_x64-setup.exe</code> from the GitHub Releases page. An
+              <p>Grab the latest <code>Wallpaper Changer_5.1.0_x64-setup.exe</code> from the GitHub Releases page. An
                 <code>.msi</code> is published alongside it if your organisation prefers one.</p>
               <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
                 target="_blank" rel="noopener">
@@ -855,12 +855,12 @@ bun run tauri dev
       <div class="section-label">Changelog</div>
       <h2 class="section-title">Release <span class="gradient-text">history.</span></h2>
       <div class="timeline">
-        <div class="timeline-item">
+        <div class="timeline-item current">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
               <span class="version-tag">v5.1</span>
-              <span class="version-label">In development</span>
+              <span class="version-label current-label">Latest</span>
             </div>
             <ul class="change-list">
               <li>Starts with Windows straight into the tray — enabled on first run, one switch away from off</li>
@@ -870,15 +870,16 @@ bun run tauri dev
                 fill the window, and apply exactly the images on screen</li>
               <li>Start/stop rotation added to the tray menu, so the window is never required</li>
               <li>Animated screen transitions and card reveals, dropped under reduced-motion</li>
+              <li>Version numbers now match the release — v5.0 shipped its files as <code>0.1.0</code>, so Windows saw
+                an upgrade as the same version</li>
             </ul>
           </div>
         </div>
-        <div class="timeline-item current">
+        <div class="timeline-item">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
               <span class="version-tag">v5.0</span>
-              <span class="version-label current-label">Latest</span>
             </div>
             <ul class="change-list">
               <li>Rebuilt the interface on Tauri 2, React, and shadcn/ui — the tkinter GUI is gone</li>
