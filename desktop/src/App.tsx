@@ -60,6 +60,9 @@ export function App() {
   const [engineDown, setEngineDown] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [section, setSection] = React.useState<SectionId>("wallpaper")
+  // Bumped after every successful save. Screens that show engine-side state the
+  // save changes (the scroll hook) re-read it when this moves.
+  const [savedAt, setSavedAt] = React.useState(0)
   // One copy of the running state, shared by the footer bar and the tabs.
   const actions = useActions(cfg.config, i18n.t)
 
@@ -89,6 +92,7 @@ export function App() {
     setSaving(true)
     try {
       await cfg.save()
+      setSavedAt((n) => n + 1)
       // Rust owns the shortcuts, so it has to re-read them for an edit to take
       // effect without a restart.
       const failed = await reloadHotkeys()
@@ -230,7 +234,14 @@ export function App() {
               onChange={cfg.set}
             />
           )}
-          {section === "transparency" && <TransparencyTab i18n={i18n} />}
+          {section === "transparency" && (
+            <TransparencyTab
+              config={config}
+              i18n={i18n}
+              savedAt={savedAt}
+              onChange={cfg.set}
+            />
+          )}
           {section === "hotkeys" && (
             <HotkeysTab
               config={config}

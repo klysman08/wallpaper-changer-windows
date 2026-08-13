@@ -84,7 +84,9 @@ export function HotkeysTab({ config, i18n, onChange }: Props) {
         <p className="mb-2 text-sm text-muted-foreground">{t("hotkey_none_hint")}</p>
         {BINDINGS.map(({ key, labelKey }) => {
           const isRecording = recording === key
-          const combo = config.hotkeys[key] ?? ""
+          // Everything in BINDINGS is a shortcut string; the scroll_* keys that
+          // share this table are not listed here.
+          const combo = String(config.hotkeys[key] ?? "")
           return (
             <div key={key} className="flex items-center justify-between gap-4">
               {/* Several of these keys are shared with the old GUI, whose layout

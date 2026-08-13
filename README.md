@@ -12,7 +12,7 @@
 
 ---
 
-![WallpaperChanger managing collage and live video wallpapers across three monitors](docs/wallpaper-changer-hero.webp)
+![WallpaperChanger managing collage and live video wallpapers across three monitors](og.png)
 
 ## Why WallpaperChanger?
 
@@ -71,7 +71,7 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 - **Native Fade Transitions**: lets Windows apply its built-in wallpaper fade, with no custom animation loop or desktop flicker.
 - **Action Bar**: a persistent bar at the bottom of every screen for apply, previous, next, rotation, and video playback.
 - **Auto-Rotation**: watch cycles rotate your backgrounds at a set interval.
-- **Window Transparency**: slider control, a toggle hotkey, or modifier-plus-scroll adjustment for any window.
+- **Window Transparency**: slider control, a toggle hotkey, or hold a modifier of your choice (`Alt`, `Ctrl`, `Shift`, `Win`) and scroll the wheel to fade the focused window.
 - **Global Hotkeys**: nothing is bound out of the box - assign only the shortcuts you want, from the Hotkeys screen.
 - **System Tray**: closing hides to the notification area, with a right-click menu for the common actions.
 - **Start with Windows**: a runtime toggle, so it can be turned on and off without reinstalling.
@@ -138,8 +138,9 @@ Switch rendering styles on the current collage:
 
 ### 3. Window Transparency
 
-- Adjust alpha (50 to 255) for any open window.
-- Hold your chosen modifier (`Alt`, `Ctrl`, `Shift`, `Win`) and scroll to fade the window under the cursor.
+- Adjust alpha (20 to 255) for any open window with the slider.
+- **Scroll to adjust**: turn it on from the Transparency screen, pick `Alt`, `Ctrl`, `Shift`, or `Win`, then hold that key and turn the wheel to fade the focused window. Off by default, because it installs a system-wide mouse hook.
+- Opacity is remembered per executable, not per window, so it survives closing and reopening the application.
 - Settings persist in `transparency.json` under `%APPDATA%\WallpaperChanger\`.
 
 ---
@@ -231,7 +232,10 @@ stop_watch          = ""
 default_wallpaper   = ""
 toggle_transparency = ""
 toggle_window       = ""
-scroll_modifier     = "alt"           # not a shortcut: alt | ctrl | shift | win
+# Not shortcuts: hold scroll_modifier and turn the wheel to fade the focused
+# window. Off by default because it installs a system-wide mouse hook.
+scroll_enabled      = false
+scroll_modifier     = "alt"           # alt | ctrl | shift | win
 effect_normal       = ""
 effect_bw           = ""
 effect_vintage      = ""

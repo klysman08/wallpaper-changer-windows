@@ -45,8 +45,21 @@ export interface Config {
     default_wallpaper: string
   }
   display: { fit_mode: FitMode; effect: Effect }
-  hotkeys: Record<string, string>
+  hotkeys: Hotkeys
   video: { enabled: boolean; folder: string; loop: boolean; sound: boolean }
+}
+
+/**
+ * The `[hotkeys]` table.
+ *
+ * Mostly shortcut strings, where empty means unbound. The two `scroll_*` keys are
+ * not shortcuts — they configure modifier+wheel transparency, and live here
+ * because that is where the engine and the legacy GUI both read them from.
+ */
+export interface Hotkeys {
+  [binding: string]: string | boolean | undefined
+  scroll_modifier?: ScrollModifier
+  scroll_enabled?: boolean
 }
 
 export interface ConfigResult {
@@ -59,6 +72,20 @@ export interface Capabilities {
   effects: Effect[]
   has_mpv: boolean
   startup_enabled: boolean
+  has_scroll_transparency: boolean
+}
+
+export type ScrollModifier = "alt" | "ctrl" | "shift" | "win"
+
+export interface ScrollTransparencyStatus {
+  /** What the config asks for. */
+  enabled: boolean
+  /** Whether the hook is actually installed — these differ on failure. */
+  running: boolean
+  available: boolean
+  modifier: ScrollModifier
+  modifiers: ScrollModifier[]
+  step: number
 }
 
 export interface PreviewResult {
@@ -160,6 +187,11 @@ export const engine = {
   saveOpacitySettings: (settings: Record<string, number>) =>
     call<{ saved: boolean }>("save_opacity_settings", { settings }),
 
+  scrollTransparencyStatus: () =>
+    call<ScrollTransparencyStatus>("scroll_transparency_status"),
+  /** Re-read the saved settings and install or remove the hook to match. */
+  syncScrollTransparency: () => call<ScrollTransparencyStatus>("sync_scroll_transparency"),
+
   scanVideos: (folder: string) => call<{ count: number; videos: string[] }>("scan_videos", { folder }),
   videoStart: (config?: Partial<Config>) => call<VideoStatus>("video_start", { config }),
   videoStop: () => call<VideoStatus>("video_stop"),
@@ -194,6 +226,10 @@ export type EngineEvent =
   | { event: "stopped"; data: Record<string, never> }
   | { event: "wallpaper_applied"; data: ApplyResult }
   | { event: "video_status"; data: { current: string } }
+  | {
+      event: "transparency_changed"
+      data: { hwnd: number; process: string; alpha: number }
+    }
   | { event: "error"; data: { source: string; message: string } }
 
 /** Subscribe to unsolicited engine events. Returns the unlisten function. */

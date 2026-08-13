@@ -57,6 +57,7 @@ The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the C
 - `src/wallpaper_changer/gui.py` — large ttkbootstrap GUI (~56 KB); includes hotkey recorder, transparency slider, system tray wiring
 - `src/wallpaper_changer/image_utils.py` — `fit_mode` logic and JSON state for image selection history
 - `src/wallpaper_changer/hotkeys.py` — global hotkey registration via `keyboard` lib; hotkeys defined in `settings.toml`
+- `src/wallpaper_changer/scroll_transparency.py` — modifier+wheel window fading. A `pynput` mouse listener gated on `GetAsyncKeyState`, owned by the engine and driven by `hotkeys.scroll_enabled` / `hotkeys.scroll_modifier`. `rpc.py` syncs it on boot and on every `save_config`, so the hook follows the setting without a restart. `pynput` resolves its backend dynamically, so the spec needs the `pynput.*` hidden imports and `build_engine.ps1` asserts `has_scroll_transparency` on the frozen binary.
 - `src/wallpaper_changer/i18n.py` — `t()` decorator used throughout; supported languages: `en`, `pt_BR`, `ja`
 - `src/wallpaper_changer/notifications.py` — Windows toast notifications via `win10toast`
 

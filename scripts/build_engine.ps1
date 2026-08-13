@@ -62,7 +62,8 @@ Write-Host '==> Verifying the frozen sidecar speaks the protocol' -ForegroundCol
 $probes = @(
     @{ Name = 'ping'; Json = '{"id":1,"method":"ping"}' },
     @{ Name = 'get_config'; Json = '{"id":2,"method":"get_config"}' },
-    @{ Name = 'get_monitors'; Json = '{"id":3,"method":"get_monitors"}' }
+    @{ Name = 'get_monitors'; Json = '{"id":3,"method":"get_monitors"}' },
+    @{ Name = 'get_capabilities'; Json = '{"id":4,"method":"get_capabilities"}' }
 )
 $script = ($probes | ForEach-Object { $_.Json }) -join "`n"
 $responses = @($script | & $exePath 2>$null)
@@ -73,6 +74,16 @@ foreach ($probe in $probes) {
     }
     Write-Host "    $($probe.Name) ok" -ForegroundColor Green
 }
+
+# A capability answering "false" is a successful call, so the loop above cannot see
+# it. pynput picks its backend dynamically, which is exactly the kind of import
+# PyInstaller misses, and the only symptom would be a switch that silently does
+# nothing once installed.
+$caps = $responses | Where-Object { $_ -match '"id":\s*4\b' } | Select-Object -First 1
+if ($caps -notmatch '"has_scroll_transparency":\s*true') {
+    throw "Frozen sidecar has no scroll transparency (pynput missing from hiddenimports). Got: $caps"
+}
+Write-Host '    scroll transparency ok' -ForegroundColor Green
 
 Write-Host "==> Staging into $targetDir" -ForegroundColor Cyan
 if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force }

@@ -1,22 +1,60 @@
 import * as React from "react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import { engine, type WindowInfo } from "@/lib/engine"
+import { Switch } from "@/components/ui/switch"
+import {
+  engine,
+  onEngineEvent,
+  type Config,
+  type ScrollModifier,
+  type ScrollTransparencyStatus,
+  type WindowInfo,
+} from "@/lib/engine"
 import type { I18n } from "@/lib/use-i18n"
 import { cn } from "@/lib/utils"
 
 const FULLY_OPAQUE = 255
 
-export function TransparencyTab({ i18n }: { i18n: I18n }) {
+/** Display names for the modifiers the engine accepts. */
+const MODIFIER_LABELS: Record<ScrollModifier, string> = {
+  alt: "Alt",
+  ctrl: "Ctrl",
+  shift: "Shift",
+  win: "Win",
+}
+
+interface Props {
+  config: Config
+  i18n: I18n
+  /** Bumped by the shell after each save, when the engine re-syncs the hook. */
+  savedAt: number
+  onChange: <S extends keyof Config, K extends keyof Config[S]>(
+    section: S,
+    key: K,
+    value: Config[S][K],
+  ) => void
+}
+
+export function TransparencyTab({ config, i18n, savedAt, onChange }: Props) {
   const { t } = i18n
   const [windows, setWindows] = React.useState<WindowInfo[]>([])
   const [selected, setSelected] = React.useState<WindowInfo | null>(null)
   const [alpha, setAlpha] = React.useState(FULLY_OPAQUE)
   const [saved, setSaved] = React.useState<Record<string, number>>({})
+  const [scroll, setScroll] = React.useState<ScrollTransparencyStatus | null>(null)
 
   const refresh = React.useCallback(async () => {
     try {
@@ -34,6 +72,33 @@ export function TransparencyTab({ i18n }: { i18n: I18n }) {
   React.useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Re-read after every save: the engine installs or removes the hook there, and
+  // the badge would otherwise keep claiming whatever was true at mount.
+  React.useEffect(() => {
+    void engine.scrollTransparencyStatus().then(setScroll).catch(() => {})
+  }, [savedAt])
+
+  React.useEffect(() => {
+    // Scrolling edits the same opacity map this screen shows, so follow it live
+    // rather than letting the list go stale behind the user's back.
+    const unlisten = onEngineEvent((event) => {
+      if (event.event !== "transparency_changed") return
+      const { process, alpha: next } = event.data
+      setSaved((prev) => ({ ...prev, [process]: next }))
+      setSelected((sel) => {
+        if (sel?.process === process) setAlpha(next)
+        return sel
+      })
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  const scrollEnabled = config.hotkeys.scroll_enabled ?? false
+  const scrollModifier = config.hotkeys.scroll_modifier ?? "alt"
+  const scrollUnavailable = scroll !== null && !scroll.available
 
   function select(win: WindowInfo) {
     setSelected(win)
@@ -61,6 +126,68 @@ export function TransparencyTab({ i18n }: { i18n: I18n }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>{t("scroll_transparency")}</CardTitle>
+          {/* The switch is what the config asks for; this says what is actually
+              installed, which is the difference that matters when it fails. */}
+          {scroll?.running && <Badge>{t("active")}</Badge>}
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            {t("scroll_transparency_hint", {
+              modifier: MODIFIER_LABELS[scrollModifier as ScrollModifier] ?? scrollModifier,
+            })}
+          </p>
+
+          {scrollUnavailable && (
+            <p className="text-sm text-destructive">{t("scroll_unavailable")}</p>
+          )}
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="scroll-enabled" className="font-normal">
+              {t("scroll_enable")}
+            </Label>
+            <Switch
+              id="scroll-enabled"
+              checked={scrollEnabled}
+              disabled={scrollUnavailable}
+              onCheckedChange={(v) => onChange("hotkeys", "scroll_enabled", v)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="font-normal text-muted-foreground">
+              {t("scroll_modifier_label")}
+            </Label>
+            <Select
+              value={scrollModifier}
+              disabled={!scrollEnabled || scrollUnavailable}
+              onValueChange={(v) =>
+                v && onChange("hotkeys", "scroll_modifier", v as ScrollModifier)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue>
+                  {(v) => MODIFIER_LABELS[String(v) as ScrollModifier] ?? String(v ?? "")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(scroll?.modifiers ?? (["alt", "ctrl", "shift", "win"] as ScrollModifier[])).map(
+                  (m) => (
+                    <SelectItem key={m} value={m}>
+                      {MODIFIER_LABELS[m] ?? m}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-xs text-muted-foreground">{t("scroll_takes_effect_on_save")}</p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>{t("open_windows")}</CardTitle>

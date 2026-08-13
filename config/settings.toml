@@ -26,8 +26,10 @@ stop_watch = ""
 default_wallpaper = ""
 toggle_transparency = ""
 toggle_window = ""
-# Not a shortcut: the modifier held while scrolling to change window transparency.
-scroll_modifier = "alt"
+# Not shortcuts. Hold scroll_modifier and turn the wheel to fade the focused
+# window. Off by default because it installs a system-wide mouse hook.
+scroll_enabled = false
+scroll_modifier = "alt"          # alt | ctrl | shift | win
 effect_normal = ""
 effect_bw = ""
 effect_vintage = ""
