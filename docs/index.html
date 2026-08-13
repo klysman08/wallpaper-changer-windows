@@ -5,24 +5,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="WallpaperChanger — The most powerful free collage & live video wallpaper manager for Windows. Multi-monitor, live preview, auto-rotation, multi-language, zero bloat." />
-  <meta name="keywords" content="wallpaper manager, windows wallpaper, multi-monitor wallpaper, collage wallpaper, video wallpaper, live wallpaper, animated wallpaper, dual monitor wallpaper, free wallpaper app, open-source wallpaper" />
+    content="WallpaperChanger — The modern multi-monitor collage and live video wallpaper manager for Windows 10 and 11. Built with Tauri v2, React 19, and shadcn/ui." />
+  <meta name="keywords"
+    content="wallpaper manager, windows wallpaper, multi-monitor wallpaper, collage wallpaper, video wallpaper, live wallpaper, animated wallpaper, dual monitor wallpaper, free wallpaper app, open-source wallpaper, tauri, shadcn ui" />
   <link rel="canonical" href="https://wallpaper.astrofocus.app/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://wallpaper.astrofocus.app/" />
   <meta property="og:site_name" content="WallpaperChanger" />
-  <meta property="og:title" content="WallpaperChanger for Windows" />
-  <meta property="og:description" content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed." />
+  <meta property="og:title" content="WallpaperChanger — Multi-Monitor Wallpaper Manager for Windows" />
+  <meta property="og:description"
+    content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed. Built with Tauri v2 and shadcn/ui." />
+  <meta property="og:image" content="https://wallpaper.astrofocus.app/wallpaper-changer-hero.png" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:url" content="https://wallpaper.astrofocus.app/" />
   <meta name="twitter:title" content="WallpaperChanger for Windows" />
-  <meta name="twitter:description" content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed." />
+  <meta name="twitter:description"
+    content="Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed." />
+  <meta name="twitter:image" content="https://wallpaper.astrofocus.app/wallpaper-changer-hero.png" />
 
   <title>WallpaperChanger — Multi-Monitor Wallpaper Manager for Windows</title>
+
+  <!-- Prevent theme flicker before paint -->
+  <script>
+    (function () {
+      try {
+        const savedTheme = localStorage.getItem('theme');
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) { }
+    })();
+  </script>
 
   <script type="application/ld+json">
   {
@@ -43,806 +63,1178 @@
     "license": "https://opensource.org/licenses/MIT"
   }
   </script>
+
+  <link rel="icon" type="image/png" href="icon.png" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Pixelify+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet" />
 </head>
 
 <body>
 
-  <!-- ─── NAVIGATION ─── -->
-  <nav id="navbar">
-    <div class="nav-inner">
+  <!-- ─── NAVIGATION BAR ─── -->
+  <header id="navbar">
+    <div class="container nav-inner">
       <a href="#" class="nav-logo">
-        <span class="logo-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" stroke-width="2" stroke-linecap="square">
-            <rect x="2" y="3" width="20" height="13" rx="1" fill="var(--primary)" stroke="var(--border-color)" stroke-width="2"/>
-            <rect x="5" y="6" width="14" height="7" fill="var(--accent-light)"/>
-            <path d="M10 16v3h4v-3" stroke="var(--border-color)" stroke-width="2" fill="none"/>
-            <path d="M8 19h8" stroke="var(--border-color)" stroke-width="2"/>
-          </svg>
-        </span>
-        <span class="logo-text">WallpaperChanger</span>
+        <img src="icon.png" alt="WallpaperChanger Icon" class="nav-logo-icon" />
+        <span>WallpaperChanger</span>
       </a>
+
       <ul class="nav-links">
         <li><a href="#features">Features</a></li>
         <li><a href="#preview">Preview</a></li>
         <li><a href="#stack">Stack</a></li>
         <li><a href="#install">Install</a></li>
         <li><a href="#cli">CLI</a></li>
+        <li><a href="#hotkeys">Hotkeys</a></li>
         <li><a href="#changelog">Changelog</a></li>
-        <li>
-          <a href="https://github.com/klysman08/wallpaper-changer-windows" class="nav-github" target="_blank"
-            rel="noopener">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path
-                d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-            </svg>
-            GitHub
-          </a>
-        </li>
-        <li class="nav-controls">
-          <button id="themeToggle" class="nav-icon-btn" aria-label="Toggle dark mode" title="Toggle Theme (T)">
-            <svg class="sun-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
-              <circle cx="12" cy="12" r="4" fill="var(--accent)"></circle>
-              <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M19.07 4.93l-1.41 1.41M6.34 17.66l-1.41 1.41M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"/>
-            </svg>
-            <svg class="moon-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" style="display: none;">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="var(--accent)"/>
-            </svg>
-          </button>
-          <button id="soundToggle" class="nav-icon-btn" aria-label="Toggle sound effects" title="Toggle Sound (S)">
-            <svg class="sound-on-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-            </svg>
-            <svg class="sound-off-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" style="display: none;">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>
-              <line x1="23" y1="9" x2="17" y2="15"/>
-              <line x1="17" y1="9" x2="23" y2="15"/>
-            </svg>
-          </button>
-        </li>
       </ul>
-      <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-  </nav>
 
-  <!-- ─── HERO ─── -->
-  <section id="hero">
-    <div class="container hero-container">
-      <div class="hero-text">
-        <div class="badge">v5.1 · MIT License · Free Forever</div>
-        <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
-        <p class="hero-sub">
-          Multi-monitor collage mode, <strong>live video wallpapers</strong>, a preview you can zoom into monitor by
-          monitor, auto-rotation, global hotkeys, system tray — completely free and open-source. No subscriptions. No
-          ads. No telemetry.
-        </p>
-        <div class="hero-actions">
-          <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
-            target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download Installer
-          </a>
-          <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline" target="_blank"
-            rel="noopener">
-            View on GitHub
-          </a>
-        </div>
-        <div class="hero-badges">
-          <img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white"
-            alt="Tauri 2" />
-          <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black"
-            alt="React 19" />
-          <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white"
-            alt="Python 3.11+" />
-          <img
-            src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white"
-            alt="Windows 10/11" />
-          <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License" />
-        </div>
+      <div class="nav-actions">
+        <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline btn-sm"
+          target="_blank" rel="noopener noreferrer" title="View Source on GitHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+          </svg>
+          <span>GitHub</span>
+        </a>
+
+        <!-- Sound Toggle Button -->
+        <button id="soundToggle" class="btn-icon" aria-label="Toggle sound effects (S)" title="Toggle sound effects (S)">
+          <svg id="soundOnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+          <svg id="soundOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="22" x2="16" y1="9" y2="15"></line>
+            <line x1="16" x2="22" y1="9" y2="15"></line>
+          </svg>
+        </button>
+
+        <!-- Theme Toggle Button -->
+        <button id="themeToggle" class="btn-icon" aria-label="Toggle color theme (T)" title="Toggle color theme (T)">
+          <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+          </svg>
+        </button>
+
+        <button id="navToggle" class="nav-toggle" aria-label="Toggle navigation menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" x2="20" y1="12" y2="12"></line>
+            <line x1="4" x2="20" y1="6" y2="6"></line>
+            <line x1="4" x2="20" y1="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
-      <div class="hero-visual">
-        <div class="retro-monitor-casing">
-          <div class="monitor-screen-bezel">
-            <img src="wallpaper-changer-hero.webp"
-              alt="WallpaperChanger managing collage and live video wallpapers across three monitors"
-              class="hero-illustration" />
-            <div class="crt-scanlines"></div>
+    </div>
+  </header>
+
+  <!-- Mobile Drawer Navigation -->
+  <div id="mobileNavOverlay" class="mobile-nav-overlay"></div>
+  <div id="mobileNavDrawer" class="mobile-nav-drawer">
+    <div class="mobile-nav-links">
+      <a href="#features">Features</a>
+      <a href="#preview">Preview</a>
+      <a href="#stack">Stack</a>
+      <a href="#install">Install</a>
+      <a href="#cli">CLI</a>
+      <a href="#hotkeys">Hotkeys</a>
+      <a href="#changelog">Changelog</a>
+    </div>
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+      <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary" target="_blank">
+        Download Latest Release
+      </a>
+      <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline" target="_blank">
+        View on GitHub
+      </a>
+    </div>
+  </div>
+
+  <!-- ─── 2-COLUMN HERO SECTION ─── -->
+  <section id="hero">
+    <div class="container">
+      <div class="hero-layout-2col">
+        <!-- Left Column: Content & Actions -->
+        <div class="hero-content-col">
+          <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="hero-badge-link" target="_blank" rel="noopener">
+            <span class="badge badge-primary">v5.1 Release</span>
+            <span>Rebuilt on Tauri v2 &amp; shadcn/ui</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14"></path>
+              <path d="m12 5 7 7-7 7"></path>
+            </svg>
+          </a>
+
+          <h1 class="hero-title">
+            The wallpaper manager<br />
+            <span class="gradient-text">Windows deserves.</span>
+          </h1>
+
+          <p class="hero-subtitle">
+            Multi-monitor collage mode, <strong>live video wallpapers</strong> via libmpv, zoomable live preview, auto-rotation, global hotkeys, and system tray — completely free and open-source.
+          </p>
+
+          <div class="hero-actions">
+            <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download Installer
+            </a>
+            <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+              </svg>
+              View on GitHub
+            </a>
           </div>
-          <div class="monitor-stand-neck"></div>
-          <div class="monitor-stand-base"></div>
+
+          <div class="hero-tech-badges">
+            <span class="tech-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+              Tauri 2
+            </span>
+            <span class="tech-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6Z"/></svg>
+              React 19
+            </span>
+            <span class="tech-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+              shadcn/ui
+            </span>
+            <span class="tech-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Python 3.11+
+            </span>
+            <span class="tech-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+              Win 10/11
+            </span>
+          </div>
+
+          <div class="hero-highlights-row">
+            <div class="hero-highlight-card">
+              <span class="hero-highlight-val">30 FPS</span>
+              <span class="hero-highlight-lbl">Smooth Fade Crossfade</span>
+            </div>
+            <div class="hero-highlight-card">
+              <span class="hero-highlight-val">1–8 Grid</span>
+              <span class="hero-highlight-lbl">Dynamic Collage Per Display</span>
+            </div>
+            <div class="hero-highlight-card">
+              <span class="hero-highlight-val">0 Telemetry</span>
+              <span class="hero-highlight-lbl">100% Free &amp; Open Source</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Live App Mockup Window -->
+        <div class="hero-visual-col">
+          <div class="mockup-container">
+            <!-- Titlebar -->
+            <div class="mockup-titlebar">
+              <div class="mockup-titlebar-left">
+                <div class="mockup-window-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <span class="mockup-window-title">Wallpaper Changer — Multi-Monitor Desktop App</span>
+              </div>
+              <div class="mockup-window-actions">
+                <span>🗕</span>
+                <span>🗖</span>
+                <span>✕</span>
+              </div>
+            </div>
+
+            <!-- App Body (Sidebar + Content) -->
+            <div class="mockup-shell">
+              <!-- Sidebar (Mirrors desktop/src/App.tsx) -->
+              <aside class="mockup-sidebar">
+                <div>
+                  <div class="mockup-sidebar-header">
+                    <img src="icon.png" alt="WallpaperChanger Icon" />
+                    <div class="mockup-sidebar-meta">
+                      <span class="mockup-sidebar-title">Wallpaper Changer</span>
+                      <span class="mockup-sidebar-subtitle">3 Displays · 6400×1440</span>
+                    </div>
+                  </div>
+
+                  <nav class="mockup-nav">
+                    <button class="mockup-nav-btn active" data-mock-tab="wallpaper">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <span>Wallpaper</span>
+                    </button>
+                    <button class="mockup-nav-btn" data-mock-tab="collage">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                      <span>Collage Grid</span>
+                    </button>
+                    <button class="mockup-nav-btn" data-mock-tab="video">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
+                      <span>Video</span>
+                    </button>
+                    <button class="mockup-nav-btn" data-mock-tab="transparency">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.9a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+                      <span>Transparency</span>
+                    </button>
+                    <button class="mockup-nav-btn" data-mock-tab="hotkeys">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                      <span>Hotkeys</span>
+                    </button>
+                    <button class="mockup-nav-btn" data-mock-tab="settings">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+                      <span>Settings</span>
+                    </button>
+                  </nav>
+                </div>
+
+                <div class="mockup-sidebar-footer">
+                  <a href="https://buy.stripe.com/4gMdRa7XW6dt8Ph9KX9Ve01" target="_blank" class="mockup-footer-btn heart-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                    <span>Support Project</span>
+                  </a>
+                  <a href="https://github.com/klysman08/wallpaper-changer-windows" target="_blank" class="mockup-footer-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>Source Code</span>
+                  </a>
+                  <div class="mockup-footer-meta">
+                    Made by klysman08 · v5.1
+                  </div>
+                </div>
+              </aside>
+
+              <!-- Main View -->
+              <div class="mockup-main">
+                <!-- 1. WALLPAPER TAB PANEL -->
+                <div class="mockup-tab-panel active" id="mock-panel-wallpaper">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">Virtual Desktop Composite</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-secondary">Auto-sync</span>
+                      <button class="btn btn-primary btn-sm" id="mockSaveBtn">Save</button>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content">
+                    <div class="mockup-stage">
+                      <div class="stage-monitor is-focused" data-monitor="1" style="left: 2%; top: 15%; width: 30%; height: 70%;">
+                        <span class="stage-monitor-label">#1 · 1920×1080</span>
+                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                      </div>
+                      <div class="stage-monitor is-focused" data-monitor="2" style="left: 34%; top: 5%; width: 38%; height: 90%;">
+                        <span class="stage-monitor-label">#2 (Primary) · 2560×1440</span>
+                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                      </div>
+                      <div class="stage-monitor is-focused" data-monitor="3" style="left: 74%; top: 15%; width: 24%; height: 70%;">
+                        <span class="stage-monitor-label">#3 · 1920×1080</span>
+                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                      </div>
+                    </div>
+
+                    <div class="mockup-chips">
+                      <span class="mockup-chip active" data-monitor="all">All monitors</span>
+                      <span class="mockup-chip" data-monitor="1">#1</span>
+                      <span class="mockup-chip" data-monitor="2">#2</span>
+                      <span class="mockup-chip" data-monitor="3">#3</span>
+                      <button class="mockup-chip ghost" id="mockShuffleBtn">⇄ Shuffle</button>
+                      <button class="mockup-chip solid" id="mockApplyBtn">✓ Set</button>
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-outline btn-sm" id="mockPrevBtn">‹</button>
+                    <button class="btn btn-primary btn-sm" id="mockApplyNowBtn">⟳ Apply</button>
+                    <button class="btn btn-outline btn-sm" id="mockNextBtn">›</button>
+                    <div class="mockup-action-sep"></div>
+                    <button class="btn btn-secondary btn-sm" id="mockRotateBtn">▶ Rotate</button>
+                  </div>
+                </div>
+
+                <!-- 2. DEDICATED COLLAGE GRID VIEW -->
+                <div class="mockup-tab-panel" id="mock-panel-collage">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">Collage Grid Generator</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-secondary">Dynamic Grid</span>
+                      <button class="btn btn-primary btn-sm" id="mockCollageSaveBtn">Save</button>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content">
+                    <div id="heroCollageGrid" class="collage-demo-grid grid-4">
+                      <img src="images/example 1 (1).jpg" alt="Wallpaper 1" class="collage-cell-img fit-fill effect-normal" />
+                      <img src="images/example 1 (2).jpg" alt="Wallpaper 2" class="collage-cell-img fit-fill effect-normal" />
+                      <img src="images/example 1 (3).jpg" alt="Wallpaper 3" class="collage-cell-img fit-fill effect-normal" />
+                      <img src="images/example 1 (4).jpg" alt="Wallpaper 4" class="collage-cell-img fit-fill effect-normal" />
+                      <img src="images/example 1 (5).jpg" alt="Wallpaper 5" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
+                      <img src="images/example 1 (1).jpg" alt="Wallpaper 6" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
+                      <img src="images/example 1 (2).jpg" alt="Wallpaper 7" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
+                      <img src="images/example 1 (3).jpg" alt="Wallpaper 8" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
+                    </div>
+
+                    <div class="mockup-collage-toolbar">
+                      <div class="mockup-toolbar-row">
+                        <div class="mockup-toolbar-label">
+                          <span>Images per monitor</span>
+                          <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="heroCollageCountBadge">4 images</span>
+                        </div>
+                        <div class="mockup-chip-group grid-cols-6">
+                          <button class="mockup-chip-btn hero-collage-count" data-count="1">1</button>
+                          <button class="mockup-chip-btn hero-collage-count" data-count="2">2</button>
+                          <button class="mockup-chip-btn hero-collage-count" data-count="3">3</button>
+                          <button class="mockup-chip-btn hero-collage-count active" data-count="4">4</button>
+                          <button class="mockup-chip-btn hero-collage-count" data-count="6">6</button>
+                          <button class="mockup-chip-btn hero-collage-count" data-count="8">8</button>
+                        </div>
+                      </div>
+
+                      <div class="mockup-toolbar-row">
+                        <div class="mockup-toolbar-label">
+                          <span>Fit mode</span>
+                          <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="heroFitBadge">Fill</span>
+                        </div>
+                        <div class="mockup-chip-group grid-cols-4">
+                          <button class="mockup-chip-btn hero-fit-btn active" data-fit="fill">Fill</button>
+                          <button class="mockup-chip-btn hero-fit-btn" data-fit="fit">Fit</button>
+                          <button class="mockup-chip-btn hero-fit-btn" data-fit="stretch">Stretch</button>
+                          <button class="mockup-chip-btn hero-fit-btn" data-fit="center">Center</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-outline btn-sm" id="mockCollagePrevBtn">‹</button>
+                    <button class="btn btn-primary btn-sm" id="mockCollageApplyBtn">⟳ Compose &amp; Set</button>
+                    <button class="btn btn-outline btn-sm" id="mockCollageNextBtn">›</button>
+                    <div class="mockup-action-sep"></div>
+                    <button class="btn btn-secondary btn-sm" id="mockCollageShuffleBtn">⇄ Reshuffle</button>
+                  </div>
+                </div>
+
+                <!-- 3. VIDEO TAB PANEL -->
+                <div class="mockup-tab-panel" id="mock-panel-video">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">Live Video Wallpaper</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-success">libmpv GPU</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content">
+                    <div class="video-demo-box">
+                      <img src="images/example 1 (5).jpg" alt="Video Wallpaper Preview" />
+                      <div class="video-overlay-play">
+                        <div class="video-play-circle" id="mockVideoPlayBtn">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </div>
+                        <span style="font-size: 0.8125rem; font-weight: 500;">Hardware Accelerated · Direct3D 11</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-primary btn-sm" id="mockVideoActionPlay">▶ Play Video</button>
+                    <button class="btn btn-secondary btn-sm" id="mockVideoActionStop">■ Stop</button>
+                    <div class="mockup-action-sep"></div>
+                    <button class="btn btn-outline btn-sm" id="mockVideoLoopBtn">🔁 Loop</button>
+                  </div>
+                </div>
+
+                <!-- 4. TRANSPARENCY TAB PANEL -->
+                <div class="mockup-tab-panel" id="mock-panel-transparency">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">Window Transparency</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-secondary">Active Hook</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content" style="gap: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                      <span style="font-size: 0.875rem; font-weight: 500;">Scroll Transparency</span>
+                      <span class="badge badge-success">Enabled</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                      <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                        <span>Target Opacity Preview</span>
+                        <strong id="mockOpacityVal">85%</strong>
+                      </div>
+                      <input type="range" min="20" max="100" value="85" id="mockOpacitySlider" style="width: 100%; cursor: pointer;" />
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-primary btn-sm" id="mockSaveTransparency">Save Hook</button>
+                  </div>
+                </div>
+
+                <!-- 5. HOTKEYS TAB PANEL -->
+                <div class="mockup-tab-panel" id="mock-panel-hotkeys">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">Global Shortcuts</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-secondary">Rust Owned</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content" style="gap: 0.5rem; overflow-y: auto; max-height: 220px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Next Wallpaper</span>
+                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Previous Wallpaper</span>
+                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Start / Stop Rotation</span>
+                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd></div>
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-primary btn-sm">Save Shortcuts</button>
+                  </div>
+                </div>
+
+                <!-- 6. SETTINGS TAB PANEL -->
+                <div class="mockup-tab-panel" id="mock-panel-settings">
+                  <div class="mockup-header">
+                    <span class="mockup-header-title">General Preferences</span>
+                    <div class="mockup-header-actions">
+                      <span class="badge badge-secondary">v5.1</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-content" style="gap: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Start with Windows</span>
+                      <span class="badge badge-success">Enabled</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Crossfade Transitions</span>
+                      <span class="badge badge-secondary">30 FPS</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                      <span>Interface Language</span>
+                      <span class="badge badge-outline">English</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-actionbar">
+                    <button class="btn btn-primary btn-sm">Save Preferences</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ─── WHY SECTION ─── -->
+  <!-- ─── WHY SECTION (COMPARISON TABLE + SHOWCASE BANNER) ─── -->
   <section id="why">
     <div class="container">
-      <div class="section-label">Why WallpaperChanger?</div>
-      <h2 class="section-title">Everything others charge for. <span class="gradient-text">Free.</span></h2>
-      <div class="comparison-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Problem with other apps</th>
-              <th>WallpaperChanger solution</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><span class="icon-bad">✗</span> Single image per screen only</td>
-              <td><span class="icon-good">✓</span> <strong>Collage mode</strong> — grid of 1–8 images per monitor</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> Live/animated wallpapers cost money</td>
-              <td><span class="icon-good">✓</span> <strong>Video wallpaper</strong> — play any video behind your icons, free</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> No real multi-monitor awareness</td>
-              <td><span class="icon-good">✓</span> Detects every monitor, respects resolution and position</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> Abrupt wallpaper cuts between changes</td>
-              <td><span class="icon-good">✓</span> <strong>Smooth fade transition</strong> at 30 fps — no flicker</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> No auto-start or background rotation</td>
-              <td><span class="icon-good">✓</span> <strong>Starts with Windows</strong> straight into the tray — no window in your way</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> Forgets what it was doing after a restart</td>
-              <td><span class="icon-good">✓</span> <strong>Resumes your session</strong> — rotation and video pick up where you left them</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> Apply and hope for the best</td>
-              <td><span class="icon-good">✓</span> <strong>Live preview</strong> — zoom to any monitor, then apply exactly what you see</td>
-            </tr>
-            <tr>
-              <td><span class="icon-bad">✗</span> Paid or ad-supported</td>
-              <td><span class="icon-good">✓</span> 100% free, MIT licensed, no telemetry</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="section-header">
+        <span class="section-label">Why WallpaperChanger</span>
+        <h2 class="section-title">Everything others charge for. <span class="gradient-text">Free.</span></h2>
+        <p class="section-sub">Free and open-source with zero bloat, telemetry, or paywalls.</p>
+      </div>
+
+      <div class="why-grid-2col">
+        <!-- Comparison Table Column -->
+        <div class="comparison-table-wrap">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Problem with other apps</th>
+                <th>WallpaperChanger solution</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Single image stretched across all screens
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> <strong>Collage mode</strong> — 1 to 8 images dynamically composed per monitor
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Live / animated wallpapers behind paywalls
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> <strong>Hardware-accelerated video wallpapers</strong> via libmpv for free
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Poor multi-monitor DPI scaling
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> Precise virtual desktop detection respecting monitor resolutions and offsets
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Abrupt, jarring wallpaper cuts
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> <strong>Smooth 30 fps crossfade transition</strong> using GDI WorkerW rendering
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Heavy Electron memory footprints (500MB+)
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> <strong>Lightweight Tauri v2 shell</strong> using native WebView + Python engine sidecar
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="status-icon bad">✕</span> Forgets active state on reboot
+                </td>
+                <td>
+                  <span class="status-icon good">✓</span> <strong>Instant session resume</strong> — rotation and video playback persist seamlessly
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Banner Showcase Column -->
+        <div class="why-banner-wrap">
+          <div class="why-banner-header">
+            <div class="why-banner-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+              <span>Multi-Monitor Collage &amp; Live Video</span>
+            </div>
+            <span class="badge badge-secondary">Desktop Composition</span>
+          </div>
+          <img src="wallpaper-changer-hero.png" alt="WallpaperChanger managing collage and live video wallpapers across three monitors" class="why-banner-img" />
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- ─── FEATURES ─── -->
+  <!-- ─── FEATURES GRID ─── -->
   <section id="features">
     <div class="container">
-      <div class="section-label">Features</div>
-      <h2 class="section-title">Everything you need,<br /><span class="gradient-text">nothing you don't.</span></h2>
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything you need,<br /><span class="gradient-text">nothing you don't.</span></h2>
+        <p class="section-sub">A complete toolset for managing desktop wallpapers across any number of monitors.</p>
+      </div>
+
       <div class="features-grid">
+        <!-- 1. Live Preview -->
         <div class="feature-card">
-          <div class="feature-icon">🔍</div>
-          <h3>Live Preview</h3>
-          <p>See the real composite before it touches your desktop. Monitor outlines are drawn over it, any screen can
-            be zoomed to on its own, the whole thing expands to fill the window — and one click applies exactly what
-            you are looking at.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
+          </div>
+          <h3 class="feature-title">Live Scaled Preview</h3>
+          <p class="feature-desc">See the exact composite before applying. Zoom into individual displays, shuffle candidates, and apply with a single click.</p>
         </div>
+
+        <!-- 2. Video Wallpaper -->
         <div class="feature-card">
-          <div class="feature-icon">🎬</div>
-          <h3>Video Wallpaper</h3>
-          <p>Play any video (MP4, MKV, WebM, MOV…) as a live wallpaper behind your desktop icons. Hardware-accelerated
-            via libmpv, multi-monitor, aspect-correct, with optional audio.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
+          </div>
+          <h3 class="feature-title">Video Wallpaper (libmpv)</h3>
+          <p class="feature-desc">Play MP4, MKV, WebM, or MOV videos behind your icons. GPU-accelerated, aspect-correct, with optional audio support.</p>
         </div>
+
+        <!-- 3. Collage Grid -->
         <div class="feature-card">
-          <div class="feature-icon">🖼️</div>
-          <h3>Collage Grid</h3>
-          <p>Automatic layout with 1 to 8 images per monitor. Each screen gets its own dynamically composed wallpaper.
-          </p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          </div>
+          <h3 class="feature-title">Collage Grid (1–8 Images)</h3>
+          <p class="feature-desc">Dynamic multi-image composition per monitor. Automatic grid calculation for portrait, landscape, and ultrawide screens.</p>
         </div>
+
+        <!-- 4. Multi-Monitor -->
         <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>Multi-Monitor</h3>
-          <p>Detects all connected displays automatically. Respects exact resolution and physical position of every
-            monitor.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+          </div>
+          <h3 class="feature-title">Multi-Monitor Aware</h3>
+          <p class="feature-desc">Automatically enumerates all connected monitors, respecting individual resolutions, scale factors, and physical arrangements.</p>
         </div>
+
+        <!-- 5. Auto Rotation -->
         <div class="feature-card">
-          <div class="feature-icon">🔁</div>
-          <h3>Auto Rotation</h3>
-          <p>Set an interval in seconds and let the app cycle through your collection non-stop — even in the background.
-          </p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          </div>
+          <h3 class="feature-title">Background Auto-Rotation</h3>
+          <p class="feature-desc">Set custom intervals to cycle wallpapers continuously in the background, even when the main app window is closed.</p>
         </div>
+
+        <!-- 6. Fade Transitions -->
         <div class="feature-card">
-          <div class="feature-icon">🎞️</div>
-          <h3>Fade Transition</h3>
-          <p>Every wallpaper change crossfades smoothly at 30 fps using GDI WorkerW rendering — no flicker, no abrupt
-            cuts, no system animation artifacts.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          </div>
+          <h3 class="feature-title">30 FPS Fade Transitions</h3>
+          <p class="feature-desc">Smooth crossfade transitions rendered into the Windows WorkerW desktop layer with zero flicker or desktop icon stutter.</p>
         </div>
+
+        <!-- 7. Global Hotkeys -->
         <div class="feature-card">
-          <div class="feature-icon">⌨️</div>
-          <h3>Global Hotkeys</h3>
-          <p>Next, Previous, Stop/Start, default wallpaper, effect switching, plus full video control — play/stop,
-            mute, and next/previous clip. Nothing is bound out of the box: assign only the shortcuts you want, and the
-            app tells you if another program already owns one.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+          </div>
+          <h3 class="feature-title">Global Shortcuts (Rust-Owned)</h3>
+          <p class="feature-desc">Next, Prev, Watch toggle, and video controls. Hotkeys are managed by Rust to survive engine restarts without conflicts.</p>
         </div>
+
+        <!-- 8. Window Transparency -->
         <div class="feature-card">
-          <div class="feature-icon">🪟</div>
-          <h3>Window Transparency</h3>
-          <p>Control any window's opacity via slider or shortcuts. Toggle with a hotkey, fine-tune with
-            modifier+Scroll. The scroll modifier key (Alt/Ctrl/Shift/Win) is configurable.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.9a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+          </div>
+          <h3 class="feature-title">Window Transparency</h3>
+          <p class="feature-desc">Fade and adjust opacity of any focused window on the fly using configurable Modifier + Mouse Scroll.</p>
         </div>
+
+        <!-- 9. Multi-Language -->
         <div class="feature-card">
-          <div class="feature-icon">🌍</div>
-          <h3>Multi-Language</h3>
-          <p>The whole interface in English, Português (Brasil), and 日本語. Switch live, and it persists across
-            restarts.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <h3 class="feature-title">Multi-Language Support</h3>
+          <p class="feature-desc">Full internationalization support with English, Português (Brasil), and 日本語 built-in.</p>
         </div>
+
+        <!-- 10. Start with Windows -->
         <div class="feature-card">
-          <div class="feature-icon">🚀</div>
-          <h3>Start with Windows</h3>
-          <p>On from the first launch, and one switch away from off. A boot-time start goes straight to the tray with
-            no window; <em>Start minimized</em> does the same when you open it yourself.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m8 17 4-4 4 4"/><path d="M12 13v9"/></svg>
+          </div>
+          <h3 class="feature-title">Start with Windows</h3>
+          <p class="feature-desc">Launches silently into the system tray on startup with zero windows or popups in your workflow.</p>
         </div>
+
+        <!-- 11. Resumes Session -->
         <div class="feature-card">
-          <div class="feature-icon">💾</div>
-          <h3>Resumes Your Session</h3>
-          <p>Rotation and the video wallpaper are remembered the moment you toggle them — from the window, the tray, or
-            a hotkey — and come back running on the next launch.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          </div>
+          <h3 class="feature-title">Instant Session Resume</h3>
+          <p class="feature-desc">Rotation and video wallpapers resume instantly upon app launch, preserving your previous desktop configuration.</p>
         </div>
+
+        <!-- 12. Native Tauri Shell -->
         <div class="feature-card">
-          <div class="feature-icon">📐</div>
-          <h3>Image Fit Modes</h3>
-          <p>Choose how images fill the screen: Fill, Fit, Stretch, Center, or Span — per monitor or globally.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🕹️</div>
-          <h3>System Tray</h3>
-          <p>Closing hides to the notification area rather than quitting. Apply, step through history, start or stop
-            rotation, or quit — all from the right-click menu, no window needed.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">⏪</div>
-          <h3>Wallpaper History</h3>
-          <p>Changed your mind? Navigate back through previously applied wallpapers at any time.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🖱️</div>
-          <h3>CLI Support</h3>
-          <p>Full command-line interface for scripting and automation. Apply, watch, and configure from PowerShell.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">📦</div>
-          <h3>Windows Installer</h3>
-          <p>MSI and NSIS installers built by the Tauri bundler. Nothing is written to the registry at install time —
-            starting with Windows is a switch inside the app.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🪶</div>
-          <h3>Native, Not Electron</h3>
-          <p>A Tauri&nbsp;2 shell around the system WebView, so there is no bundled browser. The interface is React and
-            shadcn/ui; everything touching Win32 stays in a separate Python engine.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔓</div>
-          <h3>MIT Licensed</h3>
-          <p>Free for personal and commercial use. No telemetry, no ads, no account required. Ever.</p>
+          <div class="feature-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          </div>
+          <h3 class="feature-title">Native Tauri v2 + React 19</h3>
+          <p class="feature-desc">Super lightweight architecture with near-instant boot times and minimal memory consumption.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ─── PREVIEW ─── -->
+  <!-- ─── PREVIEW SECTION ─── -->
   <section id="preview">
     <div class="container">
-      <div class="section-label">Preview</div>
-      <h2 class="section-title">A clean, distraction-free <span class="gradient-text">interface.</span></h2>
-      <p class="section-sub">The GUI stays out of your way. Everything you need is one click or hotkey away.</p>
-      <div class="preview-tabs">
-        <button class="tab-btn active" data-tab="monitors">Live Preview</button>
-        <button class="tab-btn" data-tab="collage">Collage Mode</button>
-        <button class="tab-btn" data-tab="video">Video Wallpaper</button>
-        <button class="tab-btn" data-tab="settings">Settings</button>
-        <button class="tab-btn" data-tab="tray">System Tray</button>
+      <div class="section-header">
+        <span class="section-label">Preview</span>
+        <h2 class="section-title">A clean, distraction-free <span class="gradient-text">interface.</span></h2>
+        <p class="section-sub">Explore the interactive application views with sample wallpaper sets below.</p>
       </div>
-      <div class="preview-panels">
-        <div class="preview-panel active" id="tab-monitors">
-          <div class="mock-window">
-            <div class="mock-titlebar">
-              <div class="mock-titlebar-left">
-                <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">Wallpaper Changer — Preview</span>
-              </div>
-              <div class="mock-window-actions">
-                <span class="mock-window-action" title="Minimize">_</span>
-                <span class="mock-window-action" title="Maximize">□</span>
-                <span class="mock-window-action" title="Close">X</span>
-              </div>
+
+      <!-- Preview Tabs Nav -->
+      <div class="preview-tabs-nav">
+        <button class="tab-trigger preview-tab-btn active" data-tab="monitors">Live Preview</button>
+        <button class="tab-trigger preview-tab-btn" data-tab="collage">Collage Mode</button>
+        <button class="tab-trigger preview-tab-btn" data-tab="video">Video Wallpaper</button>
+        <button class="tab-trigger preview-tab-btn" data-tab="settings">Settings</button>
+        <button class="tab-trigger preview-tab-btn" data-tab="tray">System Tray</button>
+      </div>
+
+      <!-- Panel: Monitors -->
+      <div class="preview-panel active" id="tab-monitors">
+        <div class="mockup-container" style="max-width: 980px; margin: 0 auto;">
+          <div class="mockup-titlebar">
+            <div class="mockup-titlebar-left">
+              <div class="mockup-window-dots"><span></span><span></span><span></span></div>
+              <span class="mockup-window-title">Wallpaper Changer — Live Preview</span>
             </div>
-            <div class="mock-shell">
-              <div class="mock-sidebar">
-                <div class="mock-nav-item active"><span>🖼️</span> Wallpaper</div>
-                <div class="mock-nav-item"><span>🎬</span> Video</div>
-                <div class="mock-nav-item"><span>🪟</span> Transparency</div>
-                <div class="mock-nav-item"><span>⌨️</span> Hotkeys</div>
-                <div class="mock-nav-item"><span>⚙️</span> Settings</div>
-              </div>
-              <div class="mock-body mock-preview">
-                <!-- The composite, with one outline per monitor drawn over it. -->
-                <div class="mock-stage">
-                  <div class="mock-stage-img"></div>
-                  <div class="mock-guide" style="left:0; top:12%; width:37.5%; height:76%"><span>#1 · 1920×1080</span></div>
-                  <div class="mock-guide is-focused" style="left:37.5%; top:0; width:50%; height:100%"><span>#2 · 2560×1440</span></div>
-                  <div class="mock-guide" style="left:87.5%; top:8%; width:12.5%; height:84%"><span>#3</span></div>
-                </div>
-                <div class="mock-chips">
-                  <span class="mock-chip">All monitors</span>
-                  <span class="mock-chip">#1</span>
-                  <span class="mock-chip active">#2</span>
-                  <span class="mock-chip">#3</span>
-                  <span class="mock-chip-spacer"></span>
-                  <span class="mock-chip ghost">⤢ Expand</span>
-                  <span class="mock-chip ghost">⇄ Shuffle</span>
-                  <span class="mock-chip solid">✓ Set as wallpaper</span>
-                </div>
-              </div>
-            </div>
-            <div class="mock-actionbar">
-              <span class="mock-btn">‹</span>
-              <span class="mock-btn primary">⟳ Apply now</span>
-              <span class="mock-btn">›</span>
-              <span class="mock-actionbar-sep"></span>
-              <span class="mock-btn">▶ Start rotation</span>
-              <span class="mock-actionbar-sep"></span>
-              <span class="mock-btn">⏮</span>
-              <span class="mock-btn">▶ Play video</span>
-              <span class="mock-btn">⏭</span>
-            </div>
+            <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
           </div>
-          <p class="panel-desc">The preview is the real composite, not an approximation — every monitor is outlined
-            where it actually sits on the virtual desktop. Click one to zoom into that screen alone, expand the whole
-            thing to fill the window, then apply exactly the images you are looking at.</p>
-        </div>
-        <div class="preview-panel" id="tab-collage">
-          <div class="mock-window">
-            <div class="mock-titlebar">
-              <div class="mock-titlebar-left">
-                <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">Wallpaper Changer — Collage</span>
-              </div>
-              <div class="mock-window-actions">
-                <span class="mock-window-action" title="Minimize">_</span>
-                <span class="mock-window-action" title="Maximize">□</span>
-                <span class="mock-window-action" title="Close">X</span>
-              </div>
-            </div>
-            <div class="mock-body mock-collage">
-              <div class="collage-grid grid-4">
-                <div class="collage-cell" style="background: linear-gradient(135deg, #1a1a2e, #16213e)"></div>
-                <div class="collage-cell" style="background: linear-gradient(135deg, #0f3460, #533483)"></div>
-                <div class="collage-cell" style="background: linear-gradient(135deg, #533483, #e94560)"></div>
-                <div class="collage-cell" style="background: linear-gradient(135deg, #e94560, #0f3460)"></div>
-              </div>
-              <div class="collage-controls">
-                <span>Images per monitor:</span>
-                <div class="num-btns">
-                  <button>1</button><button>2</button><button>3</button><button
-                    class="active">4</button><button>6</button><button>8</button>
+          <div class="mockup-shell">
+            <aside class="mockup-sidebar">
+              <div class="mockup-sidebar-header">
+                <img src="icon.png" alt="WallpaperChanger Icon" />
+                <div class="mockup-sidebar-meta">
+                  <span class="mockup-sidebar-title">Wallpaper Changer</span>
+                  <span class="mockup-sidebar-subtitle">3 Monitors · 6400×1440</span>
                 </div>
+              </div>
+              <nav class="mockup-nav">
+                <button class="mockup-nav-btn active" data-mock-tab="monitors"><span>🖼️</span> Wallpaper</button>
+                <button class="mockup-nav-btn" data-mock-tab="video"><span>🎬</span> Video</button>
+                <button class="mockup-nav-btn" data-mock-tab="settings"><span>🪟</span> Transparency</button>
+                <button class="mockup-nav-btn" data-mock-tab="monitors"><span>⌨️</span> Hotkeys</button>
+                <button class="mockup-nav-btn" data-mock-tab="settings"><span>⚙️</span> Settings</button>
+              </nav>
+              <div class="mockup-sidebar-footer">
+                <div class="mockup-footer-meta">v5.1 · Ready</div>
+              </div>
+            </aside>
+            <div class="mockup-main">
+              <div class="mockup-header">
+                <span class="mockup-header-title">Virtual Desktop Composite</span>
+                <button class="btn btn-primary btn-sm">Save</button>
+              </div>
+              <div class="mockup-content">
+                <div class="mockup-stage">
+                  <div class="stage-monitor is-focused" data-monitor="1" style="left: 2%; top: 15%; width: 30%; height: 70%;">
+                    <span class="stage-monitor-label">#1 · 1920×1080</span>
+                    <div class="stage-monitor-footer">
+                      <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
+                    </div>
+                  </div>
+                  <div class="stage-monitor is-focused" data-monitor="2" style="left: 34%; top: 5%; width: 38%; height: 90%;">
+                    <span class="stage-monitor-label">#2 (Primary) · 2560×1440</span>
+                    <div class="stage-monitor-footer">
+                      <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
+                    </div>
+                  </div>
+                  <div class="stage-monitor is-focused" data-monitor="3" style="left: 74%; top: 15%; width: 24%; height: 70%;">
+                    <span class="stage-monitor-label">#3 · 1920×1080</span>
+                    <div class="stage-monitor-footer">
+                      <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mockup-chips">
+                  <span class="mockup-chip active" data-monitor="all">All monitors</span>
+                  <span class="mockup-chip" data-monitor="1">#1</span>
+                  <span class="mockup-chip" data-monitor="2">#2</span>
+                  <span class="mockup-chip" data-monitor="3">#3</span>
+                  <button class="mockup-chip ghost" id="mockStageShuffle">⇄ Shuffle</button>
+                  <button class="mockup-chip solid">✓ Set as wallpaper</button>
+                </div>
+              </div>
+              <div class="mockup-actionbar">
+                <button class="btn btn-outline btn-sm">‹</button>
+                <button class="btn btn-primary btn-sm">⟳ Apply now</button>
+                <button class="btn btn-outline btn-sm">›</button>
+                <div class="mockup-action-sep"></div>
+                <button class="btn btn-secondary btn-sm">▶ Start rotation</button>
               </div>
             </div>
           </div>
-          <p class="panel-desc">Pick how many images compose each monitor's wallpaper. The app automatically arranges
-            them in the optimal grid layout.</p>
         </div>
-        <div class="preview-panel" id="tab-video">
-          <div class="mock-window">
-            <div class="mock-titlebar">
-              <div class="mock-titlebar-left">
-                <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">Wallpaper Changer — Video Wallpaper</span>
-              </div>
-              <div class="mock-window-actions">
-                <span class="mock-window-action" title="Minimize">_</span>
-                <span class="mock-window-action" title="Maximize">□</span>
-                <span class="mock-window-action" title="Close">X</span>
-              </div>
+        <p class="panel-description">The preview is the exact composition rendered to the virtual desktop. Click any screen chip to focus, inspect outlines, or test shuffled layouts instantly.</p>
+      </div>
+
+      <!-- Panel: Collage -->
+      <div class="preview-panel" id="tab-collage">
+        <div class="mockup-container" style="max-width: 980px; margin: 0 auto;">
+          <div class="mockup-titlebar">
+            <div class="mockup-titlebar-left">
+              <div class="mockup-window-dots"><span></span><span></span><span></span></div>
+              <span class="mockup-window-title">Wallpaper Changer — Collage Mode</span>
             </div>
-            <div class="mock-body mock-settings">
-              <div class="mock-setting-row">
-                <span>Video folder</span>
-                <div class="mock-input-row">
-                  <div class="mock-input">C:\Videos\live</div>
-                </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Playback</span>
-                <div class="mock-toggle-group">
-                  <span class="mock-active">Loop</span><span>Play once</span>
-                </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Audio</span>
-                <div class="mock-checkbox checked">✓</div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Controls</span>
-                <div class="mock-input-row">
-                  <div class="mock-btn">▶ Play</div>
-                  <div class="mock-btn">■ Stop</div>
-                  <div class="mock-btn">⏮ Prev</div>
-                  <div class="mock-btn">⏭ Next</div>
-                </div>
-              </div>
-            </div>
+            <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
           </div>
-          <p class="panel-desc">Point it at a folder of videos and play them as a live wallpaper rendered into the
-            desktop WORKERW layer — behind your icons, GPU-accelerated, aspect-correct, across every monitor.</p>
-        </div>
-        <div class="preview-panel" id="tab-settings">
-          <div class="mock-window">
-            <div class="mock-titlebar">
-              <div class="mock-titlebar-left">
-                <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">Wallpaper Changer — Settings</span>
+          <div class="mockup-shell">
+            <div class="mockup-main" style="grid-column: 1 / -1;">
+              <div class="mockup-header">
+                <span class="mockup-header-title">Collage Arrangement</span>
+                <span class="badge badge-secondary">Live Image Grid</span>
               </div>
-              <div class="mock-window-actions">
-                <span class="mock-window-action" title="Minimize">_</span>
-                <span class="mock-window-action" title="Maximize">□</span>
-                <span class="mock-window-action" title="Close">X</span>
-              </div>
-            </div>
-            <div class="mock-body mock-settings">
-              <div class="mock-setting-row">
-                <span>Image selection</span>
-                <div class="mock-toggle-group">
-                  <span class="mock-active">Random</span><span>Sequential</span>
+              <div class="mockup-content">
+                <div id="collageDemoGrid" class="collage-demo-grid grid-4">
+                  <img src="images/example 1 (1).jpg" alt="Wallpaper Example 1" class="collage-cell-img" />
+                  <img src="images/example 1 (2).jpg" alt="Wallpaper Example 2" class="collage-cell-img" />
+                  <img src="images/example 1 (3).jpg" alt="Wallpaper Example 3" class="collage-cell-img" />
+                  <img src="images/example 1 (4).jpg" alt="Wallpaper Example 4" class="collage-cell-img" />
+                  <img src="images/example 1 (5).jpg" alt="Wallpaper Example 5" class="collage-cell-img" style="display: none;" />
+                  <img src="images/example 1 (1).jpg" alt="Wallpaper Example 6" class="collage-cell-img" style="display: none;" />
                 </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Screen fit</span>
-                <div class="mock-toggle-group">
-                  <span class="mock-active">Fill</span><span>Fit</span><span>Stretch</span><span>Center</span>
-                </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Image effect</span>
-                <div class="mock-toggle-group">
-                  <span class="mock-active">Normal</span><span>B&amp;W</span><span>Vintage</span><span>HDR</span>
-                </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Auto-rotation interval</span>
-                <div class="mock-input-row">
-                  <div class="mock-input">30</div>
-                  <span>seconds</span>
-                  <div class="mock-btn">▶ Start Watch</div>
-                </div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Start with Windows</span>
-                <div class="mock-checkbox checked">✓</div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Start minimized in the tray</span>
-                <div class="mock-checkbox checked">✓</div>
-              </div>
-              <div class="mock-setting-row">
-                <span>Language</span>
-                <div class="mock-toggle-group">
-                  <span class="mock-active">EN</span><span>PT-BR</span><span>日本語</span>
+                <div class="mockup-collage-toolbar">
+                  <div class="mockup-toolbar-row">
+                    <div class="mockup-toolbar-label">
+                      <span>Images per monitor</span>
+                      <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="tabCollageCountBadge">4 images</span>
+                    </div>
+                    <div class="mockup-chip-group grid-cols-6">
+                      <button class="mockup-chip-btn collage-num-btn" data-count="1">1</button>
+                      <button class="mockup-chip-btn collage-num-btn" data-count="2">2</button>
+                      <button class="mockup-chip-btn collage-num-btn" data-count="3">3</button>
+                      <button class="mockup-chip-btn collage-num-btn active" data-count="4">4</button>
+                      <button class="mockup-chip-btn collage-num-btn" data-count="6">6</button>
+                      <button class="mockup-chip-btn collage-num-btn" data-count="8">8</button>
+                    </div>
+                  </div>
+
+                  <div class="mockup-toolbar-row">
+                    <div class="mockup-toolbar-label">
+                      <span>Fit mode</span>
+                      <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="tabFitBadge">Fill</span>
+                    </div>
+                    <div class="mockup-chip-group grid-cols-4">
+                      <button class="mockup-chip-btn tab-fit-btn active" data-fit="fill">Fill</button>
+                      <button class="mockup-chip-btn tab-fit-btn" data-fit="fit">Fit</button>
+                      <button class="mockup-chip-btn tab-fit-btn" data-fit="stretch">Stretch</button>
+                      <button class="mockup-chip-btn tab-fit-btn" data-fit="center">Center</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          <p class="panel-desc">Edits are yours to commit — the header tells you when something is unsaved. What the app
-            was <em>doing</em> needs no saving at all: rotation and video playback are recorded the moment you toggle
-            them and restored on the next launch.</p>
         </div>
-        <div class="preview-panel" id="tab-tray">
-          <div class="mock-window tray-window">
-            <div class="mock-titlebar">
-              <div class="mock-titlebar-left">
-                <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">System Tray — Right-click menu</span>
-              </div>
-              <div class="mock-window-actions">
-                <span class="mock-window-action" title="Minimize">_</span>
-                <span class="mock-window-action" title="Maximize">□</span>
-                <span class="mock-window-action" title="Close">X</span>
-              </div>
+        <p class="panel-description">Choose how many images compose each monitor's wallpaper. The composition pipeline generates seamless grid layouts dynamically.</p>
+      </div>
+
+      <!-- Panel: Video -->
+      <div class="preview-panel" id="tab-video">
+        <div class="mockup-container" style="max-width: 980px; margin: 0 auto;">
+          <div class="mockup-titlebar">
+            <div class="mockup-titlebar-left">
+              <div class="mockup-window-dots"><span></span><span></span><span></span></div>
+              <span class="mockup-window-title">Wallpaper Changer — Video Wallpaper</span>
             </div>
-            <div class="mock-body mock-tray">
-              <div class="mock-taskbar">
-                <div class="taskbar-icons">
-                  <div class="taskbar-icon app-icon" title="WallpaperChanger">⬛</div>
-                </div>
+            <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
+          </div>
+          <div class="mockup-shell">
+            <div class="mockup-main" style="grid-column: 1 / -1;">
+              <div class="mockup-header">
+                <span class="mockup-header-title">Live Video Settings</span>
+                <span class="badge badge-success">libmpv Backend Active</span>
               </div>
-              <div class="mock-context-menu">
-                <div class="menu-item menu-header">WallpaperChanger</div>
-                <div class="menu-divider"></div>
-                <div class="menu-item"><span class="menu-icon">👁</span> Show window</div>
-                <div class="menu-item highlight"><span class="menu-icon">🔄</span> Apply wallpaper now</div>
-                <div class="menu-item"><span class="menu-icon">⏭</span> Next wallpaper</div>
-                <div class="menu-item"><span class="menu-icon">⏮</span> Previous wallpaper</div>
-                <div class="menu-item"><span class="menu-icon">⏸</span> Start / stop rotation</div>
-                <div class="menu-divider"></div>
-                <div class="menu-item danger"><span class="menu-icon">✕</span> Quit</div>
+              <div class="mockup-content" style="gap: 1rem;">
+                <div class="video-demo-box">
+                  <img src="images/example 1 (5).jpg" alt="Video Wallpaper Preview" />
+                  <div class="video-overlay-play">
+                    <div class="video-play-circle">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </div>
+                    <span style="font-size: 0.8125rem; font-weight: 500;">Hardware Accelerated (Direct3D 11)</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                  <button class="btn btn-primary btn-sm">▶ Start Playback</button>
+                  <button class="btn btn-secondary btn-sm">■ Stop</button>
+                  <button class="btn btn-outline btn-sm">⏮ Prev</button>
+                  <button class="btn btn-outline btn-sm">⏭ Next</button>
+                </div>
               </div>
             </div>
           </div>
-          <p class="panel-desc">Close the window and the app moves to the tray rather than quitting — the rotation timer
-            and any video wallpaper keep running. It can start there too, and everything you need day to day is on the
-            right-click menu.</p>
         </div>
+        <p class="panel-description">Hardware-accelerated live video rendering directly into the Windows WorkerW layer behind desktop icons.</p>
+      </div>
+
+      <!-- Panel: Settings -->
+      <div class="preview-panel" id="tab-settings">
+        <div class="mockup-container" style="max-width: 980px; margin: 0 auto;">
+          <div class="mockup-titlebar">
+            <div class="mockup-titlebar-left">
+              <div class="mockup-window-dots"><span></span><span></span><span></span></div>
+              <span class="mockup-window-title">Wallpaper Changer — Settings</span>
+            </div>
+            <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
+          </div>
+          <div class="mockup-shell">
+            <div class="mockup-main" style="grid-column: 1 / -1;">
+              <div class="mockup-header">
+                <span class="mockup-header-title">General Preferences</span>
+                <button class="btn btn-primary btn-sm">Save Changes</button>
+              </div>
+              <div class="mockup-content" style="gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                  <span style="font-size: 0.875rem;">Start with Windows (into tray)</span>
+                  <span class="badge badge-success">Enabled</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                  <span style="font-size: 0.875rem;">Crossfade Transition</span>
+                  <span class="badge badge-secondary">30 FPS (WorkerW)</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                  <span style="font-size: 0.875rem;">App Language</span>
+                  <span class="badge badge-outline">English (EN)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-description">Preferences save cleanly to <code>%APPDATA%</code>. Live state (rotation interval, current video) is remembered the moment you toggle it.</p>
+      </div>
+
+      <!-- Panel: Tray -->
+      <div class="preview-panel" id="tab-tray">
+        <div class="mockup-container" style="max-width: 980px; margin: 0 auto;">
+          <div class="mockup-titlebar">
+            <div class="mockup-titlebar-left">
+              <div class="mockup-window-dots"><span></span><span></span><span></span></div>
+              <span class="mockup-window-title">System Tray Menu</span>
+            </div>
+            <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
+          </div>
+          <div style="padding: 2rem; display: flex; justify-content: center; background: var(--muted);">
+            <div style="width: 220px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); overflow: hidden; font-size: 0.8125rem;">
+              <div style="padding: 0.5rem 0.75rem; font-weight: 600; border-bottom: 1px solid var(--border);">WallpaperChanger</div>
+              <div style="padding: 0.375rem 0.75rem; cursor: pointer;">👁 Show Window</div>
+              <div style="padding: 0.375rem 0.75rem; cursor: pointer; background: var(--accent); font-weight: 500;">🔄 Apply Next Wallpaper</div>
+              <div style="padding: 0.375rem 0.75rem; cursor: pointer;">⏸ Stop Rotation</div>
+              <div style="height: 1px; background: var(--border); margin: 0.25rem 0;"></div>
+              <div style="padding: 0.375rem 0.75rem; cursor: pointer; color: var(--danger);">✕ Quit</div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-description">Closing the window sends the app into the background notification area without interrupting rotation or video playback.</p>
       </div>
     </div>
   </section>
 
-  <!-- ─── STACK ─── -->
+  <!-- ─── UNDER THE HOOD / ARCHITECTURE ─── -->
   <section id="stack">
     <div class="container">
-      <div class="section-label">Under the hood</div>
-      <h2 class="section-title">Two processes, <span class="gradient-text">one job each.</span></h2>
-      <p class="section-sub">The interface and the Win32 work are separated on purpose: if the engine stops, the window
-        stays up and tells you so, and the wallpaper pipeline is the same code the CLI has always used.</p>
-      <div class="stack-split">
+      <div class="section-header">
+        <span class="section-label">Architecture</span>
+        <h2 class="section-title">Two processes, <span class="gradient-text">one job each.</span></h2>
+        <p class="section-sub">A clean separation between modern UI presentation and native Win32 execution.</p>
+      </div>
+
+      <div class="stack-grid">
+        <!-- Shell Card -->
         <div class="stack-card">
-          <div class="stack-card-head">
-            <span class="stack-badge">Shell</span>
-            <h3>Tauri 2 · React · shadcn/ui</h3>
-          </div>
-          <p>Owns the window, the tray icon, and the global hotkeys — so a shortcut survives an engine restart and can
-            reach the window itself. Renders in the system WebView, with no bundled browser to ship.</p>
-          <div class="req-chips">
-            <span class="chip">Rust</span>
-            <span class="chip">React 19</span>
-            <span class="chip">Tailwind</span>
-            <span class="chip">shadcn/ui</span>
+          <span class="badge badge-primary stack-badge">Shell Layer</span>
+          <h3 class="stack-title">Tauri v2 · React 19 · shadcn/ui</h3>
+          <p class="stack-desc">Owns the window, system tray, and global hotkeys. Renders natively using the system WebView with zero bundled browser runtime.</p>
+          <div class="stack-chips">
+            <span class="badge badge-secondary">Rust</span>
+            <span class="badge badge-secondary">React 19</span>
+            <span class="badge badge-secondary">Tailwind CSS</span>
+            <span class="badge badge-secondary">shadcn/ui</span>
           </div>
         </div>
-        <div class="stack-pipe">
-          <span class="stack-pipe-label">JSON-RPC over stdio</span>
+
+        <!-- Bridge -->
+        <div class="stack-bridge">
+          <div class="bridge-line"></div>
+          <span class="bridge-badge">JSON-RPC / stdio</span>
+          <div class="bridge-line"></div>
         </div>
+
+        <!-- Engine Card -->
         <div class="stack-card">
-          <div class="stack-card-head">
-            <span class="stack-badge alt">Engine</span>
-            <h3>Python 3.11+ · Pillow · libmpv</h3>
-          </div>
-          <p>Everything that touches Win32: composing the collage, the fade transition, the WORKERW video layer, and
-            window transparency. Ships as a headless sidecar the shell starts and stops.</p>
-          <div class="req-chips">
-            <span class="chip">Pillow</span>
-            <span class="chip">libmpv</span>
-            <span class="chip">Win32 API</span>
-            <span class="chip">CLI</span>
+          <span class="badge badge-outline stack-badge">Engine Layer</span>
+          <h3 class="stack-title">Python 3.11+ · Pillow · libmpv</h3>
+          <p class="stack-desc">Handles Win32 system APIs: multi-monitor collage composition, fade transitions, WorkerW live video layer, and window transparency hooks.</p>
+          <div class="stack-chips">
+            <span class="badge badge-secondary">Pillow</span>
+            <span class="badge badge-secondary">libmpv</span>
+            <span class="badge badge-secondary">Win32 GDI</span>
+            <span class="badge badge-secondary">Headless Sidecar</span>
           </div>
         </div>
       </div>
-      <p class="stack-note">The webview never spawns a process or touches the filesystem directly — every call goes
-        through one command on the Rust side, and the engine answers only the methods on its own allowlist.</p>
     </div>
   </section>
 
-  <!-- ─── INSTALL ─── -->
+  <!-- ─── INSTALLATION ─── -->
   <section id="install">
     <div class="container">
-      <div class="section-label">Installation</div>
-      <h2 class="section-title">Up and running in <span class="gradient-text">two minutes.</span></h2>
-      <div class="install-tabs">
-        <button class="install-tab active" data-install="installer">
-          <span class="tab-icon">📦</span>
-          <span>Windows Installer</span>
-          <span class="tab-badge">Recommended</span>
-        </button>
-        <button class="install-tab" data-install="source">
-          <span class="tab-icon">💻</span>
-          <span>From Source</span>
-        </button>
+      <div class="section-header">
+        <span class="section-label">Installation</span>
+        <h2 class="section-title">Up and running in <span class="gradient-text">two minutes.</span></h2>
+        <p class="section-sub">Download prebuilt installers or build directly from source.</p>
       </div>
+
+      <div class="install-tabs-nav">
+        <button class="tab-trigger install-tab-btn active" data-install="installer">📦 Windows Installer (Recommended)</button>
+        <button class="tab-trigger install-tab-btn" data-install="source">💻 Build from Source</button>
+      </div>
+
+      <!-- Panel: Installer -->
       <div class="install-panel active" id="install-installer">
         <div class="install-steps">
           <div class="install-step">
-            <div class="step-num">1</div>
+            <div class="step-number">1</div>
             <div class="step-body">
-              <h4>Download the installer</h4>
-              <p>Grab the latest <code>Wallpaper Changer_5.1.0_x64-setup.exe</code> from the GitHub Releases page. An
-                <code>.msi</code> is published alongside it if your organisation prefers one.</p>
-              <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
-                target="_blank" rel="noopener">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
+              <h4 class="step-title">Download Installer</h4>
+              <p class="step-desc">Grab the latest <code>.exe</code> or <code>.msi</code> installer package from GitHub Releases.</p>
+              <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary btn-sm" target="_blank" style="align-self: flex-start; margin-top: 0.25rem;">
                 Download Latest Release
               </a>
             </div>
           </div>
+
           <div class="install-step">
-            <div class="step-num">2</div>
+            <div class="step-number">2</div>
             <div class="step-body">
-              <h4>Run the setup</h4>
-              <p>Nothing is written to your registry at install time, and no runtime is required — the Python engine is
-                bundled. Language is chosen inside the app.</p>
+              <h4 class="step-title">Run Setup</h4>
+              <p class="step-desc">No external runtimes required — the Python engine and libmpv binaries are bundled directly with the application.</p>
             </div>
           </div>
+
           <div class="install-step">
-            <div class="step-num">3</div>
+            <div class="step-number">3</div>
             <div class="step-body">
-              <h4>Launch and configure</h4>
-              <p>Point it at your wallpapers folder, pick a collage count, check the preview, and start rotation. It
-                registers itself to start with Windows on that first launch — one switch in Settings if you would
-                rather it didn't.</p>
+              <h4 class="step-title">Launch and Enjoy</h4>
+              <p class="step-desc">Point to your wallpaper collection, verify the live preview, and start auto-rotation.</p>
             </div>
-          </div>
-        </div>
-        <div class="install-req">
-          <h4>Requirements</h4>
-          <div class="req-chips">
-            <span class="chip">Windows 10 or 11</span>
           </div>
         </div>
       </div>
+
+      <!-- Panel: Source -->
       <div class="install-panel" id="install-source">
-        <div class="code-block-wrapper">
+        <div class="code-card">
           <div class="code-header">
             <span>PowerShell</span>
             <button class="copy-btn" data-target="code-source">Copy</button>
           </div>
-          <pre id="code-source"><code><span class="c"># 1. Clone the repository</span>
+          <div class="code-body">
+            <pre id="code-source"><code><span class="comment"># 1. Clone the repository</span>
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
 cd wallpaper-changer-windows
 
-<span class="c"># 2. Install the engine's dependencies</span>
+<span class="comment"># 2. Sync python dependencies</span>
 uv sync --dev
 
-<span class="c"># 3. Run the desktop app (starts the engine for you)</span>
+<span class="comment"># 3. Run desktop app (starts engine automatically)</span>
 cd desktop
 bun install
 bun run tauri dev
 
-<span class="c"># Or build the installers, engine included</span>
+<span class="comment"># Or build distribution bundle</span>
 .\scripts\build_app.ps1</code></pre>
-        </div>
-        <div class="install-req">
-          <h4>Prerequisites</h4>
-          <div class="req-table">
-            <div class="req-row"><span class="req-name">Windows</span><span class="req-ver">10 / 11</span></div>
-            <div class="req-row"><span class="req-name">Python</span><span class="req-ver">3.11+</span><a
-                href="https://python.org" target="_blank" rel="noopener">python.org</a></div>
-            <div class="req-row"><span class="req-name">uv</span><span class="req-ver">0.4+</span><a
-                href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">docs.astral.sh/uv</a></div>
-            <div class="req-row"><span class="req-name">Rust</span><span class="req-ver">stable</span><a
-                href="https://rustup.rs" target="_blank" rel="noopener">rustup.rs</a></div>
-            <div class="req-row"><span class="req-name">Bun</span><span class="req-ver">1.1+</span><a
-                href="https://bun.sh" target="_blank" rel="noopener">bun.sh</a></div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ─── CLI ─── -->
+  <!-- ─── CLI SECTION ─── -->
   <section id="cli">
     <div class="container">
-      <div class="section-label">Command Line</div>
-      <h2 class="section-title">Full control from <span class="gradient-text">the terminal.</span></h2>
-      <p class="section-sub">Every feature in the GUI is also available via the CLI for scripting and automation.</p>
+      <div class="section-header">
+        <span class="section-label">Command Line</span>
+        <h2 class="section-title">Full control from <span class="gradient-text">the terminal.</span></h2>
+        <p class="section-sub">Automate wallpaper rotation and video clips with simple PowerShell commands.</p>
+      </div>
+
       <div class="cli-grid">
-        <div class="cli-card">
-          <div class="cli-card-header">Apply wallpaper immediately</div>
-          <div class="code-block-wrapper">
-            <div class="code-header">
-              <span>PowerShell</span>
-              <button class="copy-btn" data-target="cli-1">Copy</button>
-            </div>
+        <div class="code-card">
+          <div class="code-header">
+            <span>Apply wallpaper</span>
+            <button class="copy-btn" data-target="cli-1">Copy</button>
+          </div>
+          <div class="code-body">
             <pre id="cli-1"><code>uv run wallpaper-changer apply</code></pre>
           </div>
         </div>
-        <div class="cli-card">
-          <div class="cli-card-header">Apply with options</div>
-          <div class="code-block-wrapper">
-            <div class="code-header">
-              <span>PowerShell</span>
-              <button class="copy-btn" data-target="cli-2">Copy</button>
-            </div>
-            <pre id="cli-2"><code>uv run wallpaper-changer apply \
-  --collage-count 6 \
-  --selection random</code></pre>
+
+        <div class="code-card">
+          <div class="code-header">
+            <span>Custom collage count</span>
+            <button class="copy-btn" data-target="cli-2">Copy</button>
+          </div>
+          <div class="code-body">
+            <pre id="cli-2"><code>uv run wallpaper-changer apply --collage-count 4 --selection random</code></pre>
           </div>
         </div>
-        <div class="cli-card">
-          <div class="cli-card-header">Watch mode (auto rotation)</div>
-          <div class="code-block-wrapper">
-            <div class="code-header">
-              <span>PowerShell</span>
-              <button class="copy-btn" data-target="cli-3">Copy</button>
-            </div>
+
+        <div class="code-card">
+          <div class="code-header">
+            <span>Watch mode (auto rotation)</span>
+            <button class="copy-btn" data-target="cli-3">Copy</button>
+          </div>
+          <div class="code-body">
             <pre id="cli-3"><code>uv run wallpaper-changer watch</code></pre>
           </div>
         </div>
-        <div class="cli-card">
-          <div class="cli-card-header">Video wallpaper</div>
-          <div class="code-block-wrapper">
-            <div class="code-header">
-              <span>PowerShell</span>
-              <button class="copy-btn" data-target="cli-4">Copy</button>
-            </div>
-            <pre id="cli-4"><code>uv run wallpaper-changer video \
-  --folder C:\Videos\live --loop</code></pre>
+
+        <div class="code-card">
+          <div class="code-header">
+            <span>Live video wallpaper</span>
+            <button class="copy-btn" data-target="cli-4">Copy</button>
+          </div>
+          <div class="code-body">
+            <pre id="cli-4"><code>uv run wallpaper-changer video --folder C:\Videos --loop</code></pre>
           </div>
         </div>
       </div>
-      <div class="hotkeys-section">
-        <h3>Global Hotkeys</h3>
-        <p>Control the app from any window using keyboard shortcuts. <strong>Nothing is bound out of the box</strong> —
-          Windows gives a shortcut to one program at a time, so claiming a dozen on first run would steal them from
-          whatever you already use. Assign the ones you want from the Hotkeys screen; these are the classic bindings to
-          start from.</p>
+    </div>
+  </section>
+
+  <!-- ─── HOTKEYS SECTION ─── -->
+  <section id="hotkeys">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Global Shortcuts</span>
+        <h2 class="section-title">Control everything via <span class="gradient-text">keyboard.</span></h2>
+        <p class="section-sub">No shortcuts are bound by default to prevent stealing your hotkeys. Assign them freely inside the app.</p>
+      </div>
+
+      <div class="hotkeys-card">
         <div class="hotkeys-grid">
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd></div>
-            <span>Next wallpaper</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>→</kbd></div>
+            <span class="hotkey-desc">Next wallpaper</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd></div>
-            <span>Previous wallpaper</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>←</kbd></div>
+            <span class="hotkey-desc">Previous wallpaper</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd></div>
-            <span>Stop / Start Watch</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd></div>
+            <span class="hotkey-desc">Start / Stop rotation</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></div>
-            <span>Apply default wallpaper</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd></div>
+            <span class="hotkey-desc">Toggle app window</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></div>
-            <span>Open / Close app window</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Alt</kbd> + <kbd>A</kbd></div>
+            <span class="hotkey-desc">Toggle window transparency</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Alt</kbd><kbd>A</kbd></div>
-            <span>Toggle transparency (50% ↔ opaque)</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Alt</kbd> + <kbd>Scroll ↕</kbd></div>
+            <span class="hotkey-desc">Adjust window opacity</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Alt</kbd><kbd>Scroll ↕</kbd></div>
-            <span>Adjust focused window opacity (modifier configurable)</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd></div>
+            <span class="hotkey-desc">Start / Stop video wallpaper</span>
           </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>1</kbd></div>
-            <span>Effect: Normal</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>2</kbd></div>
-            <span>Effect: Black &amp; White</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>3</kbd></div>
-            <span>Effect: Vintage</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>4</kbd></div>
-            <span>Effect: HDR</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>V</kbd></div>
-            <span>Start / Stop video wallpaper</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>M</kbd></div>
-            <span>Toggle video sound</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>.</kbd></div>
-            <span>Next video</span>
-          </div>
-          <div class="hotkey-row">
-            <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>,</kbd></div>
-            <span>Previous video</span>
+          <div class="hotkey-item">
+            <div class="hotkey-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd></div>
+            <span class="hotkey-desc">Mute / Unmute video audio</span>
           </div>
         </div>
       </div>
@@ -852,167 +1244,59 @@ bun run tauri dev
   <!-- ─── CHANGELOG ─── -->
   <section id="changelog">
     <div class="container">
-      <div class="section-label">Changelog</div>
-      <h2 class="section-title">Release <span class="gradient-text">history.</span></h2>
+      <div class="section-header">
+        <span class="section-label">Changelog</span>
+        <h2 class="section-title">Release <span class="gradient-text">history.</span></h2>
+        <p class="section-sub">Continuous updates and improvements.</p>
+      </div>
+
       <div class="timeline">
-        <div class="timeline-item current">
+        <!-- v5.1 -->
+        <div class="timeline-item latest">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v5.1</span>
-              <span class="version-label current-label">Latest</span>
+            <div class="timeline-header">
+              <span class="timeline-version">v5.1</span>
+              <span class="badge badge-primary">Latest</span>
             </div>
-            <ul class="change-list">
-              <li>Starts with Windows straight into the tray — enabled on first run, one switch away from off</li>
-              <li><em>Start minimized</em> does the same when you launch the app yourself</li>
-              <li>Resumes the last session: rotation and video wallpaper come back the way you left them</li>
-              <li>Reworked preview — monitor outlines over the composite, click one to zoom into that screen, expand to
-                fill the window, and apply exactly the images on screen</li>
-              <li>Start/stop rotation added to the tray menu, so the window is never required</li>
-              <li>Animated screen transitions and card reveals, dropped under reduced-motion</li>
-              <li>Version numbers now match the release — v5.0 shipped its files as <code>0.1.0</code>, so Windows saw
-                an upgrade as the same version</li>
+            <ul class="changelog-list">
+              <li>Starts with Windows straight into the tray — enabled on first run with simple toggle</li>
+              <li>Instant session resume: rotation and video wallpapers pick up where you left them</li>
+              <li>Reworked interactive live preview with monitor outlines, screen zooming, and expansion</li>
+              <li>Start/stop rotation controls added directly to the system tray context menu</li>
+              <li>Animated UI screen transitions and responsive card reveals</li>
             </ul>
           </div>
         </div>
+
+        <!-- v5.0 -->
         <div class="timeline-item">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v5.0</span>
+            <div class="timeline-header">
+              <span class="timeline-version">v5.0</span>
             </div>
-            <ul class="change-list">
-              <li>Rebuilt the interface on Tauri 2, React, and shadcn/ui — the tkinter GUI is gone</li>
-              <li>Split into two processes: a Rust shell owning the window, tray, and hotkeys, and a Python engine
-                owning everything that touches Win32, speaking JSON-RPC over stdio</li>
-              <li>Hotkeys moved to the Rust side, so they survive an engine restart and report when another app already
-                owns a combination</li>
-              <li>MSI and NSIS installers from the Tauri bundler — no more Inno Setup, and no registry writes at
-                install time</li>
-              <li>Settings, history, and transparency moved to <code>%APPDATA%</code>, so an install under Program
-                Files works without elevation</li>
-              <li>No shortcuts bound by default — assign only what you want</li>
+            <ul class="changelog-list">
+              <li>Complete architectural rewrite: Tauri v2 + React 19 + shadcn/ui frontend</li>
+              <li>Two-process model: Rust shell communicating via JSON-RPC with Python Win32 sidecar</li>
+              <li>Rust-owned global shortcuts surviving engine restarts</li>
+              <li>Bundled MSI and NSIS installers with zero registry pollution</li>
+              <li>Settings migrated cleanly to <code>%APPDATA%</code> for standard user permission support</li>
             </ul>
           </div>
         </div>
+
+        <!-- v4.0 -->
         <div class="timeline-item">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v4.2</span>
+            <div class="timeline-header">
+              <span class="timeline-version">v4.0</span>
             </div>
-            <ul class="change-list">
-              <li>Stabilized video wallpaper rendering — D3D11 presentation with software decoding, avoiding fragile
-                hardware-decoder surfaces</li>
-              <li>Simplified the wallpaper pipeline and refreshed the documentation</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v4.0</span>
-            </div>
-            <ul class="change-list">
-              <li>New tabbed control panel with focused Wallpaper, Video, and Tools views</li>
-              <li>Reliable main-thread dispatch for global shortcuts, tray actions, and background work</li>
-              <li>Shortcut normalization, duplicate detection, and safer record mode</li>
-              <li>Serialized wallpaper changes prevent overlapping render and apply jobs</li>
-              <li>Atomic settings saves and rotating diagnostic logs improve crash recovery</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v3.3</span>
-            </div>
-            <ul class="change-list">
-              <li>Video wallpaper — play any video (MP4/MKV/WebM/MOV…) behind your desktop icons via libmpv + WORKERW</li>
-              <li>Hardware-accelerated, multi-monitor playback with aspect-correct fit — vertical 9:16 clips no longer stretched</li>
-              <li>Optional audio playback from the video's own track</li>
-              <li>Video hotkeys — Start/Stop (Ctrl+Alt+V), mute (Ctrl+Alt+M), Next (Ctrl+Alt+.), Previous (Ctrl+Alt+,)</li>
-              <li>Previous/Next playlist navigation with all monitors re-synced</li>
-              <li>New <code>wallpaper-changer video</code> CLI command</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v3.2</span>
-            </div>
-            <ul class="change-list">
-              <li>Smooth fade transition at 30 fps between wallpapers (WorkerW + GDI rendering)</li>
-              <li>Image effect hotkeys — Ctrl+Alt+1–4 switch Normal / B&W / Vintage / HDR instantly</li>
-              <li>Configurable scroll modifier for transparency (Alt, Ctrl, Shift, or Win)</li>
-              <li>Auto-save — every Apply persists settings to disk, no manual Save needed</li>
-              <li>Fixed sticky-modifier bug in transparency scroll using Win32 GetAsyncKeyState</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v3.1</span>
-            </div>
-            <ul class="change-list">
-              <li>Window Transparency Control — adjust opacity of any window via GUI slider</li>
-              <li>Toggle transparency hotkey (Alt+A) — press once for 50%, again to restore</li>
-              <li>Alt+Scroll — fine-tune focused window opacity with mouse wheel</li>
-              <li>Persistent transparency — settings saved to JSON, restored on launch</li>
-              <li>All transparency shortcuts fully customizable from the GUI</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v3.0</span>
-            </div>
-            <ul class="change-list">
-              <li>Full multi-language GUI — English, Português (Brasil), 日本語</li>
-              <li>Windows Installer via Inno Setup with language selection</li>
-              <li>Global hotkeys — fully customizable from GUI</li>
-              <li>Wallpaper history navigation (Previous)</li>
-              <li>Default wallpaper hotkey</li>
-              <li>System tray with right-click menu</li>
-              <li>Start with Windows integration</li>
-              <li>CLI with <code>apply</code> and <code>watch</code> commands</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v2.0</span>
-            </div>
-            <ul class="change-list">
-              <li>Collage grid with up to 8 images per monitor</li>
-              <li>Image fit modes — Fill, Fit, Stretch, Center, Span</li>
-              <li>Auto-rotation with configurable interval</li>
-              <li>Random and sequential image selection</li>
-              <li>"Same images on all monitors" option</li>
-            </ul>
-          </div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-version">
-              <span class="version-tag">v1.0</span>
-            </div>
-            <ul class="change-list">
-              <li>Initial release</li>
-              <li>Basic multi-monitor wallpaper support</li>
-              <li>GUI with ttkbootstrap</li>
-              <li>Win32 API integration for wallpaper application</li>
+            <ul class="changelog-list">
+              <li>Hardware-accelerated video wallpaper support via libmpv and WorkerW desktop layer</li>
+              <li>Window transparency mouse-wheel modifier adjustment</li>
+              <li>Smooth 30 FPS GDI crossfade transitions between wallpapers</li>
             </ul>
           </div>
         </div>
@@ -1020,25 +1304,17 @@ bun run tauri dev
     </div>
   </section>
 
-  <!-- ─── CTA ─── -->
+  <!-- ─── CTA SECTION ─── -->
   <section id="cta">
     <div class="container">
       <div class="cta-card">
-        <div class="cta-glow"></div>
-        <h2>Ready to transform your desktop?</h2>
-        <p>Download WallpaperChanger and make every monitor unique — for free.</p>
+        <h2 class="cta-title">Ready to transform your desktop?</h2>
+        <p class="cta-desc">Download WallpaperChanger and customize every monitor with collages or live videos — completely free.</p>
         <div class="cta-actions">
-          <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary btn-lg"
-            target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
+          <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
             Download Installer
           </a>
-          <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline btn-lg"
-            target="_blank" rel="noopener">
+          <a href="https://github.com/klysman08/wallpaper-changer-windows" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
             ⭐ Star on GitHub
           </a>
         </div>
@@ -1050,17 +1326,18 @@ bun run tauri dev
   <footer>
     <div class="container footer-inner">
       <div class="footer-left">
-        <span class="logo-text">WallpaperChanger</span>
-        <p>MIT Licensed · Free forever · No telemetry</p>
+        <div class="footer-brand">
+          <img src="icon.png" alt="WallpaperChanger Logo" />
+          <span>WallpaperChanger</span>
+        </div>
+        <p class="footer-meta">MIT Licensed · Free forever · No telemetry</p>
       </div>
+
       <div class="footer-links">
         <a href="https://github.com/klysman08/wallpaper-changer-windows" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" target="_blank"
-          rel="noopener">Releases</a>
-        <a href="https://github.com/klysman08/wallpaper-changer-windows/issues" target="_blank"
-          rel="noopener">Issues</a>
-        <a href="https://github.com/klysman08/wallpaper-changer-windows/blob/master/README.md" target="_blank"
-          rel="noopener">Docs</a>
+        <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/klysman08/wallpaper-changer-windows/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://buy.stripe.com/4gMdRa7XW6dt8Ph9KX9Ve01" target="_blank" rel="noopener">Support</a>
       </div>
     </div>
   </footer>
