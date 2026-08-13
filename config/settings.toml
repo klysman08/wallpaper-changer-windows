@@ -8,29 +8,36 @@ language = "en"
 
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
-output_folder = "assets/output"
+output_folder = "output"
 default_wallpaper = ""
 
 [display]
 fit_mode = "fill"
 effect = "normal"
 
+# No shortcut is bound out of the box: a global hotkey belongs to one process on
+# Windows, so claiming a dozen of them on first run steals combinations from
+# whatever the user already runs. Empty means "not registered" — assign the ones
+# you want from the Hotkeys screen.
 [hotkeys]
-next_wallpaper = "ctrl+alt+right"
-prev_wallpaper = "ctrl+alt+left"
-stop_watch = "ctrl+alt+s"
-default_wallpaper = "ctrl+alt+d"
-toggle_transparency = "alt+a"
-toggle_window = "ctrl+alt+w"
-scroll_modifier = "alt"
-effect_normal = "ctrl+alt+1"
-effect_bw = "ctrl+alt+2"
-effect_vintage = "ctrl+alt+3"
-effect_hdr = "ctrl+alt+4"
-toggle_video = "ctrl+alt+v"
-toggle_video_sound = "ctrl+alt+m"
-next_video = "ctrl+alt+."
-prev_video = "ctrl+alt+,"
+next_wallpaper = ""
+prev_wallpaper = ""
+stop_watch = ""
+default_wallpaper = ""
+toggle_transparency = ""
+toggle_window = ""
+# Not shortcuts. Hold scroll_modifier and turn the wheel to fade the focused
+# window. Off by default because it installs a system-wide mouse hook.
+scroll_enabled = false
+scroll_modifier = "alt"          # alt | ctrl | shift | win
+effect_normal = ""
+effect_bw = ""
+effect_vintage = ""
+effect_hdr = ""
+toggle_video = ""
+toggle_video_sound = ""
+next_video = ""
+prev_video = ""
 
 [video]
 enabled = false

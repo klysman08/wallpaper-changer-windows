@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 import schedule
 
-from .config import load_config, resolve_path
+from .config import load_config, resolve_output_dir
 from .monitor import get_monitors
 from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
 from .wallpaper import EFFECTS, apply_wallpaper
@@ -42,7 +42,7 @@ def apply_cmd(
     """Aplica o wallpaper collage imediatamente."""
     cfg = load_config(Path(config) if config else None)
     monitors = get_monitors()
-    out_dir = resolve_path(cfg["paths"]["output_folder"])
+    out_dir = resolve_output_dir(cfg)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if selection:
@@ -77,7 +77,7 @@ def watch_cmd(config: str | None) -> None:
 
     def job() -> None:
         monitors = get_monitors()
-        out_dir = resolve_path(cfg["paths"]["output_folder"])
+        out_dir = resolve_output_dir(cfg)
         out_dir.mkdir(parents=True, exist_ok=True)
         apply_wallpaper(cfg, monitors, out_dir)
         click.echo("[OK] Wallpaper atualizado.")

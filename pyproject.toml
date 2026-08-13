@@ -25,6 +25,7 @@ dev = [
 [project.scripts]
 wallpaper-changer     = "wallpaper_changer.cli:main"
 wallpaper-changer-gui = "wallpaper_changer.gui:run"
+wallpaper-changer-rpc = "wallpaper_changer.rpc:main"
 
 [build-system]
 requires = ["hatchling"]

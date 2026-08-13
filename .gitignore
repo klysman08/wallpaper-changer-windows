@@ -12,3 +12,7 @@ libmpv/*
 .python-version
 /CLAUDE.md
 /.claude
+# PyInstaller sidecar staged for the Tauri bundler (built by scripts/build_engine.ps1)
+desktop/src-tauri/engine/
+# Legibility strip emitted by scripts/make_icon.py alongside the real icon
+desktop/app-icon-preview.png

@@ -378,6 +378,10 @@ class HotkeyManager:
         errors: list[str] = []
         items = bindings.items() if isinstance(bindings, Mapping) else bindings
         for raw_combo, callback in items:
+            # Blank means "not bound", which is the shipped default for every
+            # action — it is not a mistake worth reporting.
+            if not raw_combo or not raw_combo.strip():
+                continue
             try:
                 combo = normalize_hotkey(raw_combo)
             except ValueError as exc:

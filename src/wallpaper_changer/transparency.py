@@ -183,8 +183,8 @@ def list_visible_windows() -> List[Tuple[int, str, str]]:
 
 def _settings_file() -> Path:
     """Return the path to the transparency settings JSON file."""
-    from .config import PROJECT_ROOT
-    return PROJECT_ROOT / "config" / "transparency.json"
+    from .config import get_transparency_file
+    return get_transparency_file()
 
 
 def load_opacity_settings() -> Dict[str, int]:
