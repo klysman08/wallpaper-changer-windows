@@ -66,7 +66,19 @@ $probes = @(
     @{ Name = 'get_capabilities'; Json = '{"id":4,"method":"get_capabilities"}' }
 )
 $script = ($probes | ForEach-Object { $_.Json }) -join "`n"
-$responses = @($script | & $exePath 2>$null)
+# The engine logs to stderr — it announces the scroll hook whenever the machine
+# running the build has that setting on. Under Windows PowerShell 5.1 each of those
+# lines becomes a NativeCommandError, which $ErrorActionPreference='Stop' turns into
+# a failed build even though the probe itself succeeded. Same treatment as the
+# PyInstaller call above: relax it here and judge by what came back on stdout.
+$previous = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    $responses = @($script | & $exePath 2>$null)
+}
+finally {
+    $ErrorActionPreference = $previous
+}
 foreach ($probe in $probes) {
     $line = $responses | Where-Object { $_ -match "`"id`":\s*$($probes.IndexOf($probe) + 1)\b" } | Select-Object -First 1
     if ($line -notmatch '"ok":\s*true') {

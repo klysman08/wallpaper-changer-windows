@@ -117,6 +117,17 @@ class Engine:
         """Persist *config* and adopt it as the live configuration."""
         merged = dict(config)
         merged["_config_path"] = self._config().get("_config_path", str(get_default_config_path()))
+        # The session flags describe what is running *now*, and a hotkey or the tray
+        # can have flipped them since the client read the config. Taking the client's
+        # copy would let a stale draft switch rotation back off on the next launch.
+        merged["general"] = {
+            **merged.get("general", {}),
+            "rotation_active": self.watch_status()["watching"],
+        }
+        merged["video"] = {
+            **merged.get("video", {}),
+            "enabled": self._video.is_running(),
+        }
         save_config(merged)
         self._cfg = merged
         lang = merged.get("general", {}).get("language")
@@ -126,6 +137,48 @@ class Engine:
         # saved settings immediately rather than waiting for a restart.
         self.sync_scroll_transparency()
         return {"saved": True, "config_path": merged["_config_path"]}
+
+    def _remember(self, section: str, key: str, value: object) -> None:
+        """Write one session flag straight to ``settings.toml``.
+
+        Rotation and video playback are toggled from four places (the window, the
+        tray, a global hotkey, the CLI), and the next launch is supposed to come up
+        the way the user left it. Persisting on the toggle — rather than waiting for
+        an explicit Save — is what makes that true even if the window is never opened.
+        """
+        cfg = self._config()
+        current = cfg.setdefault(section, {})
+        if current.get(key) == value:
+            return
+        current[key] = value
+        try:
+            save_config(cfg)
+        except OSError as exc:
+            # Losing the flag only costs us the restore on the next launch; the
+            # running session is unaffected, so this must not fail the call.
+            log.warning("Could not persist %s.%s: %s", section, key, exc)
+
+    def restore_session(self) -> dict:
+        """Bring back what was running when the app was last closed.
+
+        Called once at startup. Each half is independent: no videos (or no libmpv)
+        must not stop the rotation timer from coming back.
+        """
+        cfg = self._config()
+        restored = {"rotation": False, "video": False}
+        if bool(cfg.get("general", {}).get("rotation_active", False)):
+            try:
+                self.watch_start()
+                restored["rotation"] = True
+            except Exception as exc:
+                log.warning("Could not restore the rotation timer: %s", exc)
+        if bool(cfg.get("video", {}).get("enabled", False)) and has_mpv():
+            try:
+                self.video_start()
+                restored["video"] = True
+            except Exception as exc:
+                log.warning("Could not restore the video wallpaper: %s", exc)
+        return restored
 
     # ── Environment ───────────────────────────────────────────────────────────
 
@@ -173,14 +226,22 @@ class Engine:
 
     # ── Wallpaper ─────────────────────────────────────────────────────────────
 
-    def apply_wallpaper(self, config: dict | None = None) -> dict:
-        """Compose and apply the collage. *config* overrides the saved settings."""
+    def apply_wallpaper(
+        self, config: dict | None = None, images: list[str] | None = None
+    ) -> dict:
+        """Compose and apply the collage. *config* overrides the saved settings.
+
+        Pass *images* — the set a preview reported — to apply exactly what is on
+        screen instead of picking a fresh selection.
+        """
         cfg = self._merged(config)
         if not self._apply_lock.acquire(blocking=False):
             raise RpcError("An apply is already running.", "busy")
         try:
             monitors = get_monitors()
-            out, images = apply_wallpaper(cfg, monitors, self._output_dir())
+            out, images = apply_wallpaper(
+                cfg, monitors, self._output_dir(), preset_images=images or None
+            )
         finally:
             self._apply_lock.release()
         self._push_history(images)
@@ -309,11 +370,13 @@ class Engine:
         with self._watch_lock:
             self._cancel_watch_locked()
             self._schedule_watch_locked(secs)
+        self._remember("general", "rotation_active", True)
         return {"watching": True, "interval": secs}
 
     def watch_stop(self) -> dict:
         with self._watch_lock:
             self._cancel_watch_locked()
+        self._remember("general", "rotation_active", False)
         return {"watching": False}
 
     def watch_status(self) -> dict:
@@ -447,10 +510,12 @@ class Engine:
             on_status=lambda name: self._emit("video_status", {"current": name}),
         )
         self._video.start()
+        self._remember("video", "enabled", True)
         return self.video_status()
 
     def video_stop(self) -> dict:
         self._video.stop()
+        self._remember("video", "enabled", False)
         return self.video_status()
 
     def video_next(self) -> dict:
@@ -616,6 +681,17 @@ def serve(stdin, stdout) -> int:
     except Exception as exc:
         log.warning("Could not start scroll transparency: %s", exc)
     emit("ready", {"protocol": PROTOCOL_VERSION})
+
+    # Come back up the way the user left it. On a thread because starting the video
+    # wallpaper spins up mpv and reparents windows, which must not delay the first
+    # request the shell sends.
+    def _restore() -> None:
+        try:
+            emit("session_restored", engine.restore_session())
+        except Exception as exc:
+            log.warning("Could not restore the previous session: %s", exc)
+
+    threading.Thread(target=_restore, name="restore-session", daemon=True).start()
 
     for raw_line in stdin:
         # Strip a stray BOM as well as whitespace: callers that reopen the stream

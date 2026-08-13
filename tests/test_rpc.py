@@ -7,11 +7,13 @@ the ``wallpaper_changer.rpc`` boundary, per the repo convention.
 import base64
 import io
 import json
+from pathlib import Path
 
 import pytest
 from PIL import Image
 
 from wallpaper_changer import rpc
+from wallpaper_changer.config import load_config
 from wallpaper_changer.monitor import Monitor
 
 
@@ -25,9 +27,11 @@ def engine():
 
 
 @pytest.fixture
-def cfg():
+def cfg(tmp_path):
+    # A real, throwaway path: the engine persists session flags (rotation, video) to
+    # this file on its own, so a fictional one would be written for real.
     return {
-        "_config_path": "C:/fake/settings.toml",
+        "_config_path": str(tmp_path / "settings.toml"),
         "general": {"selection": "random", "interval": 300, "collage_count": 4},
         "paths": {"wallpapers_folder": "C:/pics", "output_folder": "assets/output"},
         "display": {"fit_mode": "fill", "effect": "normal"},
@@ -141,7 +145,7 @@ def test_get_config_strips_internal_keys_and_exposes_path(engine, cfg, monkeypat
     result = engine.get_config()
 
     assert "_config_path" not in result["config"]
-    assert result["config_path"] == "C:/fake/settings.toml"
+    assert result["config_path"] == cfg["_config_path"]
     assert result["config"]["display"]["effect"] == "normal"
 
 
@@ -156,7 +160,7 @@ def test_save_config_persists_and_updates_language(engine, cfg, monkeypatch):
     engine.save_config(new)
 
     assert saved["lang"] == "ja"
-    assert saved["_config_path"] == "C:/fake/settings.toml"
+    assert saved["_config_path"] == cfg["_config_path"]
 
 
 def test_merged_overlays_sections_without_dropping_siblings(engine, cfg, monkeypatch):
@@ -266,6 +270,25 @@ def test_apply_wallpaper_emits_event_with_result(engine, cfg, tmp_path, monkeypa
 
     assert result["images"] == ["x.png"]
     assert ("wallpaper_applied", result) in engine.events
+
+
+def test_apply_wallpaper_can_replay_a_preview_selection(engine, cfg, tmp_path, monkeypatch):
+    """"Set as wallpaper" in the preview must apply what is on screen, not a reshuffle."""
+    seen: dict = {}
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(rpc, "get_monitors", lambda: [Monitor(0, 0, 0, 40, 20)])
+    monkeypatch.setattr(rpc, "resolve_output_dir", lambda cfg_: tmp_path)
+
+    def record(cfg_, monitors, out, preset_images=None):
+        seen["preset"] = preset_images
+        return tmp_path / "out.bmp", list(preset_images or [])
+
+    monkeypatch.setattr(rpc, "apply_wallpaper", record)
+
+    result = engine.apply_wallpaper(images=["a.png", "b.png"])
+
+    assert seen["preset"] == ["a.png", "b.png"]
+    assert result["images"] == ["a.png", "b.png"]
 
 
 def test_apply_wallpaper_rejects_concurrent_run(engine, cfg, tmp_path, monkeypatch):
@@ -498,6 +521,73 @@ def test_watch_start_falls_back_to_configured_interval(engine, cfg, monkeypatch)
     engine.watch_stop()
 
     assert result["interval"] == 300
+
+
+def test_watch_start_and_stop_persist_the_rotation_flag(engine, cfg, monkeypatch):
+    """The next launch has to know rotation was running, without an explicit Save."""
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+
+    engine.watch_start(interval=999)
+    started = load_config(Path(cfg["_config_path"]))
+    engine.watch_stop()
+    stopped = load_config(Path(cfg["_config_path"]))
+
+    assert started["general"]["rotation_active"] is True
+    assert stopped["general"]["rotation_active"] is False
+
+
+def test_save_config_ignores_a_stale_rotation_flag_from_the_client(engine, cfg, monkeypatch):
+    """A draft read before the hotkey fired must not switch rotation back off."""
+    saved: dict = {}
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    engine.watch_start(interval=999)
+    monkeypatch.setattr(rpc, "save_config", lambda c: saved.update(c))
+
+    engine.save_config({**cfg, "general": {**cfg["general"], "rotation_active": False}})
+    # Read before stopping: watch_stop writes through the same patched save_config.
+    persisted = saved["general"]["rotation_active"]
+    engine.watch_stop()
+
+    assert persisted is True
+
+
+def test_restore_session_starts_rotation_when_it_was_left_running(engine, cfg, monkeypatch):
+    cfg["general"]["rotation_active"] = True
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(rpc, "has_mpv", lambda: False)
+
+    restored = engine.restore_session()
+    watching = engine.watch_status()["watching"]
+    engine.watch_stop()
+
+    assert restored == {"rotation": True, "video": False}
+    assert watching is True
+
+
+def test_restore_session_leaves_everything_idle_when_nothing_was_running(
+    engine, cfg, monkeypatch
+):
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
+
+    restored = engine.restore_session()
+
+    assert restored == {"rotation": False, "video": False}
+    assert engine.watch_status()["watching"] is False
+
+
+def test_restore_session_survives_a_video_that_cannot_start(engine, cfg, monkeypatch):
+    """No videos on disk must not cost the user their rotation timer."""
+    cfg["general"]["rotation_active"] = True
+    cfg["video"]["enabled"] = True
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
+    monkeypatch.setattr(rpc, "scan_video_folder", lambda folder: [])
+
+    restored = engine.restore_session()
+    engine.watch_stop()
+
+    assert restored == {"rotation": True, "video": False}
 
 
 def test_watch_tick_emits_error_event_when_apply_fails(engine, cfg, monkeypatch):

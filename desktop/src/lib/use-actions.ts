@@ -8,7 +8,14 @@
 import * as React from "react"
 import { toast } from "sonner"
 
-import { engine, onEngineEvent, onHotkeyEvent, type Config, type VideoStatus } from "@/lib/engine"
+import {
+  engine,
+  onEngineEvent,
+  onHotkeyEvent,
+  onShellAction,
+  type Config,
+  type VideoStatus,
+} from "@/lib/engine"
 
 export interface Actions {
   applying: boolean
@@ -17,6 +24,8 @@ export interface Actions {
   videoBusy: boolean
   /** Compose and set a fresh wallpaper. */
   applyNow: () => Promise<void>
+  /** Set exactly the image set a preview showed, with no reshuffle. */
+  applyImages: (images: string[]) => Promise<void>
   /** Re-apply the previous image set, exactly as it was. */
   applyPrevious: () => Promise<void>
   toggleWatch: () => Promise<void>
@@ -54,10 +63,15 @@ export function useActions(config: Config | null, t: (key: string) => string): A
       if (event.event === "video_status") {
         setVideo((prev) => (prev ? { ...prev, current: event.data.current } : prev))
       }
+      // The engine restores the previous session on its own; adopt whatever it
+      // brought back rather than showing the idle state it started from.
+      if (event.event === "session_restored") refresh()
     })
+    const unlistenShell = onShellAction(refresh)
     return () => {
       void unlistenHotkey.then((fn) => fn())
       void unlistenEngine.then((fn) => fn())
+      void unlistenShell.then((fn) => fn())
     }
   }, [refresh])
 
@@ -74,6 +88,21 @@ export function useActions(config: Config | null, t: (key: string) => string): A
       setApplying(false)
     }
   }, [t])
+
+  const applyImages = React.useCallback(
+    async (images: string[]) => {
+      setApplying(true)
+      try {
+        await engine.applyWallpaper(configRef.current ?? undefined, images)
+        toast.success(t("wallpaper_applied"), { description: `${images.length} ${t("images")}` })
+      } catch (e) {
+        toast.error(t("apply_failed"), { description: (e as Error).message })
+      } finally {
+        setApplying(false)
+      }
+    },
+    [t],
+  )
 
   const applyPrevious = React.useCallback(async () => {
     setApplying(true)
@@ -133,6 +162,7 @@ export function useActions(config: Config | null, t: (key: string) => string): A
     video,
     videoBusy,
     applyNow,
+    applyImages,
     applyPrevious,
     toggleWatch,
     toggleVideo,

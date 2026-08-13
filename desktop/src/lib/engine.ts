@@ -38,6 +38,10 @@ export interface Config {
     collage_count: number
     collage_same_for_all: boolean
     language: string
+    /** Come up hidden in the tray. Always implied when Windows starts the app. */
+    start_minimized?: boolean
+    /** Written by the engine: whether rotation was running at the last shutdown. */
+    rotation_active?: boolean
   }
   paths: {
     wallpapers_folder: string
@@ -155,7 +159,9 @@ export const engine = {
   listFolderImages: (folder: string) =>
     call<{ count: number; images: string[] }>("list_folder_images", { folder }),
 
-  applyWallpaper: (config?: Partial<Config>) => call<ApplyResult>("apply_wallpaper", { config }),
+  /** Compose and apply. Pass `images` to apply exactly the set a preview showed. */
+  applyWallpaper: (config?: Partial<Config>, images?: string[]) =>
+    call<ApplyResult>("apply_wallpaper", { config, images }),
   applyDefaultWallpaper: (config?: Partial<Config>) =>
     call<ApplyResult>("apply_default_wallpaper", { config }),
   /** Replay the previous image set exactly, rather than picking a new one. */
@@ -225,6 +231,7 @@ export type EngineEvent =
   | { event: "ready"; data: { protocol: number } }
   | { event: "stopped"; data: Record<string, never> }
   | { event: "wallpaper_applied"; data: ApplyResult }
+  | { event: "session_restored"; data: { rotation: boolean; video: boolean } }
   | { event: "video_status"; data: { current: string } }
   | {
       event: "transparency_changed"
@@ -246,4 +253,14 @@ export interface HotkeyEvent {
 
 export function onHotkeyEvent(handler: (event: HotkeyEvent) => void): Promise<UnlistenFn> {
   return listen<HotkeyEvent>("hotkey-fired", ({ payload }) => handler(payload))
+}
+
+/**
+ * The tray ran an engine method.
+ *
+ * The window can be open behind the tray menu, so anything it shows that the action
+ * changed — rotation in particular — has to be re-read rather than left to drift.
+ */
+export function onShellAction(handler: (action: string) => void): Promise<UnlistenFn> {
+  return listen<{ action: string }>("shell-action", ({ payload }) => handler(payload.action))
 }

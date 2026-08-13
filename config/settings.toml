@@ -5,6 +5,12 @@ interval = 300
 collage_count = 4
 collage_same_for_all = false
 language = "en"
+# Come up hidden in the tray. Always in effect when Windows starts the app itself;
+# turn this on to get the same behaviour when launching it by hand.
+start_minimized = false
+# Written by the engine, not by hand: whether rotation was running when the app was
+# last closed. It is restored on the next launch.
+rotation_active = false
 
 [paths]
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
@@ -40,6 +46,8 @@ next_video = ""
 prev_video = ""
 
 [video]
+# Also the remembered state: set when the video wallpaper is started or stopped,
+# and restored on the next launch.
 enabled = false
 folder = "C:/Users/klysm/Videos/wuwa"
 loop = false
