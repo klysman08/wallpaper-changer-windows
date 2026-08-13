@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="WallpaperChanger — The most powerful free collage & live video wallpaper manager for Windows. Multi-monitor, multi-language, auto-rotation, zero bloat." />
+    content="WallpaperChanger — The most powerful free collage & live video wallpaper manager for Windows. Multi-monitor, live preview, auto-rotation, multi-language, zero bloat." />
   <meta name="keywords" content="wallpaper manager, windows wallpaper, multi-monitor wallpaper, collage wallpaper, video wallpaper, live wallpaper, animated wallpaper, dual monitor wallpaper, free wallpaper app, open-source wallpaper" />
   <link rel="canonical" href="https://wallpaper.astrofocus.app/" />
 
@@ -37,7 +37,10 @@
       "priceCurrency": "USD"
     },
     "description": "Multi-monitor collage & live video wallpaper manager. Free, open-source, MIT licensed.",
-    "url": "https://wallpaper.astrofocus.app/"
+    "url": "https://wallpaper.astrofocus.app/",
+    "softwareVersion": "5.0",
+    "downloadUrl": "https://github.com/klysman08/wallpaper-changer-windows/releases",
+    "license": "https://opensource.org/licenses/MIT"
   }
   </script>
   <link rel="stylesheet" href="css/style.css" />
@@ -67,6 +70,7 @@
       <ul class="nav-links">
         <li><a href="#features">Features</a></li>
         <li><a href="#preview">Preview</a></li>
+        <li><a href="#stack">Stack</a></li>
         <li><a href="#install">Install</a></li>
         <li><a href="#cli">CLI</a></li>
         <li><a href="#changelog">Changelog</a></li>
@@ -113,11 +117,12 @@
   <section id="hero">
     <div class="container hero-container">
       <div class="hero-text">
-        <div class="badge">v4.0 · MIT License · Free Forever</div>
+        <div class="badge">v5.0 · MIT License · Free Forever</div>
         <h1>The wallpaper manager<br /><span class="gradient-text">Windows deserves.</span></h1>
         <p class="hero-sub">
-          Multi-monitor collage mode, <strong>live video wallpapers</strong>, auto-rotation, global hotkeys, system tray —
-          completely free and open-source. No subscriptions. No ads. No telemetry.
+          Multi-monitor collage mode, <strong>live video wallpapers</strong>, a preview you can zoom into monitor by
+          monitor, auto-rotation, global hotkeys, system tray — completely free and open-source. No subscriptions. No
+          ads. No telemetry.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
@@ -135,6 +140,10 @@
           </a>
         </div>
         <div class="hero-badges">
+          <img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white"
+            alt="Tauri 2" />
+          <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black"
+            alt="React 19" />
           <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white"
             alt="Python 3.11+" />
           <img
@@ -190,11 +199,15 @@
             </tr>
             <tr>
               <td><span class="icon-bad">✗</span> No auto-start or background rotation</td>
-              <td><span class="icon-good">✓</span> <strong>Start with Windows</strong> → auto-rotation from tray</td>
+              <td><span class="icon-good">✓</span> <strong>Starts with Windows</strong> straight into the tray — no window in your way</td>
             </tr>
             <tr>
-              <td><span class="icon-bad">✗</span> Settings lost after restart</td>
-              <td><span class="icon-good">✓</span> <strong>Auto-save</strong> on every apply — no manual save needed</td>
+              <td><span class="icon-bad">✗</span> Forgets what it was doing after a restart</td>
+              <td><span class="icon-good">✓</span> <strong>Resumes your session</strong> — rotation and video pick up where you left them</td>
+            </tr>
+            <tr>
+              <td><span class="icon-bad">✗</span> Apply and hope for the best</td>
+              <td><span class="icon-good">✓</span> <strong>Live preview</strong> — zoom to any monitor, then apply exactly what you see</td>
             </tr>
             <tr>
               <td><span class="icon-bad">✗</span> Paid or ad-supported</td>
@@ -212,6 +225,13 @@
       <div class="section-label">Features</div>
       <h2 class="section-title">Everything you need,<br /><span class="gradient-text">nothing you don't.</span></h2>
       <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>Live Preview</h3>
+          <p>See the real composite before it touches your desktop. Monitor outlines are drawn over it, any screen can
+            be zoomed to on its own, the whole thing expands to fill the window — and one click applies exactly what
+            you are looking at.</p>
+        </div>
         <div class="feature-card">
           <div class="feature-icon">🎬</div>
           <h3>Video Wallpaper</h3>
@@ -245,8 +265,9 @@
         <div class="feature-card">
           <div class="feature-icon">⌨️</div>
           <h3>Global Hotkeys</h3>
-          <p>Next, Previous, Stop/Start, Default wallpaper, effect switching (Ctrl+Alt+1–4), plus full video control —
-            play/stop, mute, and next/previous clip. All fully customizable.</p>
+          <p>Next, Previous, Stop/Start, default wallpaper, effect switching, plus full video control — play/stop,
+            mute, and next/previous clip. Nothing is bound out of the box: assign only the shortcuts you want, and the
+            app tells you if another program already owns one.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🪟</div>
@@ -257,13 +278,20 @@
         <div class="feature-card">
           <div class="feature-icon">🌍</div>
           <h3>Multi-Language</h3>
-          <p>Full GUI in English, Português (Brasil), and 日本語. Language can be switched live and persists across
+          <p>The whole interface in English, Português (Brasil), and 日本語. Switch live, and it persists across
             restarts.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🚀</div>
           <h3>Start with Windows</h3>
-          <p>Registers in Windows startup. Launches directly to the system tray with auto-rotation already running.</p>
+          <p>On from the first launch, and one switch away from off. A boot-time start goes straight to the tray with
+            no window; <em>Start minimized</em> does the same when you open it yourself.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Resumes Your Session</h3>
+          <p>Rotation and the video wallpaper are remembered the moment you toggle them — from the window, the tray, or
+            a hotkey — and come back running on the next launch.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📐</div>
@@ -273,7 +301,8 @@
         <div class="feature-card">
           <div class="feature-icon">🕹️</div>
           <h3>System Tray</h3>
-          <p>Minimize to tray, apply instantly, or quit — all from a right-click menu in the notification area.</p>
+          <p>Closing hides to the notification area rather than quitting. Apply, step through history, start or stop
+            rotation, or quit — all from the right-click menu, no window needed.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⏪</div>
@@ -288,7 +317,14 @@
         <div class="feature-card">
           <div class="feature-icon">📦</div>
           <h3>Windows Installer</h3>
-          <p>Setup.exe built with Inno Setup. Includes language selection, Start Menu shortcuts, and startup option.</p>
+          <p>MSI and NSIS installers built by the Tauri bundler. Nothing is written to the registry at install time —
+            starting with Windows is a switch inside the app.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🪶</div>
+          <h3>Native, Not Electron</h3>
+          <p>A Tauri&nbsp;2 shell around the system WebView, so there is no bundled browser. The interface is React and
+            shadcn/ui; everything touching Win32 stays in a separate Python engine.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🔓</div>
@@ -306,7 +342,7 @@
       <h2 class="section-title">A clean, distraction-free <span class="gradient-text">interface.</span></h2>
       <p class="section-sub">The GUI stays out of your way. Everything you need is one click or hotkey away.</p>
       <div class="preview-tabs">
-        <button class="tab-btn active" data-tab="monitors">Monitor Detection</button>
+        <button class="tab-btn active" data-tab="monitors">Live Preview</button>
         <button class="tab-btn" data-tab="collage">Collage Mode</button>
         <button class="tab-btn" data-tab="video">Video Wallpaper</button>
         <button class="tab-btn" data-tab="settings">Settings</button>
@@ -318,7 +354,7 @@
             <div class="mock-titlebar">
               <div class="mock-titlebar-left">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">WallpaperChanger — Monitor Detection</span>
+                <span class="mock-title">Wallpaper Changer — Preview</span>
               </div>
               <div class="mock-window-actions">
                 <span class="mock-window-action" title="Minimize">_</span>
@@ -326,36 +362,56 @@
                 <span class="mock-window-action" title="Close">X</span>
               </div>
             </div>
-            <div class="mock-body mock-monitors">
-              <div class="mock-monitor-grid">
-                <div class="mock-monitor active-monitor">
-                  <div class="mock-screen"></div>
-                  <div class="mock-stand"></div>
-                  <div class="mock-info">Monitor 1<br /><small>1920 × 1080</small></div>
+            <div class="mock-shell">
+              <div class="mock-sidebar">
+                <div class="mock-nav-item active"><span>🖼️</span> Wallpaper</div>
+                <div class="mock-nav-item"><span>🎬</span> Video</div>
+                <div class="mock-nav-item"><span>🪟</span> Transparency</div>
+                <div class="mock-nav-item"><span>⌨️</span> Hotkeys</div>
+                <div class="mock-nav-item"><span>⚙️</span> Settings</div>
+              </div>
+              <div class="mock-body mock-preview">
+                <!-- The composite, with one outline per monitor drawn over it. -->
+                <div class="mock-stage">
+                  <div class="mock-stage-img"></div>
+                  <div class="mock-guide" style="left:0; top:12%; width:37.5%; height:76%"><span>#1 · 1920×1080</span></div>
+                  <div class="mock-guide is-focused" style="left:37.5%; top:0; width:50%; height:100%"><span>#2 · 2560×1440</span></div>
+                  <div class="mock-guide" style="left:87.5%; top:8%; width:12.5%; height:84%"><span>#3</span></div>
                 </div>
-                <div class="mock-monitor">
-                  <div class="mock-screen"></div>
-                  <div class="mock-stand"></div>
-                  <div class="mock-info">Monitor 2<br /><small>2560 × 1440</small></div>
-                </div>
-                <div class="mock-monitor">
-                  <div class="mock-screen"></div>
-                  <div class="mock-stand"></div>
-                  <div class="mock-info">Monitor 3<br /><small>1920 × 1200</small></div>
+                <div class="mock-chips">
+                  <span class="mock-chip">All monitors</span>
+                  <span class="mock-chip">#1</span>
+                  <span class="mock-chip active">#2</span>
+                  <span class="mock-chip">#3</span>
+                  <span class="mock-chip-spacer"></span>
+                  <span class="mock-chip ghost">⤢ Expand</span>
+                  <span class="mock-chip ghost">⇄ Shuffle</span>
+                  <span class="mock-chip solid">✓ Set as wallpaper</span>
                 </div>
               </div>
-              <div class="mock-detect-btn">⟳ Detect Monitors</div>
+            </div>
+            <div class="mock-actionbar">
+              <span class="mock-btn">‹</span>
+              <span class="mock-btn primary">⟳ Apply now</span>
+              <span class="mock-btn">›</span>
+              <span class="mock-actionbar-sep"></span>
+              <span class="mock-btn">▶ Start rotation</span>
+              <span class="mock-actionbar-sep"></span>
+              <span class="mock-btn">⏮</span>
+              <span class="mock-btn">▶ Play video</span>
+              <span class="mock-btn">⏭</span>
             </div>
           </div>
-          <p class="panel-desc">WallpaperChanger automatically enumerates all connected displays using Win32 APIs,
-            respecting their physical arrangement and individual resolutions.</p>
+          <p class="panel-desc">The preview is the real composite, not an approximation — every monitor is outlined
+            where it actually sits on the virtual desktop. Click one to zoom into that screen alone, expand the whole
+            thing to fill the window, then apply exactly the images you are looking at.</p>
         </div>
         <div class="preview-panel" id="tab-collage">
           <div class="mock-window">
             <div class="mock-titlebar">
               <div class="mock-titlebar-left">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">WallpaperChanger — Collage</span>
+                <span class="mock-title">Wallpaper Changer — Collage</span>
               </div>
               <div class="mock-window-actions">
                 <span class="mock-window-action" title="Minimize">_</span>
@@ -387,7 +443,7 @@
             <div class="mock-titlebar">
               <div class="mock-titlebar-left">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">WallpaperChanger — Video Wallpaper</span>
+                <span class="mock-title">Wallpaper Changer — Video Wallpaper</span>
               </div>
               <div class="mock-window-actions">
                 <span class="mock-window-action" title="Minimize">_</span>
@@ -431,7 +487,7 @@
             <div class="mock-titlebar">
               <div class="mock-titlebar-left">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
-                <span class="mock-title">WallpaperChanger — Settings</span>
+                <span class="mock-title">Wallpaper Changer — Settings</span>
               </div>
               <div class="mock-window-actions">
                 <span class="mock-window-action" title="Minimize">_</span>
@@ -471,6 +527,10 @@
                 <div class="mock-checkbox checked">✓</div>
               </div>
               <div class="mock-setting-row">
+                <span>Start minimized in the tray</span>
+                <div class="mock-checkbox checked">✓</div>
+              </div>
+              <div class="mock-setting-row">
                 <span>Language</span>
                 <div class="mock-toggle-group">
                   <span class="mock-active">EN</span><span>PT-BR</span><span>日本語</span>
@@ -478,8 +538,9 @@
               </div>
             </div>
           </div>
-          <p class="panel-desc">Settings are <strong>auto-saved on every Apply</strong> — no manual save needed. Language,
-            effects, fit mode, and all hotkeys survive restarts automatically.</p>
+          <p class="panel-desc">Edits are yours to commit — the header tells you when something is unsaved. What the app
+            was <em>doing</em> needs no saving at all: rotation and video playback are recorded the moment you toggle
+            them and restored on the next launch.</p>
         </div>
         <div class="preview-panel" id="tab-tray">
           <div class="mock-window tray-window">
@@ -503,18 +564,66 @@
               <div class="mock-context-menu">
                 <div class="menu-item menu-header">WallpaperChanger</div>
                 <div class="menu-divider"></div>
-                <div class="menu-item"><span class="menu-icon">👁</span> Show Window</div>
-                <div class="menu-item highlight"><span class="menu-icon">🔄</span> Apply Now</div>
-                <div class="menu-item"><span class="menu-icon">⏸</span> Pause Rotation</div>
+                <div class="menu-item"><span class="menu-icon">👁</span> Show window</div>
+                <div class="menu-item highlight"><span class="menu-icon">🔄</span> Apply wallpaper now</div>
+                <div class="menu-item"><span class="menu-icon">⏭</span> Next wallpaper</div>
+                <div class="menu-item"><span class="menu-icon">⏮</span> Previous wallpaper</div>
+                <div class="menu-item"><span class="menu-icon">⏸</span> Start / stop rotation</div>
                 <div class="menu-divider"></div>
                 <div class="menu-item danger"><span class="menu-icon">✕</span> Quit</div>
               </div>
             </div>
           </div>
-          <p class="panel-desc">Close the window and the app silently moves to the system tray. Right-click for instant
-            controls — no window needed.</p>
+          <p class="panel-desc">Close the window and the app moves to the tray rather than quitting — the rotation timer
+            and any video wallpaper keep running. It can start there too, and everything you need day to day is on the
+            right-click menu.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ─── STACK ─── -->
+  <section id="stack">
+    <div class="container">
+      <div class="section-label">Under the hood</div>
+      <h2 class="section-title">Two processes, <span class="gradient-text">one job each.</span></h2>
+      <p class="section-sub">The interface and the Win32 work are separated on purpose: if the engine stops, the window
+        stays up and tells you so, and the wallpaper pipeline is the same code the CLI has always used.</p>
+      <div class="stack-split">
+        <div class="stack-card">
+          <div class="stack-card-head">
+            <span class="stack-badge">Shell</span>
+            <h3>Tauri 2 · React · shadcn/ui</h3>
+          </div>
+          <p>Owns the window, the tray icon, and the global hotkeys — so a shortcut survives an engine restart and can
+            reach the window itself. Renders in the system WebView, with no bundled browser to ship.</p>
+          <div class="req-chips">
+            <span class="chip">Rust</span>
+            <span class="chip">React 19</span>
+            <span class="chip">Tailwind</span>
+            <span class="chip">shadcn/ui</span>
+          </div>
+        </div>
+        <div class="stack-pipe">
+          <span class="stack-pipe-label">JSON-RPC over stdio</span>
+        </div>
+        <div class="stack-card">
+          <div class="stack-card-head">
+            <span class="stack-badge alt">Engine</span>
+            <h3>Python 3.11+ · Pillow · libmpv</h3>
+          </div>
+          <p>Everything that touches Win32: composing the collage, the fade transition, the WORKERW video layer, and
+            window transparency. Ships as a headless sidecar the shell starts and stops.</p>
+          <div class="req-chips">
+            <span class="chip">Pillow</span>
+            <span class="chip">libmpv</span>
+            <span class="chip">Win32 API</span>
+            <span class="chip">CLI</span>
+          </div>
+        </div>
+      </div>
+      <p class="stack-note">The webview never spawns a process or touches the filesystem directly — every call goes
+        through one command on the Rust side, and the engine answers only the methods on its own allowlist.</p>
     </div>
   </section>
 
@@ -540,7 +649,8 @@
             <div class="step-num">1</div>
             <div class="step-body">
               <h4>Download the installer</h4>
-              <p>Get the latest <code>WallpaperChanger_Setup.exe</code> from the GitHub Releases page.</p>
+              <p>Grab the latest <code>Wallpaper Changer_x64-setup.exe</code> from the GitHub Releases page. An
+                <code>.msi</code> is published alongside it if your organisation prefers one.</p>
               <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary"
                 target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -556,16 +666,17 @@
             <div class="step-num">2</div>
             <div class="step-body">
               <h4>Run the setup</h4>
-              <p>Execute the installer. You'll be able to choose your preferred language and whether to create a Start
-                Menu shortcut.</p>
+              <p>Nothing is written to your registry at install time, and no runtime is required — the Python engine is
+                bundled. Language is chosen inside the app.</p>
             </div>
           </div>
           <div class="install-step">
             <div class="step-num">3</div>
             <div class="step-body">
               <h4>Launch and configure</h4>
-              <p>Open WallpaperChanger, point it at your wallpapers folder, pick your collage count, and hit Start
-                Watch. Done.</p>
+              <p>Point it at your wallpapers folder, pick a collage count, check the preview, and start rotation. It
+                registers itself to start with Windows on that first launch — one switch in Settings if you would
+                rather it didn't.</p>
             </div>
           </div>
         </div>
@@ -584,13 +695,18 @@
           </div>
           <pre id="code-source"><code><span class="c"># 1. Clone the repository</span>
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
-cd wallpaper-changer-windows/wallpaper-changer
+cd wallpaper-changer-windows
 
-<span class="c"># 2. Install dependencies (requires uv)</span>
-uv sync
+<span class="c"># 2. Install the engine's dependencies</span>
+uv sync --dev
 
-<span class="c"># 3. Launch the GUI</span>
-uv run wallpaper-changer-gui</code></pre>
+<span class="c"># 3. Run the desktop app (starts the engine for you)</span>
+cd desktop
+bun install
+bun run tauri dev
+
+<span class="c"># Or build the installers, engine included</span>
+.\scripts\build_app.ps1</code></pre>
         </div>
         <div class="install-req">
           <h4>Prerequisites</h4>
@@ -600,6 +716,10 @@ uv run wallpaper-changer-gui</code></pre>
                 href="https://python.org" target="_blank" rel="noopener">python.org</a></div>
             <div class="req-row"><span class="req-name">uv</span><span class="req-ver">0.4+</span><a
                 href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">docs.astral.sh/uv</a></div>
+            <div class="req-row"><span class="req-name">Rust</span><span class="req-ver">stable</span><a
+                href="https://rustup.rs" target="_blank" rel="noopener">rustup.rs</a></div>
+            <div class="req-row"><span class="req-name">Bun</span><span class="req-ver">1.1+</span><a
+                href="https://bun.sh" target="_blank" rel="noopener">bun.sh</a></div>
           </div>
         </div>
       </div>
@@ -659,8 +779,10 @@ uv run wallpaper-changer-gui</code></pre>
       </div>
       <div class="hotkeys-section">
         <h3>Global Hotkeys</h3>
-        <p>Control the app from any window using keyboard shortcuts. All shortcuts are fully customizable in the GUI.
-        </p>
+        <p>Control the app from any window using keyboard shortcuts. <strong>Nothing is bound out of the box</strong> —
+          Windows gives a shortcut to one program at a time, so claiming a dozen on first run would steal them from
+          whatever you already use. Assign the ones you want from the Hotkeys screen; these are the classic bindings to
+          start from.</p>
         <div class="hotkeys-grid">
           <div class="hotkey-row">
             <div class="hotkey-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd></div>
@@ -733,12 +855,63 @@ uv run wallpaper-changer-gui</code></pre>
       <div class="section-label">Changelog</div>
       <h2 class="section-title">Release <span class="gradient-text">history.</span></h2>
       <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v5.1</span>
+              <span class="version-label">In development</span>
+            </div>
+            <ul class="change-list">
+              <li>Starts with Windows straight into the tray — enabled on first run, one switch away from off</li>
+              <li><em>Start minimized</em> does the same when you launch the app yourself</li>
+              <li>Resumes the last session: rotation and video wallpaper come back the way you left them</li>
+              <li>Reworked preview — monitor outlines over the composite, click one to zoom into that screen, expand to
+                fill the window, and apply exactly the images on screen</li>
+              <li>Start/stop rotation added to the tray menu, so the window is never required</li>
+              <li>Animated screen transitions and card reveals, dropped under reduced-motion</li>
+            </ul>
+          </div>
+        </div>
         <div class="timeline-item current">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
             <div class="timeline-version">
-              <span class="version-tag">v4.0</span>
+              <span class="version-tag">v5.0</span>
               <span class="version-label current-label">Latest</span>
+            </div>
+            <ul class="change-list">
+              <li>Rebuilt the interface on Tauri 2, React, and shadcn/ui — the tkinter GUI is gone</li>
+              <li>Split into two processes: a Rust shell owning the window, tray, and hotkeys, and a Python engine
+                owning everything that touches Win32, speaking JSON-RPC over stdio</li>
+              <li>Hotkeys moved to the Rust side, so they survive an engine restart and report when another app already
+                owns a combination</li>
+              <li>MSI and NSIS installers from the Tauri bundler — no more Inno Setup, and no registry writes at
+                install time</li>
+              <li>Settings, history, and transparency moved to <code>%APPDATA%</code>, so an install under Program
+                Files works without elevation</li>
+              <li>No shortcuts bound by default — assign only what you want</li>
+            </ul>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v4.2</span>
+            </div>
+            <ul class="change-list">
+              <li>Stabilized video wallpaper rendering — D3D11 presentation with software decoding, avoiding fragile
+                hardware-decoder surfaces</li>
+              <li>Simplified the wallpaper pipeline and refreshed the documentation</li>
+            </ul>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-version">
+              <span class="version-tag">v4.0</span>
             </div>
             <ul class="change-list">
               <li>New tabbed control panel with focused Wallpaper, Video, and Tools views</li>
@@ -885,8 +1058,8 @@ uv run wallpaper-changer-gui</code></pre>
           rel="noopener">Releases</a>
         <a href="https://github.com/klysman08/wallpaper-changer-windows/issues" target="_blank"
           rel="noopener">Issues</a>
-        <a href="https://github.com/klysman08/wallpaper-changer-windows/blob/master/wallpaper-changer/README.md"
-          target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/klysman08/wallpaper-changer-windows/blob/master/README.md" target="_blank"
+          rel="noopener">Docs</a>
       </div>
     </div>
   </footer>

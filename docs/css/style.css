@@ -49,8 +49,6 @@
   --bg-grid-color: rgba(44, 37, 32, 0.03);
   --menu-border-dashed: 1px dashed rgba(44, 37, 32, 0.1);
   --mock-taskbar-bg: #EAE3D2;
-  --mock-screen-inactive-bg: #3A322C;
-  --mock-stand-bg: #C4B9A1;
 }
 
 [data-theme="dark"] {
@@ -84,8 +82,6 @@
   --bg-grid-color: rgba(245, 235, 225, 0.03);
   --menu-border-dashed: 1px dashed rgba(245, 235, 225, 0.1);
   --mock-taskbar-bg: #2C2522;
-  --mock-screen-inactive-bg: #181412;
-  --mock-stand-bg: #4F453E;
 }
 
 html {
@@ -722,76 +718,135 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
   background-color: var(--bg-surface-alt);
 }
 
-/* Monitor preview */
-.mock-monitors {
+/* App shell: sidebar + content, mirroring the real window */
+.mock-shell {
+  display: flex;
+  align-items: stretch;
+}
+.mock-sidebar {
+  flex: 0 0 168px;
+  padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  align-items: center;
+  gap: 4px;
+  background: var(--accent-blue-light);
+  border-right: var(--pixel-border);
 }
-.mock-monitor-grid {
+.mock-nav-item {
   display: flex;
-  gap: 32px;
-  justify-content: center;
-  flex-wrap: wrap;
-  width: 100%;
-}
-.mock-monitor {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-.mock-monitor.active-monitor {
-  opacity: 1;
-}
-.mock-screen {
-  width: 120px;
-  height: 76px;
-  background: var(--mock-screen-inactive-bg);
-  border: var(--pixel-border);
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--pixel-shadow-sm);
-}
-.mock-monitor.active-monitor .mock-screen {
-  border-color: var(--primary);
-  background: var(--accent-light);
-  box-shadow: var(--pixel-shadow);
-}
-.mock-stand {
-  width: 32px;
-  height: 12px;
-  background: var(--mock-stand-bg);
-  border: var(--pixel-border);
-  border-top: none;
-}
-.mock-info {
-  font-size: 0.8rem;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-primary);
-  text-align: center;
-  margin-top: 6px;
+  color: var(--text-muted);
+  border: 2px solid transparent;
 }
-.mock-detect-btn {
-  display: inline-block;
-  padding: 8px 18px;
-  background: var(--secondary-light);
+.mock-nav-item.active {
+  background: var(--bg-surface);
   border: var(--pixel-border-sm);
-  font-family: var(--font-heading);
-  font-size: 0.9rem;
-  color: var(--border-color);
-  font-weight: 700;
-  cursor: pointer;
+  color: var(--text-primary);
   box-shadow: var(--pixel-shadow-sm);
 }
-.mock-detect-btn:hover {
-  background: var(--secondary);
+.mock-shell .mock-body {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+}
+
+/* Live preview: the composite with one outline per monitor over it */
+.mock-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.mock-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  border: var(--pixel-border);
+  box-shadow: var(--pixel-shadow-sm);
+  overflow: hidden;
+}
+.mock-stage-img {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, #1a1a2e 0%, #0f3460 34%, #533483 62%, #e94560 100%);
+}
+.mock-guide {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: -2px;
+}
+.mock-guide.is-focused {
+  outline: 3px solid var(--accent);
+  background: rgba(233, 196, 106, 0.16);
+}
+.mock-guide span {
+  margin: 6px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
   color: #fff;
-  transform: translate(1px, 1px);
-  box-shadow: none;
+  background: rgba(0, 0, 0, 0.55);
+}
+.mock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.mock-chip {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: var(--pixel-border-sm);
+  background: var(--bg-surface);
+}
+.mock-chip.active {
+  background: var(--accent);
+  color: var(--border-color);
+  box-shadow: var(--pixel-shadow-sm);
+}
+.mock-chip.ghost {
+  border-style: dashed;
+}
+.mock-chip.solid {
+  background: var(--secondary);
+  border-color: var(--border-color);
+  color: #fff;
+  box-shadow: var(--pixel-shadow-sm);
+}
+/* Pushes the action chips to the right on wide layouts, folds away on narrow. */
+.mock-chip-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The action bar pinned under every screen */
+.mock-actionbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-top: var(--pixel-border);
+  background: var(--bg-surface);
+}
+.mock-btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+.mock-actionbar-sep {
+  width: 2px;
+  height: 20px;
+  background: var(--border-color);
+  opacity: 0.35;
 }
 
 /* Collage preview */
@@ -1023,6 +1078,113 @@ h1, h2, h3, h4, .logo-text, .btn, .step-num, .version-tag, .section-label, .tab-
 }
 .menu-icon {
   font-size: 1rem;
+}
+
+/* ─── STACK ─── */
+#stack {
+  padding: 100px 0;
+  border-bottom: var(--pixel-border);
+}
+
+/* Two cards with the protocol between them: side by side when there is room,
+   stacked otherwise — the connector reorients with them. */
+.stack-split {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 20px;
+}
+.stack-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 26px;
+  background: var(--bg-surface);
+  border: var(--pixel-border);
+  box-shadow: var(--pixel-shadow);
+}
+.stack-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stack-card h3 {
+  font-size: 1.2rem;
+  color: var(--border-color);
+  line-height: 1.3;
+}
+.stack-card p {
+  color: var(--text-muted);
+  font-size: 0.98rem;
+}
+.stack-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--border-color);
+  background: var(--accent);
+  border: var(--pixel-border-sm);
+}
+.stack-badge.alt {
+  background: var(--secondary);
+  color: #fff;
+}
+.stack-pipe {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 132px;
+}
+/* The wire itself. */
+.stack-pipe::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 3px dashed var(--border-color);
+  opacity: 0.5;
+}
+.stack-pipe-label {
+  position: relative;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-paper);
+  border: var(--pixel-border-sm);
+}
+.stack-note {
+  margin-top: 24px;
+  padding: 16px 20px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  background: var(--accent-blue-light);
+  border: var(--pixel-border-sm);
+}
+
+@media (max-width: 860px) {
+  .stack-split {
+    grid-template-columns: 1fr;
+  }
+  .stack-pipe {
+    min-height: 64px;
+  }
+  .stack-pipe::before {
+    left: 50%;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    border-top: none;
+    border-left: 3px dashed var(--border-color);
+  }
 }
 
 /* ─── INSTALL ─── */
@@ -1606,6 +1768,18 @@ footer {
   }
   .nav-toggle {
     display: flex;
+  }
+
+  /* The mock sidebar would leave the preview stage a sliver on a phone, and the
+     stage is the part worth showing. */
+  .mock-sidebar {
+    display: none;
+  }
+  .mock-shell .mock-body {
+    padding: 14px;
+  }
+  .mock-stage {
+    aspect-ratio: 16 / 8;
   }
 
   .features-grid {
