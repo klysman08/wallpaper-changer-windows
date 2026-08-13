@@ -7,7 +7,7 @@
 use serde_json::json;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::engine::Engine;
 
@@ -18,6 +18,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let apply = MenuItem::with_id(app, "apply", "Apply wallpaper now", true, None::<&str>)?;
     let next = MenuItem::with_id(app, "next", "Next wallpaper", true, None::<&str>)?;
     let prev = MenuItem::with_id(app, "prev", "Previous wallpaper", true, None::<&str>)?;
+    // The app can spend its whole life in the tray now that it starts there, so the
+    // one piece of running state it has needs to be reachable without the window.
+    let rotation = MenuItem::with_id(app, "rotation", "Start/stop rotation", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -27,6 +30,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             &apply,
             &next,
             &prev,
+            &rotation,
             &PredefinedMenuItem::separator(app)?,
             &quit,
         ],
@@ -77,6 +81,7 @@ fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         }
         "apply" | "next" => call_engine(app, "apply_wallpaper"),
         "prev" => call_engine(app, "apply_previous_wallpaper"),
+        "rotation" => call_engine(app, "watch_toggle"),
         _ => {}
     }
 }
@@ -89,8 +94,13 @@ fn call_engine<R: Runtime>(app: &AppHandle<R>, method: &'static str) {
         let Some(engine) = app.try_state::<Engine>() else {
             return;
         };
-        if let Err(e) = engine.call(method, json!({})).await {
-            log::info!("tray action {method} did not run: {e}");
+        match engine.call(method, json!({})).await {
+            // The window may be open behind the tray menu, showing state this call
+            // just changed. Tell it to re-read rather than letting it drift.
+            Ok(_) => {
+                let _ = app.emit("shell-action", json!({ "action": method }));
+            }
+            Err(e) => log::info!("tray action {method} did not run: {e}"),
         }
     });
 }

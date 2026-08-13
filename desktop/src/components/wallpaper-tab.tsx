@@ -1,7 +1,7 @@
 import * as React from "react"
 import { open } from "@tauri-apps/plugin-dialog"
 
-import { MonitorLayout } from "@/components/monitor-layout"
+import { PreviewStage } from "@/components/preview-stage"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { engine, type Config, type Effect, type FitMode, type MonitorsResult } from "@/lib/engine"
+import type { Actions } from "@/lib/use-actions"
 import type { I18n } from "@/lib/use-i18n"
 import { usePreview } from "@/lib/use-preview"
 
@@ -39,6 +40,7 @@ interface Props {
   config: Config
   monitors: MonitorsResult | null
   i18n: I18n
+  actions: Actions
   onChange: <S extends keyof Config, K extends keyof Config[S]>(
     section: S,
     key: K,
@@ -46,7 +48,7 @@ interface Props {
   ) => void
 }
 
-export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
+export function WallpaperTab({ config, monitors, i18n, actions, onChange }: Props) {
   const { t } = i18n
   const preview = usePreview(config)
   const [imageCount, setImageCount] = React.useState<number | null>(null)
@@ -69,31 +71,14 @@ export function WallpaperTab({ config, monitors, i18n, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>{t("preview")}</CardTitle>
-          <Button variant="outline" size="sm" onClick={preview.reshuffle}>
-            {t("shuffle")}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="relative overflow-hidden rounded-lg border bg-muted/30">
-            {preview.src ? (
-              <img
-                src={preview.src}
-                alt={t("preview")}
-                className="w-full"
-                style={{ opacity: preview.loading ? 0.5 : 1, transition: "opacity 150ms" }}
-              />
-            ) : (
-              <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                {preview.error ?? (preview.loading ? t("loading") : t("no_preview"))}
-              </div>
-            )}
-          </div>
-          {monitors && <MonitorLayout monitors={monitors} className="mt-3" />}
-        </CardContent>
-      </Card>
+      <PreviewStage
+        preview={preview}
+        monitors={monitors}
+        config={config}
+        i18n={i18n}
+        applying={actions.applying}
+        onApply={actions.applyImages}
+      />
 
       <Card>
         <CardHeader>

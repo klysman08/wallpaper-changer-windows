@@ -65,7 +65,7 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 ## Features
 
 - **Collage Grid**: automatic grid layouts of 1 to 8 images per monitor.
-- **Live Preview**: the interface renders the real composited collage before anything touches your desktop, so effect and fit changes are visible immediately.
+- **Live Preview**: the interface renders the real composited collage before anything touches your desktop, so effect and fit changes are visible immediately. Monitor outlines are drawn over it, any screen can be zoomed to on its own, the whole thing expands to fill the window, and what you are looking at can be applied as-is.
 - **Video Wallpaper**: render `.mp4`, `.mkv`, `.webm`, `.mov`, and other common formats behind your desktop icons using `libmpv`, with optional audio, looping, and playlist controls.
 - **Stable Video Rendering**: D3D11 presentation with stability-focused software decoding, avoiding fragile hardware-decoder surfaces while retaining smooth GPU composition.
 - **Native Fade Transitions**: lets Windows apply its built-in wallpaper fade, with no custom animation loop or desktop flicker.
@@ -73,8 +73,9 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 - **Auto-Rotation**: watch cycles rotate your backgrounds at a set interval.
 - **Window Transparency**: slider control, a toggle hotkey, or hold a modifier of your choice (`Alt`, `Ctrl`, `Shift`, `Win`) and scroll the wheel to fade the focused window.
 - **Global Hotkeys**: nothing is bound out of the box - assign only the shortcuts you want, from the Hotkeys screen.
-- **System Tray**: closing hides to the notification area, with a right-click menu for the common actions.
-- **Start with Windows**: a runtime toggle, so it can be turned on and off without reinstalling.
+- **System Tray**: closing hides to the notification area, with a right-click menu for the common actions, including starting and stopping rotation.
+- **Start with Windows**: on by default from the first launch, and a runtime toggle, so it can be turned off again without reinstalling. A boot-time launch goes straight to the tray; **Start minimized** does the same when you open the app yourself.
+- **Resumes Where You Left Off**: rotation and the video wallpaper are remembered as they are switched, and come back on the next launch.
 - **Windows Installer**: MSI and NSIS installers produced by the Tauri bundler.
 
 ---

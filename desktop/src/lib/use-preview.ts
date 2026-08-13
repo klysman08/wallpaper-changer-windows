@@ -22,6 +22,8 @@ export interface Preview {
   height: number
   loading: boolean
   error: string | null
+  /** The images the current render used, in monitor order. */
+  images: string[]
   reshuffle: () => void
 }
 
@@ -31,6 +33,7 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [nonce, setNonce] = React.useState(0)
+  const [images, setImages] = React.useState<string[]>([])
 
   const pinned = React.useRef<string[] | null>(null)
   // Which selection settings the pinned images were chosen under.
@@ -81,6 +84,7 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
           pinned.current = result.images
           setSrc(`data:image/png;base64,${result.png_base64}`)
           setSize({ width: result.width, height: result.height })
+          setImages(result.images)
           setError(null)
         })
         .catch((e) => {
@@ -97,5 +101,5 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, nonce, maxWidth])
 
-  return { src, ...size, loading, error, reshuffle }
+  return { src, ...size, loading, error, images, reshuffle }
 }

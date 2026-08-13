@@ -92,8 +92,19 @@ export function SettingsTab({ config, configPath, i18n, onChange }: Props) {
             </Select>
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="startup" className="font-normal">{t("start_with_windows")}</Label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("startup")}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="startup" className="font-normal">{t("start_with_windows")}</Label>
+              <p className="text-xs text-muted-foreground">{t("start_with_windows_hint")}</p>
+            </div>
             <Switch
               id="startup"
               checked={startup ?? false}
@@ -101,6 +112,26 @@ export function SettingsTab({ config, configPath, i18n, onChange }: Props) {
               onCheckedChange={toggleStartup}
             />
           </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="start-minimized" className="font-normal">
+                {t("start_minimized")}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t("start_minimized_hint")}</p>
+            </div>
+            <Switch
+              id="start-minimized"
+              checked={config.general.start_minimized ?? false}
+              onCheckedChange={(v) => onChange("general", "start_minimized", v)}
+            />
+          </div>
+
+          {/* Not a setting: the engine records what was running and restores it, so
+              this is here to explain the behaviour rather than to switch it. */}
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            {t("resume_last_session_hint")}
+          </p>
         </CardContent>
       </Card>
 

@@ -59,12 +59,29 @@ export function App() {
   const [monitors, setMonitors] = React.useState<MonitorsResult | null>(null)
   const [engineDown, setEngineDown] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
-  const [section, setSection] = React.useState<SectionId>("wallpaper")
+  // The direction travels with the selection: which way a screen slides in depends
+  // on where the sidebar moved from, which is only known at the moment of the click.
+  const [screen, setScreen] = React.useState<{ id: SectionId; direction: number }>({
+    id: "wallpaper",
+    direction: 1,
+  })
+  const { id: section, direction } = screen
   // Bumped after every successful save. Screens that show engine-side state the
   // save changes (the scroll hook) re-read it when this moves.
   const [savedAt, setSavedAt] = React.useState(0)
   // One copy of the running state, shared by the footer bar and the tabs.
   const actions = useActions(cfg.config, i18n.t)
+
+  /** Select a screen, remembering which way the selection travelled. */
+  function goTo(id: SectionId) {
+    setScreen((prev) => ({
+      id,
+      direction:
+        SECTIONS.findIndex((s) => s.id === id) >= SECTIONS.findIndex((s) => s.id === prev.id)
+          ? 1
+          : -1,
+    }))
+  }
 
   React.useEffect(() => {
     void engine.getCapabilities().then(setCaps).catch(() => setEngineDown(true))
@@ -158,7 +175,7 @@ export function App() {
                     <SidebarMenuButton
                       isActive={section === id}
                       tooltip={t(id)}
-                      onClick={() => setSection(id)}
+                      onClick={() => goTo(id)}
                     >
                       <Icon />
                       <span>{t(id)}</span>
@@ -221,9 +238,21 @@ export function App() {
           </Button>
         </header>
 
-        <div className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">
+        {/* Keyed on the section so React remounts it: that is what replays the
+            entrance animation, and the direction follows the sidebar movement. */}
+        <div
+          key={section}
+          className="screen-enter mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6"
+          style={{ "--motion-dir": direction } as React.CSSProperties}
+        >
           {section === "wallpaper" && (
-            <WallpaperTab config={config} monitors={monitors} i18n={i18n} onChange={cfg.set} />
+            <WallpaperTab
+              config={config}
+              monitors={monitors}
+              i18n={i18n}
+              actions={actions}
+              onChange={cfg.set}
+            />
           )}
           {section === "video" && (
             <VideoTab
