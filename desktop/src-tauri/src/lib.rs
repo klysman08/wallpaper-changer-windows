@@ -3,6 +3,7 @@ mod hotkeys;
 mod tray;
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use engine::Engine;
 use serde_json::{json, Value};
@@ -15,6 +16,13 @@ use tauri_plugin_opener::OpenerExt;
 /// Passed to the app when *Windows* launches it, so a boot-time start goes straight
 /// to the tray while a launch from the Start menu still opens the window.
 const AUTOSTART_ARG: &str = "--minimized";
+
+/// How long to wait for the webview before showing the window regardless.
+///
+/// WebView2 can fail to attach for reasons outside the app — a runtime mid-update
+/// is one — and `on_page_load` then never fires. Without this the app would sit
+/// there running, invisible, reachable only from the tray.
+const WEBVIEW_GRACE: Duration = Duration::from_secs(10);
 
 /// Whether the window should appear on this launch, and whether it can yet.
 ///
@@ -37,6 +45,18 @@ impl Startup {
         };
         update(&mut startup);
         startup.loaded && startup.show == Some(true)
+    }
+
+    /// Whether this launch wanted a window and the webview never delivered one.
+    ///
+    /// Deliberately leaves `loaded` alone: showing the window twice costs nothing,
+    /// and a late-arriving webview should still take the normal path.
+    fn stalled(state: &Mutex<Startup>) -> bool {
+        let startup = match state.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        !startup.loaded && startup.show == Some(true)
     }
 }
 
@@ -274,6 +294,29 @@ pub fn run() {
                     Err(e) => log::error!("could not register hotkeys: {e}"),
                 }
             });
+
+            // The window is shown when the webview reports in, so a webview that
+            // never loads leaves the app running and invisible — the tray its only
+            // door. That is the same trade `decide_visibility` already calls: an
+            // unwanted window beats an app the user cannot reach. A blank window at
+            // least says the app is alive and where the problem is.
+            let watchdog = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(WEBVIEW_GRACE).await;
+                let Some(state) = watchdog.try_state::<Mutex<Startup>>() else {
+                    return;
+                };
+                if Startup::stalled(&state) {
+                    log::warn!(
+                        "the webview did not load within {}s — showing the window anyway",
+                        WEBVIEW_GRACE.as_secs()
+                    );
+                    if let Some(window) = watchdog.get_webview_window("main") {
+                        let _ = window.show();
+                    }
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {
