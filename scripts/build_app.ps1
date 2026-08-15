@@ -139,22 +139,36 @@ finally {
 }
 
 # ── 3. Collect the installers ─────────────────────────────────────────────────
-$bundleDir = Join-Path $desktop 'src-tauri\target\release\bundle'
-$artifacts = Get-ChildItem $bundleDir -Recurse -Include *.msi, *.exe -ErrorAction SilentlyContinue
-if (-not $artifacts) { throw "The bundler produced no installers under $bundleDir." }
-
-Write-Host ''
-Write-Host '==> Installers' -ForegroundColor Green
-foreach ($file in $artifacts) {
-    '    {0,-42} {1,8:N1} MB' -f $file.Name, ($file.Length / 1MB) | Write-Host
-}
-
-# ── 4. Updater manifest ───────────────────────────────────────────────────────
 # tauri.conf.json is the version the updater compares against, so it is the only
 # version this script trusts.
 $conf = Get-Content (Join-Path $desktop 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json
 $version = $conf.version
 
+$bundleDir = Join-Path $desktop 'src-tauri\target\release\bundle'
+$found = Get-ChildItem $bundleDir -Recurse -Include *.msi, *.exe -ErrorAction SilentlyContinue
+if (-not $found) { throw "The bundler produced no installers under $bundleDir." }
+
+# target/ is never cleaned between builds, so installers from earlier versions sit
+# here indefinitely. Everything downstream must come from *this* version's artifact:
+# taking the first match instead would sign, stage and publish whichever version
+# happens to sort first, which is the oldest one.
+$artifacts = $found | Where-Object { $_.Name -like "*_${version}_*" }
+if (-not $artifacts) {
+    $names = ($found | ForEach-Object Name) -join ', '
+    throw "The bundler produced no installer for $version under $bundleDir. Found: $names"
+}
+
+Write-Host ''
+Write-Host "==> Installers for $version" -ForegroundColor Green
+foreach ($file in $artifacts) {
+    '    {0,-42} {1,8:N1} MB' -f $file.Name, ($file.Length / 1MB) | Write-Host
+}
+$stale = $found | Where-Object { $_.Name -notlike "*_${version}_*" }
+if ($stale) {
+    "    ({0} installer(s) from earlier versions ignored)" -f $stale.Count | Write-Host -ForegroundColor DarkGray
+}
+
+# ── 4. Updater manifest ───────────────────────────────────────────────────────
 if (-not $Tag) {
     $parts = $version.Split('.')
     # v5.1 for 5.1.0, but v4.0.1 for 4.0.1 — the tags in this repo drop a zero patch.
