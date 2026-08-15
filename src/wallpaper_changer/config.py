@@ -95,6 +95,19 @@ def resolve_output_dir(cfg: dict) -> Path:
     return p if p.is_absolute() else get_user_data_dir() / p
 
 
+def resolve_saved_dir(cfg: dict) -> Path:
+    """Resolve ``paths.saved_folder``: onde as collages exportadas sao guardadas.
+
+    Mesma regra de :func:`resolve_output_dir` — absoluto e a escolha do usuario,
+    relativo cai sob :func:`get_user_data_dir`. Vazio significa o padrao ``saved``,
+    e nao um caminho vazio: o campo existe para ser trocado pela interface, e um
+    apagao acidental nao deve escrever na raiz dos dados.
+    """
+    raw = cfg.get("paths", {}).get("saved_folder") or "saved"
+    p = Path(raw)
+    return p if p.is_absolute() else get_user_data_dir() / p
+
+
 def _migrate_legacy_files() -> None:
     """Copia arquivos do usuario da pasta de instalacao para %APPDATA%, uma vez.
 

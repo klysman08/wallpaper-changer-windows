@@ -19,6 +19,9 @@ rotation_active = false
 wallpapers_folder = "C:\\Users\\Public\\Pictures"
 output_folder = "output"
 default_wallpaper = ""
+# Where "Save as image" puts collages you keep. Relative paths resolve under
+# %LOCALAPPDATA%\WallpaperChanger; empty means the default "saved" folder there.
+saved_folder = ""
 
 [display]
 fit_mode = "fill"

@@ -16,6 +16,7 @@
  */
 import * as React from "react"
 import { createPortal } from "react-dom"
+import { open } from "@tauri-apps/plugin-dialog"
 import { revealItemInDir } from "@tauri-apps/plugin-opener"
 import { Check, FolderOpen, Maximize2, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
@@ -23,8 +24,10 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { engine, type SavedCollage } from "@/lib/engine"
+import { engine, type Config, type SavedCollage } from "@/lib/engine"
 import type { I18n } from "@/lib/use-i18n"
 import { useThumbnails } from "@/lib/use-thumbnails"
 import { basename, cn } from "@/lib/utils"
@@ -33,30 +36,53 @@ import { basename, cn } from "@/lib/utils"
 const THUMB = 480
 
 interface Props {
+  config: Config
   i18n: I18n
+  onChange: <S extends keyof Config, K extends keyof Config[S]>(
+    section: S,
+    key: K,
+    value: Config[S][K],
+  ) => void
 }
 
-export function GalleryTab({ i18n }: Props) {
+export function GalleryTab({ config, i18n, onChange }: Props) {
   const { t } = i18n
   const [collages, setCollages] = React.useState<SavedCollage[] | null>(null)
+  // Where the *next* save will land, resolved by the engine from the setting — a
+  // relative or empty value is a real folder there and nowhere else.
   const [folder, setFolder] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
   // Which entry is being applied; only one at a time, and the card says so.
   const [applying, setApplying] = React.useState<string | null>(null)
   const [viewing, setViewing] = React.useState<SavedCollage | null>(null)
 
-  const load = React.useCallback(() => {
+  // Re-runs when the setting changes so the resolved path under the input keeps up
+  // with what is typed, without waiting for a save.
+  const savedFolder = config.paths.saved_folder ?? ""
+
+  React.useEffect(() => {
+    let cancelled = false
     void engine
-      .listSavedCollages()
+      .listSavedCollages(config)
       .then((result) => {
+        if (cancelled) return
         setCollages(result.collages)
         setFolder(result.folder)
         setError(null)
       })
-      .catch((e) => setError((e as Error).message))
-  }, [])
+      .catch((e) => !cancelled && setError((e as Error).message))
+    return () => {
+      cancelled = true
+    }
+    // The whole config is not a dependency: only the folder decides this answer,
+    // and watching the rest would re-list on every unrelated keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedFolder])
 
-  React.useEffect(load, [load])
+  async function browse() {
+    const picked = await open({ directory: true, defaultPath: folder || undefined })
+    if (typeof picked === "string") onChange("paths", "saved_folder", picked)
+  }
 
   async function apply(collage: SavedCollage) {
     setApplying(collage.path)
@@ -95,6 +121,25 @@ export function GalleryTab({ i18n }: Props) {
           )}
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="saved-folder">{t("gallery_folder")}</Label>
+            <div className="flex gap-2">
+              <Input
+                id="saved-folder"
+                value={savedFolder}
+                placeholder={folder}
+                spellCheck={false}
+                onChange={(e) => onChange("paths", "saved_folder", e.target.value)}
+              />
+              <Button variant="outline" onClick={browse}>
+                {t("browse")}
+              </Button>
+            </div>
+            <p className="truncate font-mono text-[11px] text-muted-foreground" title={folder}>
+              {t("gallery_folder_hint", { folder })}
+            </p>
+          </div>
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {collages === null && !error && (
@@ -128,11 +173,6 @@ export function GalleryTab({ i18n }: Props) {
             </div>
           )}
 
-          {folder && (
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
-              {t("gallery_folder")}: {folder}
-            </p>
-          )}
         </CardContent>
       </Card>
 

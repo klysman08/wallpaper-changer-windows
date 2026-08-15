@@ -449,6 +449,42 @@ def test_suggest_collage_path_creates_the_folder_the_dialog_will_open(engine):
     assert suggested.name.endswith("_monitor1.png")
 
 
+def test_suggest_collage_path_follows_an_unsaved_library_folder(engine, cfg, tmp_path, monkeypatch):
+    """The dialog must open where the screen says pictures go, saved or not."""
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    chosen = tmp_path / "Pictures" / "Collages"
+
+    result = engine.suggest_collage_path(
+        monitor=None, config={"paths": {"saved_folder": str(chosen)}}
+    )
+
+    assert Path(result["path"]).parent == chosen
+
+
+def test_save_collage_without_a_path_lands_in_the_configured_library(
+    engine, cfg, tmp_path, monkeypatch
+):
+    _stub_two_monitors(monkeypatch, cfg)
+    chosen = tmp_path / "my-collages"
+
+    result = engine.save_collage(config={"paths": {"saved_folder": str(chosen)}})
+
+    saved = Path(result["collage"]["path"])
+    assert saved.parent == chosen
+    assert saved.is_file()
+
+
+def test_list_saved_collages_reports_the_folder_the_next_save_will_use(
+    engine, cfg, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    chosen = tmp_path / "elsewhere"
+
+    listed = engine.list_saved_collages(config={"paths": {"saved_folder": str(chosen)}})
+
+    assert listed["folder"] == str(chosen)
+
+
 def test_get_image_preview_only_ever_shrinks(engine, tmp_path):
     small = tmp_path / "small.png"
     Image.new("RGB", (120, 60)).save(small)

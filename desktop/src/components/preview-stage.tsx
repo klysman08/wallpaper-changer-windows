@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -263,8 +264,9 @@ function SaveCollage({
     setBusy(true)
     try {
       // Folder and name both come from the engine: a name invented here would
-      // drift from the one the library itself uses.
-      const { path: suggested } = await engine.suggestCollagePath(monitor)
+      // drift from the one the library itself uses. The config travels with the
+      // request so an unsaved library folder is where the dialog opens.
+      const { path: suggested } = await engine.suggestCollagePath(monitor, config)
       const chosen = await save({
         defaultPath: suggested,
         filters: [
@@ -316,18 +318,23 @@ function SaveCollage({
         }
       />
       <DropdownMenuContent align="end" className="w-auto min-w-48">
-        <DropdownMenuLabel>{t("preview_save_which")}</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => void saveTo(null)}>
-          {t("preview_all")}
-        </DropdownMenuItem>
-        {monitors.map((m) => (
-          <DropdownMenuItem key={m.index} onClick={() => void saveTo(m.index)}>
-            {t("monitor_n", { n: m.index + 1 })}
-            <span className="ml-auto pl-3 text-xs text-muted-foreground">
-              {m.width}×{m.height}
-            </span>
+        {/* The Group is load-bearing, not decoration: DropdownMenuLabel is a Base UI
+            Menu.GroupLabel and throws outside one, which unmounts the whole React
+            tree and leaves a black window behind a still-running app. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t("preview_save_which")}</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => void saveTo(null)}>
+            {t("preview_all")}
           </DropdownMenuItem>
-        ))}
+          {monitors.map((m) => (
+            <DropdownMenuItem key={m.index} onClick={() => void saveTo(m.index)}>
+              {t("monitor_n", { n: m.index + 1 })}
+              <span className="ml-auto pl-3 text-xs text-muted-foreground">
+                {m.width}×{m.height}
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

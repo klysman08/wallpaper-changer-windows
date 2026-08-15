@@ -86,6 +86,21 @@ def test_legacy_relative_output_folder_no_longer_targets_the_install_dir(user_di
     assert config.get_project_root() not in result.parents
 
 
+def test_saved_folder_defaults_next_to_the_other_local_data(user_dirs):
+    _, data_dir = user_dirs
+
+    assert config.resolve_saved_dir({}) == data_dir / "saved"
+    # Cleared in the UI, which must mean the default rather than the data root.
+    assert config.resolve_saved_dir({"paths": {"saved_folder": ""}}) == data_dir / "saved"
+
+
+def test_absolute_saved_folder_is_respected(user_dirs, tmp_path):
+    """The point of the setting: keep collages in the user's own Pictures folder."""
+    pictures = tmp_path / "Pictures" / "Collages"
+
+    assert config.resolve_saved_dir({"paths": {"saved_folder": str(pictures)}}) == pictures
+
+
 # ── Migration ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture

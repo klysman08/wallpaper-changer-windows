@@ -299,7 +299,9 @@ export function App() {
           )}
           {/* Listed on mount, and the screen remounts on every visit (it is keyed
               by section), so a collage saved from the preview is already there. */}
-          {section === "gallery" && <GalleryTab i18n={i18n} />}
+          {section === "gallery" && (
+            <GalleryTab config={config} i18n={i18n} onChange={cfg.set} />
+          )}
           {section === "video" && (
             <VideoTab
               config={config}

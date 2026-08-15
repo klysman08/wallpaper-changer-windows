@@ -428,18 +428,22 @@ class Engine:
 
     # ── Saved collages ────────────────────────────────────────────────────────
 
-    def suggest_collage_path(self, monitor: int | None = None) -> dict:
+    def suggest_collage_path(
+        self, monitor: int | None = None, config: dict | None = None
+    ) -> dict:
         """Where a save would go if the user just pressed Enter.
 
         The save dialog needs a folder and a name *before* anything is composed, and
         both belong here: the front end has no filesystem of its own to derive them
         from, and a name invented there would drift from the one this module uses.
+        Takes *config* so an unsaved change to the library folder is honoured — the
+        dialog should open where the screen says pictures go.
 
         The folder is created on the way out. A default path whose directory does not
         exist yet is one the dialog quietly ignores, dropping the user somewhere else
         entirely on the very first save.
         """
-        folder = gallery.get_library_dir()
+        folder = gallery.get_library_dir(self._merged(config))
         try:
             folder.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
@@ -478,7 +482,7 @@ class Engine:
         target = (
             Path(path)
             if path
-            else gallery.get_library_dir() / gallery.suggest_name(monitor)
+            else gallery.get_library_dir(cfg) / gallery.suggest_name(monitor)
         )
         fmt = _SAVE_FORMATS.get(target.suffix.lower())
         if fmt is None:
@@ -523,11 +527,15 @@ class Engine:
         )
         return [used[i % len(used)] for i in indexes] if used else []
 
-    def list_saved_collages(self) -> dict:
-        """Every saved collage still on disk, newest first."""
+    def list_saved_collages(self, config: dict | None = None) -> dict:
+        """Every saved collage still on disk, newest first.
+
+        The folder is reported alongside, resolved from *config* so the screen can
+        show where the next save will land even before the setting is saved.
+        """
         return {
             "collages": gallery.entries(),
-            "folder": str(gallery.get_library_dir()),
+            "folder": str(gallery.get_library_dir(self._merged(config))),
         }
 
     def apply_saved_collage(self, path: str) -> dict:

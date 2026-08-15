@@ -216,6 +216,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "Use “Save as image” above the preview to keep a collage here."
         ),
         "gallery_folder": "Library folder",
+        "gallery_folder_hint": "New collages are saved to {folder}",
         "gallery_open": "View",
         "gallery_apply": "Set as wallpaper",
         "gallery_show_in_folder": "Show in folder",
@@ -531,6 +532,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "collage aqui."
         ),
         "gallery_folder": "Pasta da biblioteca",
+        "gallery_folder_hint": "Novas collages são salvas em {folder}",
         "gallery_open": "Ver",
         "gallery_apply": "Aplicar como wallpaper",
         "gallery_show_in_folder": "Mostrar na pasta",
@@ -847,6 +849,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "プレビュー上部の「画像として保存」で、コラージュをここに残せます。"
         ),
         "gallery_folder": "ライブラリのフォルダー",
+        "gallery_folder_hint": "新しいコラージュの保存先: {folder}",
         "gallery_open": "表示",
         "gallery_apply": "壁紙に設定",
         "gallery_show_in_folder": "フォルダーで表示",

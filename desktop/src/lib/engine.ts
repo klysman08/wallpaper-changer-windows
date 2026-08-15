@@ -49,6 +49,8 @@ export interface Config {
     wallpapers_folder: string
     output_folder: string
     default_wallpaper: string
+    /** Where saved collages are written. Empty means the default library folder. */
+    saved_folder?: string
   }
   display: { fit_mode: FitMode; effect: Effect }
   hotkeys: Hotkeys
@@ -227,11 +229,14 @@ export const engine = {
       monitor: opts.monitor ?? null,
       path: opts.path,
     }),
-  /** Folder and filename the save dialog should open with. */
-  suggestCollagePath: (monitor: number | null) =>
-    call<{ path: string }>("suggest_collage_path", { monitor }),
-  listSavedCollages: () =>
-    call<{ collages: SavedCollage[]; folder: string }>("list_saved_collages"),
+  /**
+   * Folder and filename the save dialog should open with. Pass the live config so
+   * an unsaved change to the library folder is where the dialog opens.
+   */
+  suggestCollagePath: (monitor: number | null, config?: Partial<Config>) =>
+    call<{ path: string }>("suggest_collage_path", { monitor, config }),
+  listSavedCollages: (config?: Partial<Config>) =>
+    call<{ collages: SavedCollage[]; folder: string }>("list_saved_collages", { config }),
   /**
    * Set a saved collage as the wallpaper, as saved — nothing is recomposed and no
    * effect is applied on top of the one already baked into the file.

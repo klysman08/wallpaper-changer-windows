@@ -19,25 +19,29 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from .config import get_user_config_dir, get_user_data_dir
+from .config import get_user_config_dir, resolve_saved_dir
 
 log = logging.getLogger(__name__)
 
 INDEX_NAME = "gallery.json"
-LIBRARY_DIRNAME = "saved"
 
 # Enough to keep years of saves, low enough that the gallery stays a gallery and
 # the index stays small enough to rewrite on every save.
 _MAX_ENTRIES = 500
 
 
-def get_library_dir() -> Path:
+def get_library_dir(cfg: dict | None = None) -> Path:
     """Where a save with no explicit destination lands.
 
-    The local data directory, not the roaming config one: these are full-resolution
-    desktop composites, far too large to drag through a roaming profile.
+    Follows ``paths.saved_folder``, so the user can point the library at their own
+    Pictures folder. Left unset it is a subfolder of the local data directory, not
+    the roaming config one: these are full-resolution desktop composites, far too
+    large to drag through a roaming profile.
+
+    Only new saves move when the setting changes. Entries already in the index carry
+    absolute paths, so the gallery keeps listing pictures wherever they were written.
     """
-    return get_user_data_dir() / LIBRARY_DIRNAME
+    return resolve_saved_dir(cfg or {})
 
 
 def get_index_file() -> Path:
