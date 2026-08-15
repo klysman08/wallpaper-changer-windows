@@ -52,6 +52,10 @@ The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the C
 4. `wallpaper.py` — composites a BMP collage, optionally applies effects (`normal`/`bw`/`vintage`/`hdr`), and calls `ctypes.windll.user32.SystemParametersInfoW` to apply
 5. GUI preview (`gui.py`) renders a live scaled thumbnail of the layout using the same pipeline
 
+**The preview is editable.** `plan_collage()` in `wallpaper.py` is the single source of truth for which image lands in which rectangle; `compose_collage` draws from it and the `preview` RPC returns it as `cells` (composite pixel coords + `image_index`) so the UI can lay a hit target over every picture. Never reimplement the grid rules in TypeScript — a drag would then swap the wrong images the moment `_GRID_COLS` changes. Dragging one cell onto another swaps those entries in the pinned selection and re-renders; clicking one opens a picker fed by `get_thumbnails` (the webview cannot read local files, so pictures only reach it as base64). Because the user can edit the list, it can end up shorter than the grid — `compose_collage` wraps with a modulo rather than raising.
+
+**Two CSS traps this UI has already hit.** Tailwind's preflight caps every image at `max-width: 100%`, which silently clamps an inline width over 100% while honouring the inline height — any image deliberately oversized inside a frame (the focused-monitor zoom) needs `max-w-none`. And `[data-slot="card"]:hover` in `index.css` applies a transform, so while the pointer is over a card that card becomes the containing block for its `position: fixed` descendants *and* clips them: a full-window overlay or a cursor-following ghost inside a Card must be portalled to `document.body`.
+
 **Key files:**
 - `src/wallpaper_changer/wallpaper.py` — core composition + Windows API call; `_set_wallpaper_fast()` skips `WM_SETTINGCHANGE` broadcast for fade animation frames
 - `src/wallpaper_changer/gui.py` — large ttkbootstrap GUI (~56 KB); includes hotkey recorder, transparency slider, system tray wiring

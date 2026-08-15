@@ -200,6 +200,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_close": "Close",
         "preview_apply_this": "Set as wallpaper",
         "preview_images_used": "Images in this preview",
+        "preview_arrange_hint": (
+            "Drag a picture onto another to swap them, or click one to choose a "
+            "different image."
+        ),
+        "preview_choose_image": "Choose image",
+        "search_images": "Search by file name",
+        "no_images_found": "No images match",
+        "showing_n_of_m": "Showing {shown} of {total}",
+        "theme": "Theme",
+        "theme_light": "Light",
+        "theme_dark": "Dark",
+        "theme_system": "System",
         "images_folder": "Images folder",
         "browse": "Browse",
         "images_found": "images found",
@@ -484,6 +496,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_close": "Fechar",
         "preview_apply_this": "Aplicar este",
         "preview_images_used": "Imagens desta pré-visualização",
+        "preview_arrange_hint": (
+            "Arraste uma imagem sobre outra para trocá-las, ou clique em uma para "
+            "escolher outra imagem."
+        ),
+        "preview_choose_image": "Escolher imagem",
+        "search_images": "Buscar pelo nome do arquivo",
+        "no_images_found": "Nenhuma imagem encontrada",
+        "showing_n_of_m": "Exibindo {shown} de {total}",
+        "theme": "Tema",
+        "theme_light": "Claro",
+        "theme_dark": "Escuro",
+        "theme_system": "Sistema",
         "images_folder": "Pasta de imagens",
         "browse": "Procurar",
         "images_found": "imagens encontradas",
@@ -771,6 +795,17 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_close": "閉じる",
         "preview_apply_this": "この壁紙を適用",
         "preview_images_used": "このプレビューの画像",
+        "preview_arrange_hint": (
+            "画像を別の画像にドラッグすると入れ替わります。クリックすると画像を選び直せます。"
+        ),
+        "preview_choose_image": "画像を選択",
+        "search_images": "ファイル名で検索",
+        "no_images_found": "該当する画像はありません",
+        "showing_n_of_m": "{total} 件中 {shown} 件を表示",
+        "theme": "テーマ",
+        "theme_light": "ライト",
+        "theme_dark": "ダーク",
+        "theme_system": "システム",
         "images_folder": "画像フォルダー",
         "browse": "参照",
         "images_found": "件の画像",

@@ -5,6 +5,7 @@ import { Toaster, toast } from "sonner"
 import { ActionBar } from "@/components/action-bar"
 import { HotkeysTab } from "@/components/hotkeys-tab"
 import { SettingsTab } from "@/components/settings-tab"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { TransparencyTab } from "@/components/transparency-tab"
 import { UpdateDialog } from "@/components/update-dialog"
 import { VideoTab } from "@/components/video-tab"
@@ -157,8 +158,16 @@ export function App() {
     <SidebarProvider>
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="flex items-center gap-2 px-1 py-1.5">
-            <img src="/icon.png" alt="" className="size-8 shrink-0 rounded-md" />
+          {/* Collapsed, the sidebar is 3rem wide and the padding around this leaves
+              24px — so the logo has to give up its own padding and shrink, or it
+              spills past the rail. */}
+          <div className="flex items-center gap-2 px-1 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <img
+              src="/icon.png"
+              alt=""
+              draggable={false}
+              className="size-8 shrink-0 rounded-md transition-[width,height] group-data-[collapsible=icon]:size-7"
+            />
             {/* Hidden when collapsed to icon width. */}
             <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate text-sm font-medium">Wallpaper Changer</span>
@@ -254,6 +263,7 @@ export function App() {
           <SidebarTrigger />
           <h1 className="flex-1 truncate text-sm font-medium">{t(section)}</h1>
           {cfg.dirty && <Badge variant="secondary">{t("unsaved_changes")}</Badge>}
+          <ThemeToggle i18n={i18n} />
           <Button size="sm" onClick={save} disabled={!cfg.dirty || saving}>
             {saving ? t("saving") : t("save")}
           </Button>

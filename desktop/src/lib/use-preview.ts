@@ -12,7 +12,7 @@
  */
 import * as React from "react"
 
-import { engine, type Config } from "@/lib/engine"
+import { engine, type Config, type PreviewCell } from "@/lib/engine"
 
 const DEBOUNCE_MS = 350
 
@@ -24,7 +24,13 @@ export interface Preview {
   error: string | null
   /** The images the current render used, in monitor order. */
   images: string[]
+  /** Where each of those images sits, in composite pixels. */
+  cells: PreviewCell[]
   reshuffle: () => void
+  /** Swap two entries of the selection and re-render from the new order. */
+  swap: (a: number, b: number) => void
+  /** Put a specific file in one slot and re-render. */
+  replace: (index: number, path: string) => void
 }
 
 export function usePreview(config: Config | null, maxWidth = 900): Preview {
@@ -34,17 +40,68 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
   const [error, setError] = React.useState<string | null>(null)
   const [nonce, setNonce] = React.useState(0)
   const [images, setImages] = React.useState<string[]>([])
+  const [cells, setCells] = React.useState<PreviewCell[]>([])
 
   const pinned = React.useRef<string[] | null>(null)
   // Which selection settings the pinned images were chosen under.
   const pinnedFor = React.useRef<string | null>(null)
   // Guards against an older, slower response overwriting a newer one.
   const latest = React.useRef(0)
+  // Set when the pending render was asked for outright rather than inferred from a
+  // settings change, which is what lets it skip the debounce.
+  const urgent = React.useRef(false)
 
   const reshuffle = React.useCallback(() => {
     pinned.current = null
     setNonce((n) => n + 1)
   }, [])
+
+  /**
+   * Re-pin an edited selection and ask for a fresh render.
+   *
+   * The edit is applied to state as well as to the pin so the caption list and the
+   * hit targets update on the spot, rather than a third of a second later when the
+   * debounced render lands.
+   */
+  const edit = React.useCallback(
+    (mutate: (current: string[]) => string[] | null) => {
+      // The pin, not the state, is what the next request will send, so it is the
+      // one that must not be read stale — and being a ref, it never is.
+      const next = mutate(pinned.current ?? images)
+      if (!next) return
+      pinned.current = next
+      // A direct edit is one deliberate act, not a slider being dragged, so it
+      // skips the debounce that exists to swallow keystrokes.
+      urgent.current = true
+      setImages(next)
+      setNonce((n) => n + 1)
+    },
+    [images],
+  )
+
+  const swap = React.useCallback(
+    (a: number, b: number) => {
+      edit((current) => {
+        if (a === b || !current[a] || !current[b]) return null
+        const next = [...current]
+        ;[next[a], next[b]] = [next[b], next[a]]
+        return next
+      })
+    },
+    [edit],
+  )
+
+  const replace = React.useCallback(
+    (index: number, path: string) => {
+      edit((current) => {
+        if (index < 0 || index >= current.length || current[index] === path) return null
+        const next = [...current]
+        next[index] = path
+        return next
+      })
+    },
+    [edit],
+  )
 
   // Settings that decide *which* images get picked. When one of them changes the pin
   // has to be dropped: reusing it would keep showing pictures the new settings would
@@ -74,6 +131,8 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
     }
 
     const ticket = ++latest.current
+    const wait = urgent.current ? 0 : DEBOUNCE_MS
+    urgent.current = false
     setLoading(true)
 
     const timer = setTimeout(() => {
@@ -85,6 +144,7 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
           setSrc(`data:image/png;base64,${result.png_base64}`)
           setSize({ width: result.width, height: result.height })
           setImages(result.images)
+          setCells(result.cells ?? [])
           setError(null)
         })
         .catch((e) => {
@@ -95,11 +155,11 @@ export function usePreview(config: Config | null, maxWidth = 900): Preview {
         .finally(() => {
           if (ticket === latest.current) setLoading(false)
         })
-    }, DEBOUNCE_MS)
+    }, wait)
 
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, nonce, maxWidth])
 
-  return { src, ...size, loading, error, images, reshuffle }
+  return { src, ...size, loading, error, images, cells, reshuffle, swap, replace }
 }

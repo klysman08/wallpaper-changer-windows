@@ -33,6 +33,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
+from PIL import Image
+
 from . import i18n, scroll_transparency, startup, transparency
 from .config import (
     get_default_config_path,
@@ -44,7 +46,13 @@ from .image_utils import list_images
 from .monitor import get_monitors, get_virtual_desktop_size
 from .notifications import send_windows_notification
 from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
-from .wallpaper import EFFECTS, apply_single_wallpaper, apply_wallpaper, compose_collage
+from .wallpaper import (
+    EFFECTS,
+    apply_single_wallpaper,
+    apply_wallpaper,
+    compose_collage,
+    plan_collage,
+)
 
 log = logging.getLogger(__name__)
 
@@ -333,6 +341,14 @@ class Engine:
         canvas, used = compose_collage(
             cfg, monitors, preset_images=images, state_file=_PREVIEW_STATE
         )
+        general = cfg.get("general", {})
+        # Reported in composite pixels, alongside the picture they describe, so the
+        # UI can lay a hit target over every image without knowing the grid rules.
+        cells = plan_collage(
+            monitors,
+            max(1, int(general.get("collage_count", 4))),
+            bool(general.get("collage_same_for_all", False)),
+        )
         if max_width and canvas.width > max_width:
             ratio = max_width / canvas.width
             canvas = canvas.resize(
@@ -345,7 +361,30 @@ class Engine:
             "width": canvas.width,
             "height": canvas.height,
             "images": used,
+            "cells": cells,
         }
+
+    def get_thumbnails(self, paths: list[str], size: int = 160) -> dict:
+        """Base64 JPEG thumbnails, keyed by the path that produced them.
+
+        The webview has no access to the filesystem, so a picture can only reach it
+        as bytes. Anything that fails to open is left out rather than failing the
+        batch — a folder with one unreadable file should still show the rest.
+        """
+        box = max(32, min(512, int(size)))
+        out: dict[str, str] = {}
+        for raw in paths:
+            try:
+                with Image.open(raw) as img:
+                    thumb = img.convert("RGB")
+                    thumb.thumbnail((box, box), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    thumb.save(buf, "JPEG", quality=75)
+            except Exception as exc:
+                log.debug("Thumbnail failed for %s: %s", raw, exc)
+                continue
+            out[raw] = base64.b64encode(buf.getvalue()).decode("ascii")
+        return {"thumbnails": out}
 
     def _merged(self, config: dict | None) -> dict:
         """Overlay *config* on the saved configuration without persisting it."""
@@ -603,6 +642,7 @@ class Engine:
         "get_monitors",
         "get_translations",
         "list_folder_images",
+        "get_thumbnails",
         "apply_wallpaper",
         "apply_default_wallpaper",
         "apply_previous_wallpaper",

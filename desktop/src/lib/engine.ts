@@ -94,11 +94,29 @@ export interface ScrollTransparencyStatus {
   step: number
 }
 
+/**
+ * One image's slot in the collage, in composite pixels.
+ *
+ * Computed by the engine rather than the UI: the grid rules live in
+ * `wallpaper.py`, and a second implementation here would drift the moment they
+ * change. `image_index` points into `PreviewResult.images` — with
+ * `collage_same_for_all` several cells share one index.
+ */
+export interface PreviewCell {
+  monitor: number
+  image_index: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface PreviewResult {
   png_base64: string
   width: number
   height: number
   images: string[]
+  cells: PreviewCell[]
 }
 
 export interface ApplyResult {
@@ -160,6 +178,13 @@ export const engine = {
   getTranslations: () => call<Translations>("get_translations"),
   listFolderImages: (folder: string) =>
     call<{ count: number; images: string[] }>("list_folder_images", { folder }),
+  /**
+   * Base64 JPEG thumbnails, keyed by path. The webview cannot read local files,
+   * so a picture can only reach it as bytes. Paths that fail to open are absent
+   * from the result rather than failing the batch.
+   */
+  getThumbnails: (paths: string[], size = 160) =>
+    call<{ thumbnails: Record<string, string> }>("get_thumbnails", { paths, size }),
 
   /** Compose and apply. Pass `images` to apply exactly the set a preview showed. */
   applyWallpaper: (config?: Partial<Config>, images?: string[]) =>

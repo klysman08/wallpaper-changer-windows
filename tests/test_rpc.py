@@ -246,6 +246,46 @@ def test_preview_uses_throwaway_state_file_to_protect_rotation_history(engine, c
     assert captured["preset"] == ["keep.png"]   # re-render honours the pinned selection
 
 
+def _stub_two_monitors(monkeypatch, cfg):
+    """Two 400x200 screens side by side, composed without touching any Win32 API."""
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(
+        rpc,
+        "get_monitors",
+        lambda: [Monitor(0, 0, 0, 400, 200), Monitor(1, 400, 0, 400, 200)],
+    )
+    monkeypatch.setattr(
+        rpc,
+        "compose_collage",
+        lambda *a, **k: (Image.new("RGB", (800, 200)), ["a.png"]),
+    )
+
+
+def test_preview_reports_a_cell_for_every_image_slot(engine, cfg, monkeypatch):
+    """The UI lays hit targets over these, so a missing cell is an uneditable image."""
+    cfg["general"]["collage_count"] = 4
+    _stub_two_monitors(monkeypatch, cfg)
+
+    cells = engine.preview(max_width=0)["cells"]
+
+    assert len(cells) == 8
+    assert sorted(c["image_index"] for c in cells) == list(range(8))
+    # The second monitor's cells are offset into its half of the composite.
+    assert all(c["x"] >= 400 for c in cells if c["monitor"] == 1)
+
+
+def test_preview_cells_repeat_short_list_when_sharing(engine, cfg, monkeypatch):
+    cfg["general"]["collage_count"] = 2
+    cfg["general"]["collage_same_for_all"] = True
+    _stub_two_monitors(monkeypatch, cfg)
+
+    cells = engine.preview(max_width=0)["cells"]
+
+    # Four cells, but only two pictures — both screens point at the same pair.
+    assert len(cells) == 4
+    assert sorted(c["image_index"] for c in cells) == [0, 0, 1, 1]
+
+
 def test_preview_without_monitors_raises_clean_error(engine, cfg, monkeypatch):
     monkeypatch.setattr(rpc, "load_config", lambda: cfg)
     monkeypatch.setattr(rpc, "get_monitors", lambda: [])
@@ -254,6 +294,44 @@ def test_preview_without_monitors_raises_clean_error(engine, cfg, monkeypatch):
         engine.preview()
 
     assert exc.value.kind == "no_monitors"
+
+
+# ── Thumbnails ────────────────────────────────────────────────────────────────
+
+def test_get_thumbnails_returns_decodable_jpegs_within_the_box(engine, tmp_path):
+    source = tmp_path / "wide.png"
+    Image.new("RGB", (800, 200), (5, 10, 15)).save(source)
+
+    result = engine.get_thumbnails([str(source)], size=100)
+
+    thumb = Image.open(io.BytesIO(base64.b64decode(result["thumbnails"][str(source)])))
+    assert thumb.format == "JPEG"
+    assert max(thumb.size) <= 100
+    assert thumb.size == (100, 25)          # aspect ratio preserved
+
+
+def test_get_thumbnails_skips_unreadable_files_instead_of_failing_the_batch(
+    engine, tmp_path
+):
+    good = tmp_path / "good.png"
+    Image.new("RGB", (40, 40)).save(good)
+    broken = tmp_path / "broken.png"
+    broken.write_text("not an image")
+
+    result = engine.get_thumbnails([str(broken), str(good), str(tmp_path / "gone.png")])
+
+    # One folder with one bad file must still show every other picture in it.
+    assert list(result["thumbnails"]) == [str(good)]
+
+
+def test_get_thumbnails_clamps_an_absurd_size(engine, tmp_path):
+    source = tmp_path / "square.png"
+    Image.new("RGB", (2000, 2000)).save(source)
+
+    result = engine.get_thumbnails([str(source)], size=99999)
+
+    thumb = Image.open(io.BytesIO(base64.b64decode(result["thumbnails"][str(source)])))
+    assert max(thumb.size) <= 512
 
 
 # ── Apply ─────────────────────────────────────────────────────────────────────

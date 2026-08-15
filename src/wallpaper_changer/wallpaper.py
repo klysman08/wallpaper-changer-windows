@@ -136,6 +136,42 @@ def _compute_grid_layout(n: int, w: int, h: int) -> list[tuple[int, int, int, in
     return cells
 
 
+def plan_collage(
+    monitors: list[Monitor],
+    count: int,
+    same_for_all: bool,
+) -> list[dict]:
+    """Where each image of a collage lands on the virtual desktop.
+
+    The one place that maps the flat image list a collage is handed onto the
+    rectangles it gets pasted into. ``compose_collage`` draws from it, and the
+    preview hands it to the UI so a cell can be pointed at with a mouse — a second
+    implementation on that side would drift the moment the grid changes.
+
+    Coordinates are pixels within the composite, i.e. relative to the top-left of
+    the virtual desktop rather than to any one screen.
+    """
+    min_x, min_y, _, _ = get_virtual_desktop(monitors)
+    cells: list[dict] = []
+    img_idx = 0
+    for mon in monitors:
+        grid = _compute_grid_layout(count, mon.width, mon.height)
+        for j, (cell_x, cell_y, cell_w, cell_h) in enumerate(grid):
+            cells.append({
+                "monitor": mon.index,
+                # Which entry of the image list fills this cell. With
+                # same_for_all every monitor repeats the same short list.
+                "image_index": j if same_for_all else img_idx,
+                "x": (mon.x - min_x) + cell_x,
+                "y": (mon.y - min_y) + cell_y,
+                "width": cell_w,
+                "height": cell_h,
+            })
+            if not same_for_all:
+                img_idx += 1
+    return cells
+
+
 # ── Collage ───────────────────────────────────────────────────────────────────
 
 def compose_collage(
@@ -169,28 +205,30 @@ def compose_collage(
     else:
         imgs = pick_images(str(folder), count * len(monitors), selection, sf)
 
-    min_x, min_y, total_w, total_h = get_virtual_desktop(monitors)
+    if not imgs:
+        raise FileNotFoundError(f"Nenhuma imagem em: {folder}")
+
+    _, _, total_w, total_h = get_virtual_desktop(monitors)
     canvas = build_canvas(total_w, total_h)
 
     # When same_for_all, pre-load each source image once per unique cell size
     # to avoid redundant File I/O and fit_image processing across monitors.
     _fitted_cache: dict[tuple, Image.Image] = {}
 
-    img_idx = 0
-    for mon in monitors:
-        cells = _compute_grid_layout(count, mon.width, mon.height)
-        for j, (cell_x, cell_y, cell_w, cell_h) in enumerate(cells):
-            src_idx = j if same_for_all else img_idx
-            cache_key = (src_idx, cell_w, cell_h)
-            if cache_key not in _fitted_cache:
-                raw = Image.open(imgs[src_idx]).convert("RGB")
-                _fitted_cache[cache_key] = fit_image(raw, cell_w, cell_h, fit_mode)
-            img = _fitted_cache[cache_key]
-            paste_x = (mon.x - min_x) + cell_x
-            paste_y = (mon.y - min_y) + cell_y
-            canvas.paste(img, (paste_x, paste_y))
-            if not same_for_all:
-                img_idx += 1
+    for cell in plan_collage(monitors, count, same_for_all):
+        # A caller-supplied list can be shorter than the grid — the preview lets
+        # the user edit the selection, and the count can change under it. Wrapping
+        # draws a repeated picture instead of failing the whole composition.
+        src_idx = cell["image_index"] % len(imgs)
+        cache_key = (src_idx, cell["width"], cell["height"])
+        if cache_key not in _fitted_cache:
+            _fitted_cache[cache_key] = fit_image(
+                Image.open(imgs[src_idx]).convert("RGB"),
+                cell["width"],
+                cell["height"],
+                fit_mode,
+            )
+        canvas.paste(_fitted_cache[cache_key], (cell["x"], cell["y"]))
 
     return apply_effect(canvas, effect), [str(p) for p in imgs]
 

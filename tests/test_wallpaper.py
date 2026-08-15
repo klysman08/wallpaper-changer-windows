@@ -45,3 +45,88 @@ def test_deve_lancar_erro_quando_efeito_invalido():
 
     with pytest.raises(ValueError, match="Efeito de imagem invalido"):
         wallpaper.apply_effect(canvas, "invalid")
+
+
+# ── plan_collage ──────────────────────────────────────────────────────────────
+#
+# The preview hands these rectangles to the UI as mouse targets, so they have to
+# describe the picture that compose_collage actually draws.
+
+def test_plan_collage_covers_each_monitor_without_overlapping():
+    monitors = [Monitor(0, 0, 0, 400, 200), Monitor(1, 400, 0, 400, 200)]
+
+    cells = wallpaper.plan_collage(monitors, count=4, same_for_all=False)
+
+    assert len(cells) == 8
+    assert sorted(c["image_index"] for c in cells) == list(range(8))
+    covered = sum(c["width"] * c["height"] for c in cells)
+    assert covered == 400 * 200 * 2
+
+
+def test_plan_collage_offsets_cells_by_the_monitors_place_on_the_desktop():
+    """Coordinates are composite-relative, so a screen left of the origin still
+    lands at a non-negative offset."""
+    monitors = [Monitor(0, -1920, 0, 1920, 1080), Monitor(1, 0, 0, 1920, 1080)]
+
+    cells = wallpaper.plan_collage(monitors, count=1, same_for_all=False)
+
+    assert [(c["x"], c["y"]) for c in cells] == [(0, 0), (1920, 0)]
+
+
+def test_plan_collage_repeats_the_short_list_when_sharing_images():
+    monitors = [Monitor(0, 0, 0, 400, 200), Monitor(1, 400, 0, 400, 200)]
+
+    cells = wallpaper.plan_collage(monitors, count=2, same_for_all=True)
+
+    assert [c["image_index"] for c in cells] == [0, 1, 0, 1]
+
+
+def test_compose_collage_draws_every_cell_the_plan_describes(tmp_path):
+    """The two must not drift: a plan the composition ignores would put the UI's
+    hit targets over the wrong pictures."""
+    folder = tmp_path / "pics"
+    folder.mkdir()
+    colours = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+    for i, colour in enumerate(colours):
+        Image.new("RGB", (40, 40), colour).save(folder / f"{i}.png")
+
+    monitors = [Monitor(0, 0, 0, 400, 200)]
+    cfg = {
+        "paths": {"wallpapers_folder": str(folder)},
+        "display": {"fit_mode": "stretch", "effect": "normal"},
+        "general": {"collage_count": 4, "collage_same_for_all": False},
+    }
+    preset = [str(folder / f"{i}.png") for i in range(4)]
+
+    canvas, used = wallpaper.compose_collage(
+        cfg, monitors, preset_images=preset, state_file=tmp_path / "state.json"
+    )
+
+    assert used == preset
+    for cell in wallpaper.plan_collage(monitors, 4, same_for_all=False):
+        centre = (cell["x"] + cell["width"] // 2, cell["y"] + cell["height"] // 2)
+        assert canvas.getpixel(centre) == colours[cell["image_index"]]
+
+
+def test_compose_collage_repeats_a_short_selection_rather_than_failing(tmp_path):
+    """The preview lets the user edit the selection, so a list shorter than the
+    grid is reachable — and a wallpaper with a repeat beats no wallpaper."""
+    folder = tmp_path / "pics"
+    folder.mkdir()
+    Image.new("RGB", (40, 40), (10, 20, 30)).save(folder / "only.png")
+
+    cfg = {
+        "paths": {"wallpapers_folder": str(folder)},
+        "display": {"fit_mode": "stretch", "effect": "normal"},
+        "general": {"collage_count": 4, "collage_same_for_all": False},
+    }
+
+    canvas, _ = wallpaper.compose_collage(
+        cfg,
+        [Monitor(0, 0, 0, 400, 200)],
+        preset_images=[str(folder / "only.png")],
+        state_file=tmp_path / "state.json",
+    )
+
+    assert canvas.getpixel((10, 10)) == (10, 20, 30)
+    assert canvas.getpixel((390, 190)) == (10, 20, 30)
