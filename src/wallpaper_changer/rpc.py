@@ -35,7 +35,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from . import i18n, scroll_transparency, startup, transparency
+from . import gallery, i18n, scroll_transparency, startup, transparency
 from .config import (
     get_default_config_path,
     load_config,
@@ -48,9 +48,11 @@ from .notifications import send_windows_notification
 from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
 from .wallpaper import (
     EFFECTS,
+    apply_desktop_image,
     apply_single_wallpaper,
     apply_wallpaper,
     compose_collage,
+    crop_to_monitor,
     plan_collage,
 )
 
@@ -64,6 +66,16 @@ _PREVIEW_STATE = Path(tempfile.gettempdir()) / "wallpaper_changer_preview_state.
 
 # How many applied image sets the "previous wallpaper" hotkey can step back through.
 _HISTORY_LIMIT = 50
+
+# Image formats a collage can be exported to, by the extension the user typed in the
+# save dialog. PNG first because it is lossless and what the dialog suggests.
+_SAVE_FORMATS = {
+    ".png": "PNG",
+    ".jpg": "JPEG",
+    ".jpeg": "JPEG",
+    ".bmp": "BMP",
+    ".webp": "WEBP",
+}
 
 # Opacity the transparency hotkey toggles to (half of fully opaque).
 _HALF_OPACITY = 128
@@ -386,6 +398,179 @@ class Engine:
             out[raw] = base64.b64encode(buf.getvalue()).decode("ascii")
         return {"thumbnails": out}
 
+    def get_image_preview(self, path: str, max_width: int = 1400) -> dict:
+        """One image as a base64 JPEG, large enough to actually look at.
+
+        ``get_thumbnails`` is sized for a grid and clamps to 512px; this is what the
+        gallery's full view uses. Downscale only — a small picture is sent as it is
+        rather than blown up into a bigger payload.
+        """
+        box = max(64, min(4096, int(max_width)))
+        try:
+            with Image.open(path) as img:
+                shown = img.convert("RGB")
+                if shown.width > box:
+                    shown = shown.resize(
+                        (box, max(1, round(shown.height * box / shown.width))),
+                        Image.LANCZOS,
+                    )
+                buf = io.BytesIO()
+                shown.save(buf, "JPEG", quality=85)
+        except FileNotFoundError as exc:
+            raise RpcError(f"Image not found: {path}", "not_found") from exc
+        except OSError as exc:
+            raise RpcError(f"Could not read the image: {exc}", "invalid") from exc
+        return {
+            "jpeg_base64": base64.b64encode(buf.getvalue()).decode("ascii"),
+            "width": shown.width,
+            "height": shown.height,
+        }
+
+    # ── Saved collages ────────────────────────────────────────────────────────
+
+    def suggest_collage_path(self, monitor: int | None = None) -> dict:
+        """Where a save would go if the user just pressed Enter.
+
+        The save dialog needs a folder and a name *before* anything is composed, and
+        both belong here: the front end has no filesystem of its own to derive them
+        from, and a name invented there would drift from the one this module uses.
+
+        The folder is created on the way out. A default path whose directory does not
+        exist yet is one the dialog quietly ignores, dropping the user somewhere else
+        entirely on the very first save.
+        """
+        folder = gallery.get_library_dir()
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            log.warning("Could not create the collage library folder: %s", exc)
+        return {"path": str(folder / gallery.suggest_name(monitor))}
+
+    def save_collage(
+        self,
+        config: dict | None = None,
+        images: list[str] | None = None,
+        monitor: int | None = None,
+        path: str | None = None,
+    ) -> dict:
+        """Write the collage to an image file, leaving the desktop untouched.
+
+        Composed at full resolution rather than from the preview's downscaled PNG —
+        the preview is sized for a window, and a saved picture should be worth
+        keeping. ``monitor`` saves one screen's share of the composite; ``None``
+        saves the whole virtual desktop. ``path`` is the destination chosen in the
+        save dialog; without one the file lands in the library folder.
+        """
+        cfg = self._merged(config)
+        monitors = get_monitors()
+        if not monitors:
+            raise RpcError("No monitors detected.", "no_monitors")
+        if monitor is not None and not any(m.index == monitor for m in monitors):
+            raise RpcError(f"No monitor #{monitor + 1}.", "invalid")
+
+        canvas, used = compose_collage(
+            cfg, monitors, preset_images=images, state_file=_PREVIEW_STATE
+        )
+        if monitor is not None:
+            canvas = crop_to_monitor(canvas, monitors, monitor)
+            used = self._images_on(cfg, monitors, monitor, used)
+
+        target = (
+            Path(path)
+            if path
+            else gallery.get_library_dir() / gallery.suggest_name(monitor)
+        )
+        fmt = _SAVE_FORMATS.get(target.suffix.lower())
+        if fmt is None:
+            raise RpcError(
+                f"Unsupported image format: {target.suffix or target.name}", "invalid"
+            )
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            canvas.save(target, fmt)
+        except OSError as exc:
+            raise RpcError(f"Could not save the image: {exc}", "io") from exc
+
+        entry = gallery.record(
+            target,
+            monitor=monitor,
+            images=used,
+            width=canvas.width,
+            height=canvas.height,
+        )
+        return {"collage": entry}
+
+    @staticmethod
+    def _images_on(
+        cfg: dict, monitors: list, monitor: int, used: list[str]
+    ) -> list[str]:
+        """The subset of a selection that ends up on one screen.
+
+        Derived from the same layout ``compose_collage`` drew from, including its
+        wrap-around for a selection shorter than the grid, so a saved crop lists
+        exactly the pictures inside it.
+        """
+        general = cfg.get("general", {})
+        cells = plan_collage(
+            monitors,
+            max(1, int(general.get("collage_count", 4))),
+            bool(general.get("collage_same_for_all", False)),
+        )
+        # dict.fromkeys: first-seen order, no repeats — a cell can share an image
+        # with another, and the list is a caption, not a tally.
+        indexes = dict.fromkeys(
+            c["image_index"] for c in cells if c["monitor"] == monitor
+        )
+        return [used[i % len(used)] for i in indexes] if used else []
+
+    def list_saved_collages(self) -> dict:
+        """Every saved collage still on disk, newest first."""
+        return {
+            "collages": gallery.entries(),
+            "folder": str(gallery.get_library_dir()),
+        }
+
+    def apply_saved_collage(self, path: str) -> dict:
+        """Put a saved collage back on the desktop, exactly as it was saved.
+
+        Nothing is recomposed and no effect is applied on top: the file already
+        carries whichever effect was active when it was made. How it is laid down
+        follows what the library says it is — a whole-desktop export spans every
+        screen, a single-screen crop is placed on each screen at that screen's size.
+
+        Deliberately *not* pushed onto the wallpaper history: that history replays
+        image *selections* through the collage composer, and a single flattened
+        picture put through it would come back as a collage of itself.
+        """
+        target = Path(path)
+        if not target.is_file():
+            raise RpcError(f"Saved collage not found: {path}", "not_found")
+        monitors = get_monitors()
+        if not monitors:
+            raise RpcError("No monitors detected.", "no_monitors")
+
+        entry = gallery.find(target)
+        # An unknown file is treated as a full-desktop picture: that is what the app
+        # exports unless asked otherwise, and spanning is the gentler mistake.
+        whole_desktop = entry is None or entry.get("monitor") is None
+        fit_mode = self._config().get("display", {}).get("fit_mode", "fill")
+
+        if not self._apply_lock.acquire(blocking=False):
+            raise RpcError("An apply is already running.", "busy")
+        try:
+            place = apply_desktop_image if whole_desktop else apply_single_wallpaper
+            out = place(target, monitors, self._output_dir(), fit_mode=fit_mode)
+        finally:
+            self._apply_lock.release()
+
+        result = {"output": str(out), "images": [str(target)]}
+        self._emit("wallpaper_applied", result)
+        return result
+
+    def forget_saved_collage(self, path: str) -> dict:
+        """Remove one collage from the library index, keeping the file itself."""
+        return {"removed": gallery.forget(path)}
+
     def _merged(self, config: dict | None) -> dict:
         """Overlay *config* on the saved configuration without persisting it."""
         base = dict(self._config())
@@ -643,6 +828,12 @@ class Engine:
         "get_translations",
         "list_folder_images",
         "get_thumbnails",
+        "get_image_preview",
+        "suggest_collage_path",
+        "save_collage",
+        "list_saved_collages",
+        "apply_saved_collage",
+        "forget_saved_collage",
         "apply_wallpaper",
         "apply_default_wallpaper",
         "apply_previous_wallpaper",

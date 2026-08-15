@@ -18,16 +18,30 @@
  * can be dragged onto another to swap the two, or clicked to choose a different
  * picture. Those handles come from the engine's own layout, never from a second
  * implementation of the grid rules here.
+ *
+ * It can also be kept: "Save as image" exports the collage to a file — one screen's
+ * share of it or the whole desktop — and the saved file joins the gallery. That
+ * export is composed afresh at full resolution by the engine; the PNG on screen is
+ * sized for this window and would be a poor thing to hand someone.
  */
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { Check, Maximize2, Shuffle, X } from "lucide-react"
+import { save } from "@tauri-apps/plugin-dialog"
+import { Check, ImageDown, Maximize2, Shuffle, X } from "lucide-react"
+import { toast } from "sonner"
 
 import { ImagePickerDialog } from "@/components/image-picker-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Config, MonitorsResult, PreviewCell } from "@/lib/engine"
+import { engine, type Config, type MonitorsResult, type PreviewCell } from "@/lib/engine"
 import type { I18n } from "@/lib/use-i18n"
 import type { Preview } from "@/lib/use-preview"
 import { useThumbnails } from "@/lib/use-thumbnails"
@@ -74,6 +88,13 @@ export function PreviewStage({ preview, monitors, config, i18n, applying, onAppl
             <Shuffle />
             {t("shuffle")}
           </Button>
+          <SaveCollage
+            config={config}
+            monitors={list}
+            images={preview.images}
+            disabled={!preview.src || preview.images.length === 0}
+            i18n={i18n}
+          />
           <Tooltip>
             <TooltipTrigger
               render={
@@ -208,6 +229,107 @@ export function PreviewStage({ preview, monitors, config, i18n, applying, onAppl
         onPick={(path) => picking !== null && preview.replace(picking, path)}
       />
     </Card>
+  )
+}
+
+/**
+ * Export the collage to a file: pick a screen, then a destination.
+ *
+ * With a single monitor there is nothing to choose — the virtual desktop *is* that
+ * screen — so the button saves straight away instead of opening a menu of one.
+ *
+ * The engine does the writing. The webview has no filesystem access, and handing it
+ * a full-resolution composite as base64 only to hand it back again would be a lot of
+ * traffic to accomplish nothing.
+ */
+function SaveCollage({
+  config,
+  monitors,
+  images,
+  disabled,
+  i18n,
+}: {
+  config: Config
+  monitors: MonitorsResult["monitors"]
+  /** The exact selection on screen, so the file matches the preview. */
+  images: string[]
+  disabled: boolean
+  i18n: I18n
+}) {
+  const { t } = i18n
+  const [busy, setBusy] = React.useState(false)
+
+  async function saveTo(monitor: number | null) {
+    setBusy(true)
+    try {
+      // Folder and name both come from the engine: a name invented here would
+      // drift from the one the library itself uses.
+      const { path: suggested } = await engine.suggestCollagePath(monitor)
+      const chosen = await save({
+        defaultPath: suggested,
+        filters: [
+          { name: "PNG", extensions: ["png"] },
+          { name: "JPEG", extensions: ["jpg", "jpeg"] },
+          { name: "BMP", extensions: ["bmp"] },
+          { name: "WebP", extensions: ["webp"] },
+        ],
+      })
+      if (!chosen) return // dialog dismissed
+      const { collage } = await engine.saveCollage({ config, images, monitor, path: chosen })
+      toast.success(t("collage_saved"), {
+        description: `${basename(collage.path)} · ${collage.width}×${collage.height}`,
+      })
+    } catch (e) {
+      toast.error(t("collage_save_failed"), { description: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const label = (
+    <>
+      <ImageDown />
+      {t("preview_save")}
+    </>
+  )
+
+  if (monitors.length <= 1) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled || busy}
+        onClick={() => void saveTo(null)}
+      >
+        {label}
+      </Button>
+    )
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" disabled={disabled || busy}>
+            {label}
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-auto min-w-48">
+        <DropdownMenuLabel>{t("preview_save_which")}</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => void saveTo(null)}>
+          {t("preview_all")}
+        </DropdownMenuItem>
+        {monitors.map((m) => (
+          <DropdownMenuItem key={m.index} onClick={() => void saveTo(m.index)}>
+            {t("monitor_n", { n: m.index + 1 })}
+            <span className="ml-auto pl-3 text-xs text-muted-foreground">
+              {m.width}×{m.height}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

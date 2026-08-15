@@ -1,8 +1,19 @@
 import * as React from "react"
-import { Code2, Download, Heart, Image, KeyRound, Layers, Settings2, Video } from "lucide-react"
+import {
+  Code2,
+  Download,
+  Heart,
+  Image,
+  Images,
+  KeyRound,
+  Layers,
+  Settings2,
+  Video,
+} from "lucide-react"
 import { Toaster, toast } from "sonner"
 
 import { ActionBar } from "@/components/action-bar"
+import { GalleryTab } from "@/components/gallery-tab"
 import { HotkeysTab } from "@/components/hotkeys-tab"
 import { SettingsTab } from "@/components/settings-tab"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -42,10 +53,11 @@ import { useConfig } from "@/lib/use-config"
 import { useI18n } from "@/lib/use-i18n"
 import { useUpdate } from "@/lib/use-update"
 
-type SectionId = "wallpaper" | "video" | "transparency" | "hotkeys" | "settings"
+type SectionId = "wallpaper" | "gallery" | "video" | "transparency" | "hotkeys" | "settings"
 
 const SECTIONS: { id: SectionId; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "wallpaper", icon: Image },
+  { id: "gallery", icon: Images },
   { id: "video", icon: Video },
   { id: "transparency", icon: Layers },
   { id: "hotkeys", icon: KeyRound },
@@ -285,6 +297,9 @@ export function App() {
               onChange={cfg.set}
             />
           )}
+          {/* Listed on mount, and the screen remounts on every visit (it is keyed
+              by section), so a collage saved from the preview is already there. */}
+          {section === "gallery" && <GalleryTab i18n={i18n} />}
           {section === "video" && (
             <VideoTab
               config={config}

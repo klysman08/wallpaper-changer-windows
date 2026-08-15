@@ -66,6 +66,8 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 
 - **Collage Grid**: automatic grid layouts of 1 to 8 images per monitor.
 - **Live Preview**: the interface renders the real composited collage before anything touches your desktop, so effect and fit changes are visible immediately. Monitor outlines are drawn over it, any screen can be zoomed to on its own, the whole thing expands to fill the window, and what you are looking at can be applied as-is.
+- **Editable Preview**: drag one picture in the preview onto another to swap them, or click one to choose a different image, before anything is applied.
+- **Save & Gallery**: keep any collage as an image file - the whole desktop or a single monitor's share of it, composed at full resolution - and find every one you have saved on the Gallery screen, ready to view again or put straight back on the desktop.
 - **Video Wallpaper**: render `.mp4`, `.mkv`, `.webm`, `.mov`, and other common formats behind your desktop icons using `libmpv`, with optional audio, looping, and playlist controls.
 - **Stable Video Rendering**: D3D11 presentation with stability-focused software decoding, avoiding fragile hardware-decoder surfaces while retaining smooth GPU composition.
 - **Native Fade Transitions**: lets Windows apply its built-in wallpaper fade, with no custom animation loop or desktop flicker.
@@ -314,6 +316,7 @@ wallpaper-changer/
     ├── rpc.py                    # JSON-RPC adapter over the engine
     ├── cli.py                    # Command-line router
     ├── config.py                 # TOML parsing and user-directory migration
+    ├── gallery.py                # Index of collages saved as image files
     ├── gui.py                    # Legacy ttkbootstrap interface
     ├── hotkeys.py                # Win32 global hotkey registration
     ├── i18n.py                   # Locales (en, pt_BR, ja)

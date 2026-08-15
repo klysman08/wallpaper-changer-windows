@@ -124,6 +124,22 @@ export interface ApplyResult {
   images: string[]
 }
 
+/**
+ * One collage the user exported to an image file.
+ *
+ * `monitor` is the screen it was cropped to, or null for the whole virtual
+ * desktop. `images` lists only the pictures actually inside the saved crop.
+ */
+export interface SavedCollage {
+  path: string
+  /** Local time with offset, ISO 8601. */
+  saved_at: string
+  monitor: number | null
+  images: string[]
+  width: number
+  height: number
+}
+
 export interface WindowInfo {
   hwnd: number
   title: string
@@ -185,6 +201,45 @@ export const engine = {
    */
   getThumbnails: (paths: string[], size = 160) =>
     call<{ thumbnails: Record<string, string> }>("get_thumbnails", { paths, size }),
+  /** One image, sized to look at rather than to fit a grid. */
+  getImagePreview: (path: string, maxWidth = 1400) =>
+    call<{ jpeg_base64: string; width: number; height: number }>("get_image_preview", {
+      path,
+      max_width: maxWidth,
+    }),
+
+  /**
+   * Export the collage to an image file. Nothing on the desktop changes.
+   *
+   * `monitor` saves one screen's share of the composite, null the whole virtual
+   * desktop. Omit `path` to let it land in the library folder under a generated
+   * name. Composed fresh at full resolution — not the downscaled preview PNG.
+   */
+  saveCollage: (opts: {
+    config?: Partial<Config>
+    images?: string[]
+    monitor?: number | null
+    path?: string
+  }) =>
+    call<{ collage: SavedCollage }>("save_collage", {
+      config: opts.config,
+      images: opts.images,
+      monitor: opts.monitor ?? null,
+      path: opts.path,
+    }),
+  /** Folder and filename the save dialog should open with. */
+  suggestCollagePath: (monitor: number | null) =>
+    call<{ path: string }>("suggest_collage_path", { monitor }),
+  listSavedCollages: () =>
+    call<{ collages: SavedCollage[]; folder: string }>("list_saved_collages"),
+  /**
+   * Set a saved collage as the wallpaper, as saved — nothing is recomposed and no
+   * effect is applied on top of the one already baked into the file.
+   */
+  applySavedCollage: (path: string) => call<ApplyResult>("apply_saved_collage", { path }),
+  /** Drop one entry from the library. The image file itself is left alone. */
+  forgetSavedCollage: (path: string) =>
+    call<{ removed: boolean }>("forget_saved_collage", { path }),
 
   /** Compose and apply. Pass `images` to apply exactly the set a preview showed. */
   applyWallpaper: (config?: Partial<Config>, images?: string[]) =>

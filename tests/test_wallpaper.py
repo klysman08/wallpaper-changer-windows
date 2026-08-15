@@ -130,3 +130,56 @@ def test_compose_collage_repeats_a_short_selection_rather_than_failing(tmp_path)
 
     assert canvas.getpixel((10, 10)) == (10, 20, 30)
     assert canvas.getpixel((390, 190)) == (10, 20, 30)
+
+
+def test_crop_to_monitor_returns_that_screens_share_of_the_composite():
+    """Two 100x50 screens side by side, painted in halves: the crop must pick one."""
+    monitors = [Monitor(0, 0, 0, 100, 50), Monitor(1, 100, 0, 100, 50)]
+    canvas = Image.new("RGB", (200, 50), (10, 10, 10))
+    canvas.paste(Image.new("RGB", (100, 50), (250, 0, 0)), (100, 0))
+
+    right = wallpaper.crop_to_monitor(canvas, monitors, 1)
+
+    assert right.size == (100, 50)
+    assert right.getpixel((50, 25)) == (250, 0, 0)
+
+
+def test_crop_to_monitor_handles_a_screen_left_of_the_origin():
+    """A secondary monitor can sit at a negative x; the composite starts at zero."""
+    monitors = [Monitor(0, 0, 0, 100, 50), Monitor(1, -100, 0, 100, 50)]
+    canvas = Image.new("RGB", (200, 50), (10, 10, 10))
+    canvas.paste(Image.new("RGB", (100, 50), (0, 0, 250)), (0, 0))
+
+    left = wallpaper.crop_to_monitor(canvas, monitors, 1)
+
+    assert left.getpixel((50, 25)) == (0, 0, 250)
+
+
+def test_crop_to_monitor_rejects_a_screen_that_is_not_there():
+    canvas = Image.new("RGB", (10, 10))
+
+    with pytest.raises(ValueError):
+        wallpaper.crop_to_monitor(canvas, [Monitor(0, 0, 0, 10, 10)], 3)
+
+
+def test_apply_desktop_image_spans_the_virtual_desktop_without_repeating(
+    tmp_path, monkeypatch
+):
+    """A saved desktop-wide collage lands once across every screen, not per screen."""
+    src = tmp_path / "saved.png"
+    Image.new("RGB", (200, 50), (7, 7, 7)).save(src)
+    monitors = [Monitor(0, 0, 0, 100, 50), Monitor(1, 100, 0, 100, 50)]
+    captured: dict = {}
+
+    def fake_transition(canvas, out, set_fn):
+        captured["size"] = canvas.size
+        captured["set_fn"] = set_fn
+        canvas.save(str(out), "BMP")
+
+    monkeypatch.setattr(wallpaper, "apply_transition", fake_transition)
+
+    out = wallpaper.apply_desktop_image(src, monitors, tmp_path, fit_mode="stretch")
+
+    assert captured["size"] == (200, 50)
+    assert captured["set_fn"] is wallpaper.set_wallpaper_win
+    assert out == tmp_path / "wallpaper_saved.bmp"

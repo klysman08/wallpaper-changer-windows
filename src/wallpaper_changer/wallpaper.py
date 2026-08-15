@@ -233,6 +233,26 @@ def compose_collage(
     return apply_effect(canvas, effect), [str(p) for p in imgs]
 
 
+def crop_to_monitor(
+    canvas: Image.Image,
+    monitors: list[Monitor],
+    index: int,
+) -> Image.Image:
+    """The part of a composite that lands on one screen.
+
+    The composite *is* the virtual desktop, so a screen's share of it is just its
+    rectangle offset by the desktop's top-left corner — the same arithmetic
+    ``_build_canvas_from_sections`` uses to paste into it, read the other way.
+    """
+    target = next((m for m in monitors if m.index == index), None)
+    if target is None:
+        raise ValueError(f"Nenhum monitor com indice {index}.")
+    min_x, min_y, _, _ = get_virtual_desktop(monitors)
+    left = target.x - min_x
+    top = target.y - min_y
+    return canvas.crop((left, top, left + target.width, top + target.height))
+
+
 def _apply_collage(
     cfg: dict,
     monitors: list[Monitor],
@@ -270,6 +290,29 @@ def apply_single_wallpaper(
         canvas.paste(fitted, (paste_x, paste_y))
     out = output_dir / "wallpaper_default.bmp"
     canvas = apply_effect(canvas, effect)
+    apply_transition(canvas, out, set_wallpaper_win)
+    return out
+
+
+def apply_desktop_image(
+    image_path: str | Path,
+    monitors: list[Monitor],
+    output_dir: Path,
+    fit_mode: str = "fill",
+) -> Path:
+    """Apply one image laid across the *whole* virtual desktop.
+
+    Distinct from :func:`apply_single_wallpaper`, which repeats the picture on every
+    screen. A saved desktop-wide collage is already arranged for the full desktop, so
+    repeating it per monitor would put the entire thing, shrunk, on each one.
+
+    No effect is applied: a saved file already carries whichever one was active when
+    it was composed, and running that a second time is not the same picture.
+    """
+    img = Image.open(str(image_path)).convert("RGB")
+    _, _, total_w, total_h = get_virtual_desktop(monitors)
+    canvas = fit_image(img, total_w, total_h, fit_mode)
+    out = output_dir / "wallpaper_saved.bmp"
     apply_transition(canvas, out, set_wallpaper_win)
     return out
 

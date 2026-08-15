@@ -54,6 +54,8 @@ The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the C
 
 **The preview is editable.** `plan_collage()` in `wallpaper.py` is the single source of truth for which image lands in which rectangle; `compose_collage` draws from it and the `preview` RPC returns it as `cells` (composite pixel coords + `image_index`) so the UI can lay a hit target over every picture. Never reimplement the grid rules in TypeScript — a drag would then swap the wrong images the moment `_GRID_COLS` changes. Dragging one cell onto another swaps those entries in the pinned selection and re-renders; clicking one opens a picker fed by `get_thumbnails` (the webview cannot read local files, so pictures only reach it as base64). Because the user can edit the list, it can end up shorter than the grid — `compose_collage` wraps with a modulo rather than raising.
 
+**A collage can be kept.** "Save as image" in the preview exports it to a file — one monitor's share (`crop_to_monitor`) or the whole virtual desktop — composed afresh at full resolution rather than reusing the preview's window-sized PNG. Saved files are indexed by `gallery.py` (`gallery.json` beside the settings, images in `%LOCALAPPDATA%\WallpaperChanger\saved`), and the Gallery screen lists them. That index is derived data: it is reconciled against the disk on every read, so a file deleted from Explorer just disappears from the list, and "Remove" drops the entry while **leaving the image alone** — the app never deletes the user's pictures. Applying one back (`apply_saved_collage`) neither recomposes it nor re-applies an effect the file already baked in, and picks its placement from what the index says the file is: a desktop-wide export spans every screen (`apply_desktop_image`), a single-screen crop is placed on each screen (`apply_single_wallpaper`). It is deliberately kept out of the wallpaper history, which replays image *selections* through the collage composer — a flattened picture put through that would come back as a collage of itself.
+
 **Two CSS traps this UI has already hit.** Tailwind's preflight caps every image at `max-width: 100%`, which silently clamps an inline width over 100% while honouring the inline height — any image deliberately oversized inside a frame (the focused-monitor zoom) needs `max-w-none`. And `[data-slot="card"]:hover` in `index.css` applies a transform, so while the pointer is over a card that card becomes the containing block for its `position: fixed` descendants *and* clips them: a full-window overlay or a cursor-following ghost inside a Card must be portalled to `document.body`.
 
 **Key files:**
@@ -63,12 +65,13 @@ The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the C
 - `src/wallpaper_changer/hotkeys.py` — global hotkey registration via `keyboard` lib; hotkeys defined in `settings.toml`
 - `src/wallpaper_changer/i18n.py` — `t()` decorator used throughout; supported languages: `en`, `pt_BR`, `ja`
 - `src/wallpaper_changer/notifications.py` — Windows toast notifications via `win10toast`
+- `src/wallpaper_changer/gallery.py` — index of collages the user exported to image files
 
 **Output format:** Always BMP (required by `SystemParametersInfoW`). Written to `paths.output_folder`; a relative value resolves under `%LOCALAPPDATA%\WallpaperChanger`, never the install directory.
 
 **User files** live outside the installation, so the app works when installed under `Program Files`:
-- `%APPDATA%\WallpaperChanger\` — `settings.toml`, `state.json`, `transparency.json`
-- `%LOCALAPPDATA%\WallpaperChanger\` — composed wallpaper output
+- `%APPDATA%\WallpaperChanger\` — `settings.toml`, `state.json`, `transparency.json`, `gallery.json`
+- `%LOCALAPPDATA%\WallpaperChanger\` — composed wallpaper output, and `saved/` for exported collages
 
 `config.py` migrates these out of the old in-install `config/` directory on first run (copy, never move; never overwrites). Override both locations with `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` — `tests/conftest.py` does this for every test so the suite cannot touch real user files.
 

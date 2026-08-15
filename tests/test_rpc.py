@@ -334,6 +334,198 @@ def test_get_thumbnails_clamps_an_absurd_size(engine, tmp_path):
     assert max(thumb.size) <= 512
 
 
+# ── Saving a collage ──────────────────────────────────────────────────────────
+
+def test_save_collage_writes_the_whole_desktop_at_full_resolution(
+    engine, cfg, tmp_path, monkeypatch
+):
+    """The preview PNG is sized for a window; a saved file must not inherit that."""
+    _stub_two_monitors(monkeypatch, cfg)
+    target = tmp_path / "saved.png"
+
+    result = engine.save_collage(path=str(target))
+
+    assert Image.open(target).size == (800, 200)
+    assert result["collage"]["monitor"] is None
+    assert result["collage"]["width"] == 800
+
+
+def test_save_collage_crops_to_the_requested_monitor(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+    target = tmp_path / "second-screen.png"
+
+    result = engine.save_collage(monitor=1, path=str(target))
+
+    assert Image.open(target).size == (400, 200)
+    assert result["collage"]["monitor"] == 1
+
+
+def test_save_collage_lists_only_the_images_inside_the_crop(engine, cfg, monkeypatch, tmp_path):
+    cfg["general"]["collage_count"] = 2
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(
+        rpc,
+        "get_monitors",
+        lambda: [Monitor(0, 0, 0, 400, 200), Monitor(1, 400, 0, 400, 200)],
+    )
+    monkeypatch.setattr(
+        rpc,
+        "compose_collage",
+        lambda *a, **k: (Image.new("RGB", (800, 200)), ["a.png", "b.png", "c.png", "d.png"]),
+    )
+
+    result = engine.save_collage(monitor=1, path=str(tmp_path / "right.png"))
+
+    # Two per screen, in order: the right-hand screen holds the second pair.
+    assert result["collage"]["images"] == ["c.png", "d.png"]
+
+
+def test_save_collage_rejects_a_format_pillow_cannot_write(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+
+    with pytest.raises(rpc.RpcError) as exc:
+        engine.save_collage(path=str(tmp_path / "collage.pdf"))
+
+    assert exc.value.kind == "invalid"
+
+
+def test_save_collage_rejects_a_monitor_that_is_not_there(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+
+    with pytest.raises(rpc.RpcError) as exc:
+        engine.save_collage(monitor=7, path=str(tmp_path / "x.png"))
+
+    assert exc.value.kind == "invalid"
+
+
+def test_save_collage_never_touches_the_desktop_or_rotation_history(
+    engine, cfg, tmp_path, monkeypatch
+):
+    captured: dict = {}
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+    monkeypatch.setattr(rpc, "get_monitors", lambda: [Monitor(0, 0, 0, 40, 20)])
+    monkeypatch.setattr(
+        rpc, "apply_wallpaper", lambda *a, **k: pytest.fail("saving must not apply")
+    )
+
+    def fake_compose(cfg_, monitors, preset_images=None, state_file=None):
+        captured["state_file"] = state_file
+        captured["preset"] = preset_images
+        return Image.new("RGB", (40, 20)), ["pinned.png"]
+
+    monkeypatch.setattr(rpc, "compose_collage", fake_compose)
+
+    engine.save_collage(images=["pinned.png"], path=str(tmp_path / "out.png"))
+
+    assert captured["state_file"] == rpc._PREVIEW_STATE
+    assert captured["preset"] == ["pinned.png"]   # exactly what the preview showed
+
+
+def test_saved_collages_are_listed_newest_first(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+    engine.save_collage(path=str(tmp_path / "first.png"))
+    engine.save_collage(monitor=0, path=str(tmp_path / "second.png"))
+
+    listed = engine.list_saved_collages()["collages"]
+
+    assert [Path(c["path"]).name for c in listed] == ["second.png", "first.png"]
+
+
+def test_forget_saved_collage_keeps_the_image_file(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+    target = tmp_path / "kept.png"
+    engine.save_collage(path=str(target))
+
+    assert engine.forget_saved_collage(str(target))["removed"] is True
+    assert engine.list_saved_collages()["collages"] == []
+    assert target.exists()
+
+
+def test_suggest_collage_path_creates_the_folder_the_dialog_will_open(engine):
+    """A default path in a folder that does not exist is one the dialog ignores."""
+    suggested = Path(engine.suggest_collage_path(monitor=0)["path"])
+
+    assert suggested.parent.is_dir()
+    assert suggested.name.endswith("_monitor1.png")
+
+
+def test_get_image_preview_only_ever_shrinks(engine, tmp_path):
+    small = tmp_path / "small.png"
+    Image.new("RGB", (120, 60)).save(small)
+
+    result = engine.get_image_preview(str(small), max_width=1400)
+
+    assert (result["width"], result["height"]) == (120, 60)
+
+
+# ── Applying a saved collage ──────────────────────────────────────────────────
+
+def test_apply_saved_collage_spans_a_whole_desktop_export(
+    engine, cfg, tmp_path, monkeypatch
+):
+    _stub_two_monitors(monkeypatch, cfg)
+    saved = tmp_path / "desktop.png"
+    engine.save_collage(path=str(saved))
+    placed: dict = {}
+
+    def fake_span(path, *_args, **_kwargs):
+        placed["spanned"] = Path(path)
+        return tmp_path / "out.bmp"
+
+    monkeypatch.setattr(rpc, "apply_desktop_image", fake_span)
+    monkeypatch.setattr(
+        rpc,
+        "apply_single_wallpaper",
+        lambda *a, **k: pytest.fail("a desktop-wide export must not be repeated per screen"),
+    )
+
+    result = engine.apply_saved_collage(str(saved))
+
+    assert placed["spanned"] == saved
+    assert result["images"] == [str(saved)]
+    assert engine.events[-1][0] == "wallpaper_applied"
+
+
+def test_apply_saved_collage_repeats_a_single_screen_crop(engine, cfg, tmp_path, monkeypatch):
+    _stub_two_monitors(monkeypatch, cfg)
+    saved = tmp_path / "one-screen.png"
+    engine.save_collage(monitor=0, path=str(saved))
+    placed: dict = {}
+
+    def fake_each_screen(path, *_args, **_kwargs):
+        placed["each"] = Path(path)
+        return tmp_path / "out.bmp"
+
+    monkeypatch.setattr(rpc, "apply_single_wallpaper", fake_each_screen)
+
+    engine.apply_saved_collage(str(saved))
+
+    assert placed["each"] == saved
+
+
+def test_apply_saved_collage_does_not_pollute_the_wallpaper_history(
+    engine, cfg, tmp_path, monkeypatch
+):
+    """History replays selections through the composer; a flat picture is not one."""
+    _stub_two_monitors(monkeypatch, cfg)
+    saved = tmp_path / "flat.png"
+    engine.save_collage(path=str(saved))
+    monkeypatch.setattr(rpc, "apply_desktop_image", lambda *a, **k: tmp_path / "out.bmp")
+
+    engine.apply_saved_collage(str(saved))
+
+    assert engine._history == []
+
+
+def test_apply_saved_collage_reports_a_missing_file_cleanly(engine, cfg, tmp_path, monkeypatch):
+    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
+
+    with pytest.raises(rpc.RpcError) as exc:
+        engine.apply_saved_collage(str(tmp_path / "never.png"))
+
+    assert exc.value.kind == "not_found"
+
+
 # ── Apply ─────────────────────────────────────────────────────────────────────
 
 def test_apply_wallpaper_emits_event_with_result(engine, cfg, tmp_path, monkeypatch):
