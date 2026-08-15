@@ -1,11 +1,12 @@
 import * as React from "react"
-import { Code2, Heart, Image, KeyRound, Layers, Settings2, Video } from "lucide-react"
+import { Code2, Download, Heart, Image, KeyRound, Layers, Settings2, Video } from "lucide-react"
 import { Toaster, toast } from "sonner"
 
 import { ActionBar } from "@/components/action-bar"
 import { HotkeysTab } from "@/components/hotkeys-tab"
 import { SettingsTab } from "@/components/settings-tab"
 import { TransparencyTab } from "@/components/transparency-tab"
+import { UpdateDialog } from "@/components/update-dialog"
 import { VideoTab } from "@/components/video-tab"
 import { WallpaperTab } from "@/components/wallpaper-tab"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -37,6 +39,7 @@ import {
 import { useActions } from "@/lib/use-actions"
 import { useConfig } from "@/lib/use-config"
 import { useI18n } from "@/lib/use-i18n"
+import { useUpdate } from "@/lib/use-update"
 
 type SectionId = "wallpaper" | "video" | "transparency" | "hotkeys" | "settings"
 
@@ -71,6 +74,8 @@ export function App() {
   const [savedAt, setSavedAt] = React.useState(0)
   // One copy of the running state, shared by the footer bar and the tabs.
   const actions = useActions(cfg.config, i18n.t)
+  // Shared by the sidebar item, the dialog it opens, and the Settings screen.
+  const update = useUpdate(cfg.config, i18n.t)
 
   /** Select a screen, remembering which way the selection travelled. */
   function goTo(id: SectionId) {
@@ -191,6 +196,21 @@ export function App() {
           {/* Plain anchors: ExternalLinkGuard intercepts them and hands the URL to
               the system browser, so nothing ever navigates inside the webview. */}
           <SidebarMenu>
+            {/* The whole notification: present only while an update is waiting, and
+                it opens the dialog rather than starting anything on its own. */}
+            {update.version && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={`${t("update_available")} · ${update.version}`}
+                  className="text-emerald-600 dark:text-emerald-400"
+                  onClick={() => update.setDialogOpen(true)}
+                >
+                  <Download />
+                  <span>{t("update_available")}</span>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>{update.version}</SidebarMenuBadge>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton
                 tooltip={t("support_project")}
@@ -221,6 +241,7 @@ export function App() {
             >
               klysman08
             </a>
+            {update.currentVersion ? ` · v${update.currentVersion}` : ""}
             {caps ? ` · protocol v${caps.protocol}` : ""}
           </div>
         </SidebarFooter>
@@ -285,6 +306,7 @@ export function App() {
               config={config}
               configPath={cfg.configPath}
               i18n={i18n}
+              update={update}
               onChange={cfg.set}
             />
           )}
@@ -292,6 +314,7 @@ export function App() {
 
         <ActionBar actions={actions} hasMpv={caps?.has_mpv ?? false} i18n={i18n} />
       </SidebarInset>
+      <UpdateDialog update={update} i18n={i18n} />
       <Toaster position="bottom-right" richColors />
     </SidebarProvider>
     </TooltipProvider>

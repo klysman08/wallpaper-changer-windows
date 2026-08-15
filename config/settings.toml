@@ -8,6 +8,9 @@ language = "en"
 # Come up hidden in the tray. Always in effect when Windows starts the app itself;
 # turn this on to get the same behaviour when launching it by hand.
 start_minimized = false
+# Ask GitHub once at startup whether a newer release exists. Turn this off to stop
+# the app reaching the network on its own; the Settings screen can still check by hand.
+check_updates = true
 # Written by the engine, not by hand: whether rotation was running when the app was
 # last closed. It is restored on the next launch.
 rotation_active = false

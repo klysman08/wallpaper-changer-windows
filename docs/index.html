@@ -1087,7 +1087,7 @@
             <div class="step-number">1</div>
             <div class="step-body">
               <h4 class="step-title">Download Installer</h4>
-              <p class="step-desc">Grab the latest <code>.exe</code> or <code>.msi</code> installer package from GitHub Releases.</p>
+              <p class="step-desc">Grab the latest <code>-setup.exe</code> installer from GitHub Releases. After that, the app updates itself.</p>
               <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="btn btn-primary btn-sm" target="_blank" style="align-self: flex-start; margin-top: 0.25rem;">
                 Download Latest Release
               </a>
@@ -1280,7 +1280,7 @@ bun run tauri dev
               <li>Complete architectural rewrite: Tauri v2 + React 19 + shadcn/ui frontend</li>
               <li>Two-process model: Rust shell communicating via JSON-RPC with Python Win32 sidecar</li>
               <li>Rust-owned global shortcuts surviving engine restarts</li>
-              <li>Bundled MSI and NSIS installers with zero registry pollution</li>
+              <li>Signed NSIS installer with zero registry pollution, and in-app updates</li>
               <li>Settings migrated cleanly to <code>%APPDATA%</code> for standard user permission support</li>
             </ul>
           </div>

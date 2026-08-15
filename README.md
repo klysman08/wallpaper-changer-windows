@@ -56,7 +56,7 @@ The desktop app is two processes that speak newline-delimited JSON-RPC over stdi
 | **Components** | shadcn/ui on Base UI, Tailwind CSS 4, lucide icons |
 | **Native integration** | `tauri-plugin-global-shortcut`, `-autostart`, `-dialog`, `-notification`, `-opener`, `-log` |
 | **Engine** | Python 3.11+, Pillow, pywin32, screeninfo, python-mpv |
-| **Packaging** | PyInstaller sidecar + Tauri bundler (MSI and NSIS) |
+| **Packaging** | PyInstaller sidecar + Tauri bundler (NSIS) |
 
 The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI still run against the same engine modules.
 
@@ -76,7 +76,7 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 - **System Tray**: closing hides to the notification area, with a right-click menu for the common actions, including starting and stopping rotation.
 - **Start with Windows**: on by default from the first launch, and a runtime toggle, so it can be turned off again without reinstalling. A boot-time launch goes straight to the tray; **Start minimized** does the same when you open the app yourself.
 - **Resumes Where You Left Off**: rotation and the video wallpaper are remembered as they are switched, and come back on the next launch.
-- **Windows Installer**: MSI and NSIS installers produced by the Tauri bundler.
+- **Windows Installer**: NSIS installer produced by the Tauri bundler, signed so the app can update itself in place.
 
 ---
 
@@ -84,7 +84,7 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 
 ### Option A - Installer (recommended)
 
-1. Download the `.msi` or `-setup.exe` from the [GitHub Releases](https://github.com/klysman08/wallpaper-changer-windows/releases) page.
+1. Download the `-setup.exe` from the [GitHub Releases](https://github.com/klysman08/wallpaper-changer-windows/releases) page. From then on the app checks for new releases itself and can install them for you.
 2. Run the installer.
 3. Point the application at your wallpapers or video directory and press **Apply Now** or **Play video**.
 

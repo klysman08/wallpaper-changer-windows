@@ -40,6 +40,8 @@ export interface Config {
     language: string
     /** Come up hidden in the tray. Always implied when Windows starts the app. */
     start_minimized?: boolean
+    /** Ask GitHub for a newer release at startup. Absent in configs predating it. */
+    check_updates?: boolean
     /** Written by the engine: whether rotation was running at the last shutdown. */
     rotation_active?: boolean
   }

@@ -16,3 +16,8 @@ libmpv/*
 desktop/src-tauri/engine/
 # Legibility strip emitted by scripts/make_icon.py alongside the real icon
 desktop/app-icon-preview.png
+# Updater signing keys. The private half must never be committed — a leak lets
+# anyone sign an update that every installed copy will trust and run.
+*.key
+.tauri/
+$USERPROFILE/

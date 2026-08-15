@@ -1,6 +1,6 @@
 [package]
 name = "tauri-native"
-version = "5.1.0"
+version = "5.2.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -43,3 +43,6 @@ strip = true      # Ensures debug symbols are removed.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+# Only pulled in for relaunch() after an update installs.
+tauri-plugin-process = "2"

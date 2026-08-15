@@ -17,11 +17,13 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { engine, type Config } from "@/lib/engine"
 import type { I18n } from "@/lib/use-i18n"
+import type { UpdateStore } from "@/lib/use-update"
 
 interface Props {
   config: Config
   configPath: string
   i18n: I18n
+  update: UpdateStore
   onChange: <S extends keyof Config, K extends keyof Config[S]>(
     section: S,
     key: K,
@@ -29,7 +31,7 @@ interface Props {
   ) => void
 }
 
-export function SettingsTab({ config, configPath, i18n, onChange }: Props) {
+export function SettingsTab({ config, configPath, i18n, update, onChange }: Props) {
   const { t } = i18n
   const [startup, setStartup] = React.useState<boolean | null>(null)
 
@@ -189,6 +191,63 @@ export function SettingsTab({ config, configPath, i18n, onChange }: Props) {
             />
             <p className="text-xs text-muted-foreground">{t("output_folder_hint")}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("updates")}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <Label className="font-normal text-muted-foreground">{t("current_version")}</Label>
+            <p className="font-mono text-xs">{update.currentVersion || "—"}</p>
+          </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="check-updates" className="font-normal">
+                {t("auto_check_updates")}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t("auto_check_updates_hint")}</p>
+            </div>
+            <Switch
+              id="check-updates"
+              // Absent in configs written before this setting existed, and checking
+              // is the behaviour those users were given when they upgraded.
+              checked={config.general.check_updates ?? true}
+              onCheckedChange={(v) => onChange("general", "check_updates", v)}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={update.status === "checking"}
+              onClick={() => void update.check(true)}
+            >
+              {update.status === "checking" ? t("checking_for_updates") : t("check_for_updates")}
+            </Button>
+            {update.version && (
+              <Button size="sm" onClick={() => update.setDialogOpen(true)}>
+                {t("new_version_available", { version: update.version })}
+              </Button>
+            )}
+            {/* Only after a check has actually run, so this does not claim the app is
+                up to date before anything has been asked. */}
+            {!update.version && update.checked && update.status !== "checking" && (
+              <p className="text-xs text-muted-foreground">
+                {update.status === "error" ? t("update_check_failed") : t("up_to_date")}
+              </p>
+            )}
+          </div>
+
+          {update.status === "error" && update.error && (
+            <p className="rounded-md bg-muted/50 px-3 py-2 font-mono text-xs break-all text-muted-foreground">
+              {update.error}
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

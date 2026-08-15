@@ -220,6 +220,11 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
+        // The update check and the download both run here rather than in the
+        // webview: the CSP allows no remote origin, and the installer has to land
+        // on disk outside the sandbox anyway.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
