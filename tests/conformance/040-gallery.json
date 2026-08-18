@@ -1,0 +1,49 @@
+{
+  "area": "gallery",
+  "source": "tests/test_rpc.py — saved collage index",
+  "cases": [
+    {
+      "name": "suggest_collage_path offers a path for the save dialog",
+      "steps": [
+        {
+          "method": "suggest_collage_path",
+          "expect": { "ok": true, "result_types": { "path": "string" } }
+        }
+      ]
+    },
+    {
+      "name": "an empty library lists nothing and names the folder it would use",
+      "steps": [
+        {
+          "method": "list_saved_collages",
+          "expect": {
+            "ok": true,
+            "result": { "collages": [] },
+            "result_types": { "folder": "string" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forgetting an entry that is not indexed reports no removal",
+      "note": "Removal never touches the image on disk; this only drops an index entry.",
+      "steps": [
+        {
+          "method": "forget_saved_collage",
+          "params": { "path": "Z:/never-saved.png" },
+          "expect": { "ok": true, "result": { "removed": false } }
+        }
+      ]
+    },
+    {
+      "name": "applying a saved collage that is gone reports it cleanly",
+      "steps": [
+        {
+          "method": "apply_saved_collage",
+          "params": { "path": "Z:/never-saved.png" },
+          "expect": { "ok": false, "error_type": "not_found" }
+        }
+      ]
+    }
+  ]
+}

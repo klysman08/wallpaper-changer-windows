@@ -1,0 +1,57 @@
+{
+  "area": "images",
+  "source": "tests/test_rpc.py — folder listing, thumbnails, previews",
+  "cases": [
+    {
+      "name": "listing a folder that is not there yields nothing rather than failing",
+      "steps": [
+        {
+          "method": "list_folder_images",
+          "params": { "folder": "Z:/definitely-not-a-folder" },
+          "expect": { "ok": true, "result": { "count": 0, "images": [] } }
+        }
+      ]
+    },
+    {
+      "name": "scanning for videos in a folder that is not there yields nothing",
+      "steps": [
+        {
+          "method": "scan_videos",
+          "params": { "folder": "Z:/definitely-not-a-folder" },
+          "expect": { "ok": true, "result": { "count": 0, "videos": [] } }
+        }
+      ]
+    },
+    {
+      "name": "an empty thumbnail batch is answered with an empty map",
+      "steps": [
+        {
+          "method": "get_thumbnails",
+          "params": { "paths": [] },
+          "expect": { "ok": true, "result": { "thumbnails": {} } }
+        }
+      ]
+    },
+    {
+      "name": "unreadable files are dropped from a batch instead of failing it",
+      "note": "One bad path in a folder must not cost the user every other thumbnail.",
+      "steps": [
+        {
+          "method": "get_thumbnails",
+          "params": { "paths": ["Z:/no-such-image.png", "Z:/also-missing.jpg"] },
+          "expect": { "ok": true, "result": { "thumbnails": {} } }
+        }
+      ]
+    },
+    {
+      "name": "previewing a missing image reports not_found",
+      "steps": [
+        {
+          "method": "get_image_preview",
+          "params": { "path": "Z:/no-such-image.png" },
+          "expect": { "ok": false, "error_type": "not_found" }
+        }
+      ]
+    }
+  ]
+}

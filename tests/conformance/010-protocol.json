@@ -1,0 +1,86 @@
+{
+  "area": "protocol",
+  "source": "tests/test_rpc.py — the serve loop and dispatch guard tests",
+  "cases": [
+    {
+      "name": "ping reports the protocol version",
+      "steps": [
+        {
+          "method": "ping",
+          "expect": { "ok": true, "result": { "pong": true, "protocol": 1 } }
+        }
+      ]
+    },
+    {
+      "name": "a malformed line is reported without killing the engine",
+      "note": "The next request must still be answered — a bad line must not end the loop.",
+      "steps": [
+        { "raw": "{ this is not json", "expect": { "ok": false, "error_type": "parse" } },
+        { "method": "ping", "expect": { "ok": true, "result": { "pong": true } } }
+      ]
+    },
+    {
+      "name": "a UTF-8 BOM on a request line is tolerated",
+      "note": "A client that writes a BOM would otherwise look like a protocol bug.",
+      "steps": [
+        {
+          "raw": "﻿{\"id\": 9001, \"method\": \"ping\", \"params\": {}}",
+          "expect": { "ok": true, "result": { "pong": true } }
+        }
+      ]
+    },
+    {
+      "name": "params that are not an object are rejected",
+      "note": "rpc.py splats params as keyword arguments, so a list cannot be dispatched.",
+      "steps": [
+        {
+          "raw": "{\"id\": 9002, \"method\": \"ping\", \"params\": [1, 2, 3]}",
+          "expect": { "ok": false, "error_type": "bad_params" }
+        }
+      ]
+    },
+    {
+      "name": "an unknown method is rejected",
+      "steps": [
+        {
+          "method": "definitely_not_a_method",
+          "expect": { "ok": false, "error_type": "unknown_method" }
+        }
+      ]
+    },
+    {
+      "name": "a private attribute cannot be called as a method",
+      "note": "Dispatch is getattr-based, so the allowlist is what stops _config being reachable.",
+      "steps": [
+        { "method": "_config", "expect": { "ok": false, "error_type": "unknown_method" } }
+      ]
+    },
+    {
+      "name": "arguments that do not fit the signature become bad_params",
+      "steps": [
+        {
+          "method": "ping",
+          "params": { "unexpected": 1 },
+          "expect": { "ok": false, "error_type": "bad_params" }
+        }
+      ]
+    },
+    {
+      "name": "get_capabilities describes the engine",
+      "steps": [
+        {
+          "method": "get_capabilities",
+          "expect": {
+            "ok": true,
+            "result": { "protocol": 1, "effects": ["normal", "bw", "vintage", "hdr"] },
+            "result_types": {
+              "has_mpv": "boolean",
+              "startup_enabled": "boolean",
+              "has_scroll_transparency": "boolean"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

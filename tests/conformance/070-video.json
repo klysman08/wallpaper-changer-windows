@@ -1,0 +1,42 @@
+{
+  "area": "video",
+  "source": "tests/test_rpc.py — video status and navigation while stopped",
+  "note": "Nothing here starts playback: video_start parents windows to WORKERW and takes over the desktop.",
+  "cases": [
+    {
+      "name": "video reports itself stopped with no current file",
+      "steps": [
+        {
+          "method": "video_status",
+          "expect": {
+            "ok": true,
+            "result": { "running": false, "current": "" },
+            "result_types": { "has_mpv": "boolean" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stepping through the playlist while stopped is a no-op, not an error",
+      "steps": [
+        {
+          "method": "video_next",
+          "expect": { "ok": true, "result": { "running": false } }
+        },
+        {
+          "method": "video_prev",
+          "expect": { "ok": true, "result": { "running": false } }
+        }
+      ]
+    },
+    {
+      "name": "stopping video that is not running is harmless",
+      "steps": [
+        {
+          "method": "video_stop",
+          "expect": { "ok": true, "result": { "running": false } }
+        }
+      ]
+    }
+  ]
+}

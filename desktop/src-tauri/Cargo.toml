@@ -1,3 +1,6 @@
+[workspace]
+members = ["crates/wallpaper-core", "crates/wallpaper-core-cli"]
+
 [package]
 name = "tauri-native"
 version = "5.4.0"
@@ -28,6 +31,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+wallpaper-core = { path = "crates/wallpaper-core" }
 
 
 [profile.dev]
@@ -37,8 +41,16 @@ incremental = true # Compile your binary in smaller steps.
 codegen-units = 1 # Allows LLVM to perform better optimization.
 lto = true        # Enables link-time-optimizations.
 opt-level = "s"   # Prioritizes small binary size. Use `3` if you prefer speed.
-panic = "abort"   # Higher performance by disabling panic handlers.
-strip = true      # Ensures debug symbols are removed.
+strip = true      # Keeps debug symbols out of the shipped .exe.
+# `unwind`, not `abort`: the engine core catches panics and turns them into an
+# `internal` error envelope, matching what rpc.py's catch-all does today. Under
+# `abort` a corrupt image would take down the tray, the hotkeys and the window
+# instead of failing one call. See `wallpaper_core::guard`.
+panic = "unwind"
+# MSVC keeps debug info in a separate .pdb, so this costs the installer nothing —
+# the bundler ships only the .exe — but leaves a symbolised stack for the dxgi
+# access violations the video layer is known to produce.
+debug = "line-tables-only"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"

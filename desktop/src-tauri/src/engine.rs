@@ -1,8 +1,14 @@
-//! Supervises the Python engine sidecar (`wallpaper_changer.rpc`).
+//! The webview's route into the engine, and the seam the Rust port grows through.
 //!
-//! The sidecar owns everything that touches Win32: the wallpaper composition, the
-//! WORKERW video layer, and window transparency. This module owns its lifetime and
-//! speaks its newline-delimited JSON protocol.
+//! [`Engine::call`] asks [`wallpaper_core::Core`] first. Methods the core has taken
+//! over are answered in-process; everything else returns [`Dispatch::NotPorted`] and
+//! is forwarded to the Python sidecar (`wallpaper_changer.rpc`), which still owns the
+//! rest of the Win32 surface — composition, the WORKERW video layer, transparency.
+//!
+//! This is the single choke point: `lib.rs`, `tray.rs`, `hotkeys.rs` and the
+//! `engine_call` command all funnel through `call`, so a method migrates for every
+//! caller at once. When the last method lands, the `sidecar` field goes away and the
+//! `NotPorted` arm becomes the allowlist gate.
 //!
 //! The child is spawned from Rust rather than through `tauri-plugin-shell` on
 //! purpose: the shell plugin exists so the *front end* can spawn processes, which is
@@ -23,6 +29,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
+use wallpaper_core::{Core, Dispatch, EventSink};
 
 /// Event name the webview listens on for unsolicited engine events.
 pub const ENGINE_EVENT: &str = "engine-event";
@@ -39,16 +46,77 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 
-pub struct Engine {
+/// Forwards core events to the webview in the sidecar's envelope.
+///
+/// `dispatch_line` re-emits a sidecar event object verbatim, so building the same
+/// `{"event": ..., "data": ...}` shape here is what makes the two sides
+/// indistinguishable to the front end.
+struct WebviewSink {
+    app: AppHandle,
+}
+
+impl EventSink for WebviewSink {
+    fn emit(&self, event: &str, data: Value) {
+        let _ = self
+            .app
+            .emit(ENGINE_EVENT, json!({ "event": event, "data": data }));
+    }
+}
+
+/// The Python sidecar process and its protocol plumbing.
+struct Sidecar {
     stdin: Mutex<Option<ChildStdin>>,
     child: Mutex<Option<Child>>,
     pending: Pending,
     next_id: AtomicU64,
 }
 
+pub struct Engine {
+    core: Arc<Core>,
+    /// `None` once the port is complete. Until then, the fallback for every method
+    /// the core has not taken over.
+    sidecar: Option<Sidecar>,
+}
+
 impl Engine {
-    /// Spawn the sidecar and start the reader threads.
+    /// Build the core and start the sidecar that still backs the unported methods.
     pub fn spawn(app: &AppHandle) -> Result<Self, String> {
+        let core = Arc::new(Core::new(Arc::new(WebviewSink { app: app.clone() })));
+        // While nothing is ported, a sidecar that will not start means no working
+        // engine at all, so the failure is still fatal. As methods migrate this can
+        // soften to a warning: the ported half would keep working without it.
+        let sidecar = Sidecar::spawn(app)?;
+        Ok(Self {
+            core,
+            sidecar: Some(sidecar),
+        })
+    }
+
+    /// Answer a request from the core, or forward it to the sidecar.
+    pub async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
+        match self.core.dispatch(method, &params).await {
+            // The error string must match `dispatch_line`'s exactly — the front end
+            // reads the "{kind}: {message}" prefix, and it must not be able to tell
+            // which side produced the failure.
+            Dispatch::Handled(result) => result.map_err(|e| format!("{}: {}", e.kind(), e)),
+            Dispatch::NotPorted => match &self.sidecar {
+                Some(sidecar) => sidecar.call(method, params).await,
+                None => Err(format!("unknown_method: Unknown method: {method}")),
+            },
+        }
+    }
+
+    /// Ask the engine to shut down, then make sure the process is gone.
+    pub fn shutdown(&self) {
+        if let Some(sidecar) = &self.sidecar {
+            sidecar.shutdown();
+        }
+    }
+}
+
+impl Sidecar {
+    /// Spawn the sidecar and start the reader threads.
+    fn spawn(app: &AppHandle) -> Result<Self, String> {
         let mut command = engine_command(app)?;
         command
             .stdin(Stdio::piped())
@@ -114,7 +182,7 @@ impl Engine {
     }
 
     /// Send a request and await its response.
-    pub async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
+    async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().unwrap().insert(id, tx);
@@ -149,7 +217,7 @@ impl Engine {
     /// The graceful request matters: the engine parents its video host windows to
     /// WORKERW, and killing it outright strands them on the desktop until Explorer
     /// restarts. Closing stdin is what ends the engine's read loop.
-    pub fn shutdown(&self) {
+    fn shutdown(&self) {
         let _ = self.write_line(&json!({ "id": 0, "method": "shutdown" }).to_string());
         *self.stdin.lock().unwrap() = None; // drop the pipe -> engine's loop ends
 

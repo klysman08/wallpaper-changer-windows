@@ -12,14 +12,22 @@ Highest value/effort ratio in the plan. 2,441 lines, 37% of the Python, all supe
 
 ## 1. Scaffold the seam and the conformance corpus (2.5-3.5 days)
 
-- [ ] 1.1 Convert `desktop/src-tauri/` into a Cargo workspace; add `crates/wallpaper-core` (no `tauri` dependency) and `crates/wallpaper-core-cli`.
-- [ ] 1.2 Define `Core`, `Dispatch::{Handled, NotPorted}`, `EventSink`, and `CoreError` with a `kind()` matching the Python error `type` vocabulary (`error`, `busy`, `invalid`, `no_history`, `not_configured`, `not_found`, `no_monitors`, `no_mpv`, `io`, `unknown_method`, `bad_params`, `parse`, `internal`).
-- [ ] 1.3 Change the release profile to `panic = "unwind"` and wrap `Core::dispatch` in `std::panic::catch_unwind` mapping to `{"type": "internal"}`. Retain a PDB despite `strip = true`.
-- [ ] 1.4 Wire the seam into `Engine::call` with every method returning `NotPorted`; move the existing sidecar logic behind a `Sidecar` struct in an `Option` field.
-- [ ] 1.5 Implement the Tauri `EventSink` emitting `ENGINE_EVENT` as `json!({"event": name, "data": data})`, byte-compatible with `dispatch_line`.
-- [ ] 1.6 Build `wallpaper-core-cli` (~80 lines) speaking the identical newline-JSON stdio protocol, usable via `WALLPAPER_ENGINE_CMD` for manual A/B against Python.
-- [ ] 1.7 Extract ~40 envelope-only tests from `tests/test_rpc.py` into `tests/conformance/NNN-name.json` (`{setup, request, expect}`) plus a runner that drives any binary speaking the protocol.
-- [ ] 1.8 Verify: conformance corpus passes against the Python sidecar; a Rust test asserts all 45 method names currently return `NotPorted`.
+- [x] 1.1 Convert `desktop/src-tauri/` into a Cargo workspace; add `crates/wallpaper-core` (no `tauri` dependency) and `crates/wallpaper-core-cli`.
+- [x] 1.2 Define `Core`, `Dispatch::{Handled, NotPorted}`, `EventSink`, and `CoreError` with a `kind()` matching the Python error `type` vocabulary (`error`, `busy`, `invalid`, `no_history`, `not_configured`, `not_found`, `no_monitors`, `no_mpv`, `io`, `unknown_method`, `bad_params`, `parse`, `internal`).
+- [x] 1.3 Change the release profile to `panic = "unwind"` and add `wallpaper_core::guard`, which turns a panic into `{"type": "internal"}`. `debug = "line-tables-only"` keeps a PDB; on MSVC that is a separate file, so the shipped `.exe` is unaffected.
+- [x] 1.4 Wire the seam into `Engine::call` with every method returning `NotPorted`; sidecar logic moved behind a `Sidecar` struct in an `Option` field. `Engine::spawn`/`call`/`shutdown` kept their signatures, so `lib.rs`, `tray.rs` and `hotkeys.rs` needed no changes.
+- [x] 1.5 Implement the Tauri `EventSink` (`WebviewSink`) emitting `ENGINE_EVENT` as `json!({"event": name, "data": data})`, byte-compatible with `dispatch_line`.
+- [x] 1.6 Build `wallpaper-core-cli` speaking the identical newline-JSON stdio protocol, including the BOM strip and non-object-`params` rejection.
+- [x] 1.7 Corpus at `tests/conformance/*.json` — 35 cases across 7 areas — with a Rust runner at `crates/wallpaper-core-cli/tests/conformance.rs` that drives any binary speaking the protocol. Each run gets its own `WALLPAPER_CHANGER_CONFIG_DIR`/`_DATA_DIR`, mirroring `conftest.py`.
+- [x] 1.8 Verify: **35/35 pass against the Python sidecar under `CONFORMANCE_STRICT=1`**; against the Rust core 3 pass and 32 report as not-yet-ported. A Rust test asserts all 45 method names return `NotPorted`.
+
+**Outcome:** 21 Rust tests green (9 pre-existing + 11 core + 1 conformance), `cargo check --workspace` clean with no warnings.
+
+**Corpus scope, deliberately.** Cases are envelope-only: read-only calls, error paths, and no-op toggles. Nothing that composites, applies a wallpaper, starts video, or changes a real window's opacity — those change the user's desktop, and the golden-image harness in phase 4 is where composition gets pinned.
+
+**Two design notes for later phases:**
+- The runner counts `unknown_method` as *skipped*, not passed, so the corpus turns green progressively as methods land and doubles as a progress meter. `CONFORMANCE_STRICT=1` forbids skips and is how the Python side is held to the full corpus.
+- Unknown method names return `NotPorted` rather than an error, so the Python allowlist stays the single gate while it exists. When the sidecar goes, the `None` arm in `Engine::call` already answers `unknown_method` — the fallthrough becomes the gate with no extra code.
 
 ## 2. Stateless leaves (2-3 days)
 

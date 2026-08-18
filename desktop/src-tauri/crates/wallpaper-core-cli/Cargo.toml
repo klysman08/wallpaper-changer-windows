@@ -1,0 +1,17 @@
+[package]
+name = "wallpaper-core-cli"
+version = "5.4.0"
+edition = "2021"
+description = "Speaks the engine's stdio protocol against wallpaper-core, for conformance testing."
+
+[[bin]]
+name = "wallpaper-core-cli"
+path = "src/main.rs"
+
+[dependencies]
+wallpaper-core = { path = "../wallpaper-core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time", "process", "io-util"] }

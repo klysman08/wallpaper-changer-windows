@@ -1,0 +1,82 @@
+{
+  "area": "transparency",
+  "source": "tests/test_rpc.py — opacity settings and the scroll hook",
+  "note": "Read-only and no-op cases only: setting a real window's opacity would change the user's desktop.",
+  "cases": [
+    {
+      "name": "opacity settings are keyed by process name",
+      "note": "Contents depend on what the config directory was seeded with, so only the shape is pinned.",
+      "steps": [
+        {
+          "method": "get_opacity_settings",
+          "expect": { "ok": true, "result_types": { "settings": "object" } }
+        }
+      ]
+    },
+    {
+      "name": "saving opacity settings acknowledges the write",
+      "steps": [
+        {
+          "method": "save_opacity_settings",
+          "params": { "settings": {} },
+          "expect": { "ok": true, "result": { "saved": true } }
+        }
+      ]
+    },
+    {
+      "name": "the visible window list is enumerable",
+      "steps": [
+        {
+          "method": "list_windows",
+          "expect": { "ok": true, "result_types": { "windows": "array" } }
+        }
+      ]
+    },
+    {
+      "name": "the foreground window is reported as a handle",
+      "steps": [
+        {
+          "method": "get_foreground_window",
+          "expect": { "ok": true, "result_types": { "hwnd": "number" } }
+        }
+      ]
+    },
+    {
+      "name": "scroll transparency reports its modifier vocabulary",
+      "steps": [
+        {
+          "method": "scroll_transparency_status",
+          "expect": {
+            "ok": true,
+            "result": { "modifiers": ["alt", "ctrl", "shift", "win"], "step": 5 },
+            "result_types": {
+              "running": "boolean",
+              "modifier": "string",
+              "available": "boolean",
+              "enabled": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "syncing the scroll hook answers with the same shape as status",
+      "steps": [
+        {
+          "method": "sync_scroll_transparency",
+          "expect": {
+            "ok": true,
+            "result_types": {
+              "running": "boolean",
+              "modifier": "string",
+              "available": "boolean",
+              "enabled": "boolean",
+              "modifiers": "array",
+              "step": "number"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

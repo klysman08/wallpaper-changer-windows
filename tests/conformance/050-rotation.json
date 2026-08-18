@@ -1,0 +1,53 @@
+{
+  "area": "rotation",
+  "source": "tests/test_rpc.py — watch_start / stop / status / toggle, history",
+  "note": "Intervals are deliberately long: a tick would composite and change the desktop.",
+  "cases": [
+    {
+      "name": "rotation is idle to begin with",
+      "steps": [
+        { "method": "watch_status", "expect": { "ok": true, "result": { "watching": false } } }
+      ]
+    },
+    {
+      "name": "starting and stopping rotation moves the status with it",
+      "steps": [
+        {
+          "method": "watch_start",
+          "params": { "interval": 3600 },
+          "expect": { "ok": true, "result": { "watching": true, "interval": 3600 } }
+        },
+        { "method": "watch_status", "expect": { "ok": true, "result": { "watching": true } } },
+        { "method": "watch_stop", "expect": { "ok": true, "result": { "watching": false } } },
+        { "method": "watch_status", "expect": { "ok": true, "result": { "watching": false } } }
+      ]
+    },
+    {
+      "name": "toggling rotation twice returns it to idle",
+      "steps": [
+        { "method": "watch_toggle", "expect": { "ok": true, "result": { "watching": true } } },
+        { "method": "watch_toggle", "expect": { "ok": true, "result": { "watching": false } } }
+      ]
+    },
+    {
+      "name": "stepping back with no history reports no_history",
+      "steps": [
+        {
+          "method": "apply_previous_wallpaper",
+          "expect": { "ok": false, "error_type": "no_history" }
+        }
+      ]
+    },
+    {
+      "name": "an unknown effect is rejected",
+      "note": "Only the invalid case is exercised — a valid one would change the desktop.",
+      "steps": [
+        {
+          "method": "set_effect",
+          "params": { "effect": "definitely-not-an-effect" },
+          "expect": { "ok": false, "error_type": "invalid" }
+        }
+      ]
+    }
+  ]
+}

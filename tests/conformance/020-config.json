@@ -1,0 +1,69 @@
+{
+  "area": "config",
+  "source": "tests/test_rpc.py — get_config / get_translations / get_monitors",
+  "cases": [
+    {
+      "name": "get_config exposes the config and its path",
+      "note": "Keys beginning with an underscore are internal and must not reach the webview.",
+      "steps": [
+        {
+          "method": "get_config",
+          "expect": {
+            "ok": true,
+            "result_types": { "config": "object", "config_path": "string" },
+            "result": {
+              "config": {
+                "general": { "mode": "collage" },
+                "paths": {},
+                "display": {},
+                "hotkeys": {},
+                "video": {}
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_translations carries every supported language",
+      "steps": [
+        {
+          "method": "get_translations",
+          "expect": {
+            "ok": true,
+            "result": {
+              "default": "en",
+              "supported": { "en": "English", "pt_BR": "Português (Brasil)", "ja": "日本語" }
+            },
+            "result_types": { "translations": "object", "current": "string" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_monitors reports the virtual desktop size",
+      "steps": [
+        {
+          "method": "get_monitors",
+          "expect": {
+            "ok": true,
+            "result_types": {
+              "monitors": "array",
+              "virtual_width": "number",
+              "virtual_height": "number"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_startup_enabled answers with a boolean",
+      "steps": [
+        {
+          "method": "get_startup_enabled",
+          "expect": { "ok": true, "result_types": { "enabled": "boolean" } }
+        }
+      ]
+    }
+  ]
+}
