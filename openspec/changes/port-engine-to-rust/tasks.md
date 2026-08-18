@@ -1,0 +1,118 @@
+## 0. Delete the dead weight (1-2 days)
+
+Highest value/effort ratio in the plan. 2,441 lines, 37% of the Python, all superseded by `hotkeys.rs` / `tray.rs` / the React UI. No behaviour change.
+
+- [ ] 0.1 Delete `src/wallpaper_changer/gui.py` (1,716 lines), `transparency_gui.py` (329), `hotkeys.py` (396).
+- [ ] 0.2 Delete `tests/test_hotkeys.py`, `wallpaper_changer.spec`, and `main.py`.
+- [ ] 0.3 Drop `ttkbootstrap` and `pystray` from `pyproject.toml`, and the `wallpaper-changer-gui = gui:run` script entry.
+- [ ] 0.4 Fix `startup.py`'s non-frozen path, which currently registers `-m wallpaper_changer.gui` — a module that no longer exists.
+- [ ] 0.5 Verify: `uv run pytest` green (165 tests), `bun run tauri dev` unchanged.
+
+## 1. Scaffold the seam and the conformance corpus (2.5-3.5 days)
+
+- [ ] 1.1 Convert `desktop/src-tauri/` into a Cargo workspace; add `crates/wallpaper-core` (no `tauri` dependency) and `crates/wallpaper-core-cli`.
+- [ ] 1.2 Define `Core`, `Dispatch::{Handled, NotPorted}`, `EventSink`, and `CoreError` with a `kind()` matching the Python error `type` vocabulary (`error`, `busy`, `invalid`, `no_history`, `not_configured`, `not_found`, `no_monitors`, `no_mpv`, `io`, `unknown_method`, `bad_params`, `parse`, `internal`).
+- [ ] 1.3 Change the release profile to `panic = "unwind"` and wrap `Core::dispatch` in `std::panic::catch_unwind` mapping to `{"type": "internal"}`. Retain a PDB despite `strip = true`.
+- [ ] 1.4 Wire the seam into `Engine::call` with every method returning `NotPorted`; move the existing sidecar logic behind a `Sidecar` struct in an `Option` field.
+- [ ] 1.5 Implement the Tauri `EventSink` emitting `ENGINE_EVENT` as `json!({"event": name, "data": data})`, byte-compatible with `dispatch_line`.
+- [ ] 1.6 Build `wallpaper-core-cli` (~80 lines) speaking the identical newline-JSON stdio protocol, usable via `WALLPAPER_ENGINE_CMD` for manual A/B against Python.
+- [ ] 1.7 Extract ~40 envelope-only tests from `tests/test_rpc.py` into `tests/conformance/NNN-name.json` (`{setup, request, expect}`) plus a runner that drives any binary speaking the protocol.
+- [ ] 1.8 Verify: conformance corpus passes against the Python sidecar; a Rust test asserts all 45 method names currently return `NotPorted`.
+
+## 2. Stateless leaves (2-3 days)
+
+Lands: `ping`, `get_translations`, `list_folder_images`, `get_thumbnails`, `get_image_preview`, `scan_videos`, `suggest_collage_path`, `list_saved_collages`, `forget_saved_collage`.
+
+- [ ] 2.1 **Do this first: the DPI check.** Compare `EnumDisplayMonitors` output from the Tauri process against `screeninfo` output from the unmanifested PyInstaller exe, on a fractionally-scaled display. Confirm whether the composite resolution changes, and confirm `index` ordering matches on a 3-monitor setup. Record the finding before building anything on top of it.
+- [ ] 2.2 Port `monitor.py` to `EnumDisplayMonitors` + `GetMonitorInfoW`, keeping `Monitor {index, x, y, width, height}` field-identical.
+- [ ] 2.3 Export `i18n.py`'s 807 strings to JSON, embed via `include_str!`, and serve `get_translations` as a pass-through.
+- [ ] 2.4 Port `gallery.py` read paths: `entries()` (with on-read disk reconciliation), `find`, `forget`, `suggest_name`, `get_library_dir`. Preserve the entry shape and `os.path.normcase`-equivalent identity.
+- [ ] 2.5 Port `list_images` and the `SUPPORTED` extension set from `image_utils.py`.
+- [ ] 2.6 Implement `get_thumbnails` (clamp 32-512, JPEG q75, drop unreadable files silently) and `get_image_preview` (clamp 64-4096, downscale only, q85).
+- [ ] 2.7 Measure how far `image`'s Lanczos3 sits from Pillow's LANCZOS on the thumbnail corpus; record the number to calibrate the phase 4 tolerance.
+- [ ] 2.8 Verify: conformance corpus passes against `wallpaper-core-cli` for these methods; gallery listing matches Python byte-for-byte on a real `gallery.json`.
+
+## 3. Config, startup, notifications (2-3 days)
+
+Lands: `get_config`, `save_config`, `get_capabilities`, `get_startup_enabled`, `set_startup_enabled`, `notify`.
+
+- [ ] 3.1 Port the path resolution from `config.py`: `get_user_config_dir`, `get_user_data_dir`, `resolve_output_dir`, `resolve_saved_dir`, `resolve_path`, and the `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` overrides.
+- [ ] 3.2 Port `_migrate_legacy_files` (copy, never move; never overwrite).
+- [ ] 3.3 Implement read/write with `toml_edit`. Reproduce the `startswith("_")` skip so `_config_path` is never written, and the atomic write via tempfile -> `File::sync_all` -> `fs::rename` on the same volume.
+- [ ] 3.4 Add `_reload_config` to `Engine._METHODS` in `rpc.py` (~5 lines) clearing `self._cfg`; call it from Rust after each write while Python methods remain.
+- [ ] 3.5 Have Rust's `save_config` round-trip `watch_status` and `video_status` to the sidecar before writing, reproducing the session-flag folding at `rpc.py:135`. Remove once phase 8 lands.
+- [ ] 3.6 Port `startup.py` to the `windows` registry API, and replace `notifications.py` with `tauri-plugin-notification`.
+- [ ] 3.7 Translate the 19 tests in `test_config_paths.py` to Rust; add a round-trip fixpoint property test.
+- [ ] 3.8 Verify: byte-diff the new writer against the hand-rolled one across real `settings.toml` files; confirm comments and unknown keys now survive (the intended behaviour change).
+
+## 4. Composition (5-8 days — the risk concentrate)
+
+Lands: `preview`, `save_collage`.
+
+- [ ] 4.1 Port `_compute_grid_layout` and `plan_collage` literally: the `{1:1, 2:2, 3:2, 4:2, 5:3, 6:3, 7:4, 8:4, 9:3}` table with `ceil(sqrt(n))` fallback, `h // rows`, and the centred short last row.
+- [ ] 4.2 Port `fit_image`'s five modes with integer-truncating arithmetic exactly (`int(src_w * ratio)`, `// 2` offsets); `span` aliases `fill`.
+- [ ] 4.3 Port `pick_images`. **Use `dunce::canonicalize`, not `std::fs::canonicalize`** — the latter yields `\\?\C:\...` and silently resets every user's rotation history. Assert the produced state key against a hardcoded literal, and add a test loading a real `state.json`.
+- [ ] 4.4 Hand-roll the effects: ITU-R 601-2 grayscale, `ImageEnhance` lerp semantics for Color/Contrast/Sharpness, `colorize` LUT, and the DETAIL/SMOOTH kernels. **Leave the 1-pixel border unprocessed**, as Pillow does.
+- [ ] 4.5 Port `compose_collage` including the fitted-image cache and the modulo wrap for short image lists, and `crop_to_monitor`.
+- [ ] 4.6 Implement `preview` (returning `cells` in pre-downscale composite coordinates) and `save_collage` (full-res, not the preview PNG).
+- [ ] 4.7 Build the differential harness as three separate comparisons: `plan_collage` JSON byte-identical, `apply_effect` <=1 delta, `fit_image` 1-3 delta.
+- [ ] 4.8 Run the harness once, **freeze the Python outputs as golden PNGs committed to the repo**, and keep them as the permanent Rust regression suite.
+
+## 5. Apply, rotation, history (3-4 days)
+
+Lands: `apply_wallpaper`, `apply_default_wallpaper`, `apply_previous_wallpaper`, `apply_saved_collage`, `set_effect`, `watch_start/stop/status/toggle`.
+
+- [ ] 5.1 Port `set_wallpaper_win`: `SystemParametersInfoW` with **`SPIF_UPDATEINIFILE` only** (never `SPIF_SENDWININICHANGE`), plus the `WallpaperStyle = "22"` / `TileWallpaper = "0"` registry writes.
+- [ ] 5.2 Port `apply_single_wallpaper` and `apply_desktop_image`, preserving that a saved desktop-wide export spans all screens while a single-screen crop repeats per screen, and that neither re-applies a baked-in effect.
+- [ ] 5.3 Implement the apply lock with `tokio::sync::Mutex::try_lock()` returning `busy` — **never `.lock().await`**. Composite inside `spawn_blocking` while holding the guard.
+- [ ] 5.4 Port the history ring: 50 cap with pop-from-front, truncate-forward on push, `no_history` when `idx <= 0`. Keep `apply_saved_collage` out of history.
+- [ ] 5.5 Implement the rotation timer so it **re-arms after the tick completes** (period = interval + work time), not as a fixed-rate `tokio::time::interval`. Persist `general.rotation_active` on every toggle.
+- [ ] 5.6 Emit `wallpaper_applied` and the `error` event with `source: "watch"` through `EventSink`.
+- [ ] 5.7 Define `trait WallpaperSetter` with a fake, and drive the history / lock / timer logic headlessly in tests.
+- [ ] 5.8 Verify: manual apply, rotation, and back-navigation on real multi-monitor hardware.
+
+## 6. Transparency (2-3 days)
+
+Lands: `list_windows`, `set_window_opacity`, `get_foreground_window`, `toggle_foreground_opacity`, `get_opacity_settings`, `save_opacity_settings`, `reapply_opacity_settings`.
+
+- [ ] 6.1 Port `list_visible_windows` with the cloaked filter (`DwmGetWindowAttribute` / `DWMWA_CLOAKED`), the title blocklist, and the lowercased-title sort.
+- [ ] 6.2 Resolve process names via `GetWindowThreadProcessId` + `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `QueryFullProcessImageNameW` — better than pywin32's `GetModuleFileNameEx`, and no `VM_READ` needed.
+- [ ] 6.3 Port `set_window_opacity` using **`SetWindowLongPtrW`** (the Python binds `SetWindowLongW` as `c_long`, wrong on 64-bit). Preserve that alpha 255 **strips** `WS_EX_LAYERED` rather than setting 255.
+- [ ] 6.4 Port the process-keyed `transparency.json` persistence and `reapply_saved_settings`.
+- [ ] 6.5 Drop the `pywin32` dependency.
+- [ ] 6.6 Verify: manual fade/restore across several apps; unit tests for the alpha clamp and the 128/255 toggle.
+
+## 7. Scroll transparency (2-3 days)
+
+Lands: `sync_scroll_transparency`, `scroll_transparency_status`.
+
+- [ ] 7.1 Implement the hook on a dedicated thread: `SetWindowsHookExW(WH_MOUSE_LL)` + `GetMessageW` loop, stopped via `PostThreadMessageW(tid, WM_QUIT)`.
+- [ ] 7.2 Keep the callback minimal — filter `WM_MOUSEWHEEL`, `GetAsyncKeyState` the modifier, push to a channel. **It must return well under `LowLevelHooksTimeout` (300 ms) or Windows silently unhooks us.**
+- [ ] 7.3 Move process-name lookup, `SetLayeredWindowAttributes`, and the 0.6s debounced save to a worker thread (an improvement over the Python, which does the lookup inline on the hook thread).
+- [ ] 7.4 Port `next_alpha`, `normalize_modifier`, `STEP = 5`, `MIN_ALPHA = 20`, and the `alt|ctrl|shift|win` modifier set; emit `transparency_changed`.
+- [ ] 7.5 Drop the `pynput` dependency.
+- [ ] 7.6 Verify: manual; translate the pure-logic tests from `test_scroll_transparency.py`.
+
+## 8. Video (5-8 days — highest variance)
+
+Lands: `video_start/stop/next/prev/set_sound/toggle/toggle_sound/status`, `restore_session`, `shutdown`.
+
+- [ ] 8.1 Port `workerw.py`: the undocumented `0x052C` to Progman via `SendMessageTimeoutW`, the 100 ms settle, and the Win11 (`FindWindowExW` on Progman) / Win10 (`SHELLDLL_DefView` sibling walk) dual discovery with Progman fallback.
+- [ ] 8.2 Hand-roll the libmpv FFI with `libloading` and `LoadLibraryW` on an explicit absolute path (~10 symbols, ~150 lines), with graceful degradation when the DLL is absent. Set `wid` as a *string* option before `mpv_initialize`.
+- [ ] 8.3 Carry `_MPV_SAFE_VIDEO_OPTIONS` verbatim — these exist to dodge dxgi.dll access violations, do not "clean up".
+- [ ] 8.4 **Own all host windows on one dedicated thread**, fixing the current cross-thread `DestroyWindow` failure (created on the `restore-session` thread at `rpc.py:933`, destroyed from main).
+- [ ] 8.5 Preserve **mpv terminate strictly before `DestroyWindow`**, the `InvalidateRect` + `UpdateWindow` desktop repaint, audio on the first instance only, and `playlist_pos` navigation with wrap.
+- [ ] 8.6 Port `restore_session` and the `shutdown` teardown ordering.
+- [ ] 8.7 Verify: manual on real multi-monitor hardware; a soak test of 200 start/stop cycles that enumerates WORKERW children afterward and asserts none of ours survive.
+- [ ] 8.8 **Bail-out if this fights back** (pre-approved, no re-planning): extract a ~400-line `wallpaper-video-host.exe` taking monitor rects and a playlist on stdin, supervised with auto-restart.
+
+## 9. Delete the sidecar and ship (3-5 days)
+
+- [ ] 9.1 Remove the sidecar plumbing from `engine.rs`: all three branches of `engine_command`, `parse_engine_override`, the reader threads, `CALL_TIMEOUT`, and `SHUTDOWN_GRACE`.
+- [ ] 9.2 Remove `"resources": { "engine": "engine" }` from `tauri.conf.json`.
+- [ ] 9.3 Delete `src/wallpaper_changer/`, `tests/` (Python), `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, and `scripts/build_engine.ps1`.
+- [ ] 9.4 Remove the `-SkipEngine` switch and the engine-staging assert from `scripts/build_app.ps1`. Keep signing-key validation, `bun install`, `tauri build`, artifact collection, and `latest.json` generation.
+- [ ] 9.5 Port `cli.py` to a `clap`-based mode of the Tauri binary (`apply`, `watch`, `video`), preserving the `IntRange(1, 8)` collage-count and effect-choice validation.
+- [ ] 9.6 Update `CLAUDE.md` and `AGENTS.md` — the two-process architecture description is the first thing both documents explain.
+- [ ] 9.7 Verify: `cargo test --workspace`; full signed installer build (~15 MB) with `latest.json`; install over an existing 5.4.0 install and confirm the updater upgrades in place rather than adding a second program entry.
+- [ ] 9.8 Verify the scaled-display case end-to-end: a monitor at 150% must produce the same composite resolution as before the port.
