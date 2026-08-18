@@ -2,11 +2,13 @@
 
 Highest value/effort ratio in the plan. 2,441 lines, 37% of the Python, all superseded by `hotkeys.rs` / `tray.rs` / the React UI. No behaviour change.
 
-- [ ] 0.1 Delete `src/wallpaper_changer/gui.py` (1,716 lines), `transparency_gui.py` (329), `hotkeys.py` (396).
-- [ ] 0.2 Delete `tests/test_hotkeys.py`, `wallpaper_changer.spec`, and `main.py`.
-- [ ] 0.3 Drop `ttkbootstrap` and `pystray` from `pyproject.toml`, and the `wallpaper-changer-gui = gui:run` script entry.
-- [ ] 0.4 Fix `startup.py`'s non-frozen path, which currently registers `-m wallpaper_changer.gui` — a module that no longer exists.
-- [ ] 0.5 Verify: `uv run pytest` green (165 tests), `bun run tauri dev` unchanged.
+- [x] 0.1 Delete `src/wallpaper_changer/gui.py` (1,716 lines), `transparency_gui.py` (329), `hotkeys.py` (396).
+- [x] 0.2 Delete `tests/test_hotkeys.py`, `wallpaper_changer.spec`, and `main.py`.
+- [x] 0.3 Drop `ttkbootstrap` and `pystray` from `pyproject.toml`, and the `wallpaper-changer-gui = gui:run` script entry.
+- [x] 0.4 Fix `startup.py`'s non-frozen path, which currently registers `-m wallpaper_changer.gui` — a module that no longer exists. Now raises rather than writing a registry entry that launches nothing; the frozen path (the one that ships) is unchanged.
+- [x] 0.5 Verify: `uv run pytest` green (176 passed, down from 187 — the 11 lost are `test_hotkeys.py`); engine smoke-tested over the real stdio protocol (`ping`, `get_capabilities`, `get_config`, `shutdown` all `ok: true`); `desktop/` untouched so the Rust build is unaffected.
+
+**Outcome:** 2,655 lines deleted, 13 inserted. Ruff errors in `src/` fell from 205 to 99 — all 106 removed were in the deleted files; none were introduced.
 
 ## 1. Scaffold the seam and the conformance corpus (2.5-3.5 days)
 

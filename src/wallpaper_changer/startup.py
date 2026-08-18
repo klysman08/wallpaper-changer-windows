@@ -11,12 +11,22 @@ _STARTUP_FLAG = "--startup"
 
 
 def _get_exe_path() -> str:
-    """Retorna o caminho do executavel atual (com flag --startup)."""
+    """Retorna o caminho do executavel atual (com flag --startup).
+
+    Only meaningful in a frozen build. The desktop app registers autostart through
+    ``tauri-plugin-autostart`` instead, which points at the Tauri executable; this
+    module would register ``sys.executable``, i.e. the headless engine, which comes
+    up with no window. In a source checkout there is no longer anything sensible to
+    name — the ttkbootstrap GUI that used to be the target is gone — so rather than
+    write a registry entry that launches nothing, say so.
+    """
     if getattr(sys, "frozen", False):
         exe = str(Path(sys.executable).resolve())
         return f'"{exe}" {_STARTUP_FLAG}'
-    # Modo desenvolvimento: usa o interpretador Python + modulo
-    return f'"{sys.executable}" -m wallpaper_changer.gui {_STARTUP_FLAG}'
+    raise RuntimeError(
+        "Autostart cannot be registered from a source checkout; "
+        "the desktop app owns it via tauri-plugin-autostart."
+    )
 
 
 def is_startup_launch() -> bool:

@@ -6,11 +6,9 @@ requires-python = ">=3.11"
 dependencies = [
     "Pillow>=10.0.0",
     "pywin32>=306",
-    "pystray>=0.19.5",
     "schedule>=1.2.1",
     "click>=8.1.7",
     "screeninfo>=0.8.1",
-    "ttkbootstrap>=1.20.1",
     "pynput>=1.7.6",
     "python-mpv>=1.0.5",
 ]
@@ -24,7 +22,6 @@ dev = [
 
 [project.scripts]
 wallpaper-changer     = "wallpaper_changer.cli:main"
-wallpaper-changer-gui = "wallpaper_changer.gui:run"
 wallpaper-changer-rpc = "wallpaper_changer.rpc:main"
 
 [build-system]
