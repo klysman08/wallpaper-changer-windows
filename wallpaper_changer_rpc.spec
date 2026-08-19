@@ -38,13 +38,6 @@ hidden = [
     "tomllib",
     "ctypes.wintypes",
     "mpv",
-    # pynput picks its backend at import time, so the Windows one is invisible to
-    # the analyser. Without these the frozen sidecar has no scroll transparency.
-    "pynput",
-    "pynput.mouse",
-    "pynput.mouse._win32",
-    "pynput._util",
-    "pynput._util.win32",
 ]
 
 a = Analysis(

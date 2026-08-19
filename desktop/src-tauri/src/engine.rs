@@ -118,6 +118,21 @@ impl Engine {
             }
         });
 
+        // Same reason, and the same trap avoided: `serve()` in the sidecar used to call
+        // `sync_scroll_transparency` directly at start-up, which is not an RPC and so
+        // never passed the seam. Leaving it there while the core owns the hook would
+        // install *two* system-wide mouse hooks, and every wheel notch would step the
+        // alpha twice. Inline rather than spawned: the hook is what a user who left the
+        // switch on expects to be working the moment the app is up.
+        match core.session().sync_scroll_transparency() {
+            Ok(status) if status["running"] == true => {
+                log::info!("scroll transparency active on {}+wheel", status["modifier"]);
+            }
+            Ok(_) => {}
+            // Never fatal: everything else still works without it.
+            Err(e) => log::warn!("could not start scroll transparency: {e}"),
+        }
+
         Ok(Self {
             core,
             sidecar: Some(sidecar),
@@ -146,6 +161,9 @@ impl Engine {
         // process on its way out. This does not clear `rotation_active`, so a rotation
         // left running still comes back on the next launch.
         self.core.session().stop_rotation_for_exit();
+        // A WH_MOUSE_LL hook is system-wide. Leaving it installed would route every
+        // wheel event on the machine through a process that is going away.
+        self.core.session().stop_scroll_for_exit();
         if let Some(sidecar) = &self.sidecar {
             sidecar.shutdown();
         }

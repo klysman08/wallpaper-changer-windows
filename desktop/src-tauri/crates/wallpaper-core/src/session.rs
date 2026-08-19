@@ -39,6 +39,7 @@ use std::time::Duration;
 use serde_json::{json, Map, Value};
 
 use crate::apply::{self, WallpaperSetter};
+use crate::scroll::{self, ScrollHook};
 use crate::{config, effects, gallery, monitor, CoreError, EventSink};
 
 /// How many applied image sets the "previous wallpaper" hotkey can step back
@@ -125,10 +126,13 @@ pub struct Session {
     apply_lock: tokio::sync::Mutex<()>,
     history: Mutex<History>,
     watch: Mutex<Watch>,
+    /// The modifier+wheel hook. Owns two threads of its own while it is running.
+    scroll: ScrollHook,
 }
 
 impl Session {
     pub fn new(events: Arc<dyn EventSink>, setter: Arc<dyn WallpaperSetter>) -> Self {
+        let events_for_scroll = Arc::clone(&events);
         Self {
             events,
             bridge: Mutex::new(None),
@@ -137,6 +141,7 @@ impl Session {
             apply_lock: tokio::sync::Mutex::new(()),
             history: Mutex::new(History::new()),
             watch: Mutex::new(Watch::default()),
+            scroll: ScrollHook::new(events_for_scroll),
         }
     }
 
@@ -236,19 +241,6 @@ impl Session {
         let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(bridge) = bridge {
             let _ = bridge.call("_reload_config", json!({})).await;
-        }
-    }
-
-    /// Tell the sidecar to re-read `transparency.json`.
-    ///
-    /// Transitional, and the same hazard as [`Self::notify_sidecar_of_config_change`]:
-    /// the scroll hook over there holds the opacities in memory from the moment it
-    /// started, and its next debounced flush would put that stale snapshot back over
-    /// whatever the core just wrote. Goes away when the hook moves across.
-    pub async fn notify_sidecar_of_opacity_change(&self) {
-        let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        if let Some(bridge) = bridge {
-            let _ = bridge.call("_reload_opacity_settings", json!({})).await;
         }
     }
 
@@ -543,6 +535,61 @@ impl Session {
         }
     }
 
+    // ── modifier + wheel transparency ────────────────────────────────────────
+
+    /// `sync_scroll_transparency` — match the hook to the saved settings.
+    ///
+    /// Called at start-up and after every save, so turning the switch off really
+    /// removes the system-wide hook rather than leaving it installed until the next
+    /// restart. Synchronous even though `save_config` awaits it: starting or stopping
+    /// joins two threads that do nothing but a file write, and the settings screen is
+    /// waiting on the answer to draw its badge.
+    pub fn sync_scroll_transparency(&self) -> Result<Value, CoreError> {
+        let cfg = self.config()?;
+        let modifier = scroll::normalize_modifier(
+            cfg.pointer("/hotkeys/scroll_modifier").and_then(Value::as_str),
+        );
+        if cfg
+            .pointer("/hotkeys/scroll_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            self.scroll.start(modifier);
+        } else {
+            self.scroll.stop();
+        }
+        self.scroll_transparency_status()
+    }
+
+    /// `scroll_transparency_status` — what the hook is actually doing.
+    ///
+    /// `enabled` is what the configuration asks for; `running` is whether the hook is
+    /// installed. They differ when it could not be installed at all, and that gap is
+    /// the thing the interface needs to surface.
+    pub fn scroll_transparency_status(&self) -> Result<Value, CoreError> {
+        let cfg = self.config()?;
+        let mut status = self.scroll.status();
+        let enabled = cfg
+            .pointer("/hotkeys/scroll_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if let Some(status) = status.as_object_mut() {
+            status.insert("enabled".to_string(), json!(enabled));
+            status.insert("modifiers".to_string(), json!(scroll::SUPPORTED_MODIFIERS));
+            status.insert("step".to_string(), json!(scroll::STEP));
+        }
+        Ok(status)
+    }
+
+    /// Remove the hook on the way out of the process.
+    ///
+    /// A `WH_MOUSE_LL` hook is system-wide, so leaving it behind would mean every
+    /// wheel event on the machine still being routed through a dead process. This
+    /// also flushes whatever scroll was still inside the save debounce.
+    pub fn stop_scroll_for_exit(&self) {
+        self.scroll.stop();
+    }
+
     // ── saving the configuration ─────────────────────────────────────────────
 
     /// `save_config` — persist the client's settings and adopt them.
@@ -595,9 +642,9 @@ impl Session {
         self.clear_overrides();
 
         self.notify_sidecar_of_config_change().await;
-        // The scroll listener holds a system-wide hook, so it has to follow the saved
-        // settings immediately rather than waiting for a restart. Still Python's.
-        let _ = self.ask_sidecar("sync_scroll_transparency", json!({})).await;
+        // The scroll hook holds a system-wide hook, so it has to follow the saved
+        // settings immediately rather than waiting for a restart.
+        let _ = self.sync_scroll_transparency();
 
         Ok(json!({ "saved": true, "config_path": config_path }))
     }

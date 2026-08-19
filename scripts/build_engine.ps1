@@ -87,15 +87,10 @@ foreach ($probe in $probes) {
     Write-Host "    $($probe.Name) ok" -ForegroundColor Green
 }
 
-# A capability answering "false" is a successful call, so the loop above cannot see
-# it. pynput picks its backend dynamically, which is exactly the kind of import
-# PyInstaller misses, and the only symptom would be a switch that silently does
-# nothing once installed.
-$caps = $responses | Where-Object { $_ -match '"id":\s*4\b' } | Select-Object -First 1
-if ($caps -notmatch '"has_scroll_transparency":\s*true') {
-    throw "Frozen sidecar has no scroll transparency (pynput missing from hiddenimports). Got: $caps"
-}
-Write-Host '    scroll transparency ok' -ForegroundColor Green
+# The scroll-transparency probe that used to live here checked that PyInstaller had
+# found pynput's dynamically-chosen backend. The hook is native now, so the sidecar
+# has no such import to miss and `has_scroll_transparency` no longer says anything
+# about the frozen build.
 
 Write-Host "==> Staging into $targetDir" -ForegroundColor Cyan
 if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force }

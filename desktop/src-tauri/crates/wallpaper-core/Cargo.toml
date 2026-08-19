@@ -45,6 +45,7 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Dwm",
     "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
 ]
 
 [dev-dependencies]

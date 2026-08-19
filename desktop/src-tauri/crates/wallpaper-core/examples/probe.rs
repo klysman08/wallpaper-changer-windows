@@ -66,6 +66,37 @@ fn main() {
                 .save_with_format(&args[3], image::ImageFormat::Bmp)
                 .expect("write bmp");
         }
+        // The scroll hook's two pure functions over their whole input space, for
+        // diffing against `scroll_transparency.py`. The unit tests pin the handful of
+        // cases the Python suite pinned; this pins every one of them.
+        "scroll" => {
+            use wallpaper_core::scroll;
+            let mut alphas = Vec::new();
+            for current in 0..=255i64 {
+                for notches in -10..=10i64 {
+                    alphas.push(scroll::next_alpha(current, notches));
+                }
+            }
+            let names: Vec<&str> = [
+                "alt", "ALT", "  Ctrl  ", "control", "shift", "win", "windows", "super",
+                "meta", "", "nonsense", "ctrl+alt", "CONTROL", "Win", "SHIFT", "sHiFt",
+                "  ", "altt", "ctrl ", "meta ",
+            ]
+            .iter()
+            .map(|raw| scroll::normalize_modifier(Some(raw)))
+            .collect();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "next_alpha": alphas,
+                    "normalize_modifier": names,
+                    "step": scroll::STEP,
+                    "min_alpha": scroll::MIN_ALPHA,
+                    "max_alpha": scroll::MAX_ALPHA,
+                    "modifiers": scroll::SUPPORTED_MODIFIERS,
+                })
+            );
+        }
         other => {
             eprintln!("unknown subcommand: {other}");
             std::process::exit(2);

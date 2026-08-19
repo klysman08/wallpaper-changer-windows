@@ -33,6 +33,7 @@ pub mod gallery;
 pub mod i18n;
 pub mod images;
 pub mod monitor;
+pub mod scroll;
 pub mod selection;
 pub mod session;
 pub mod startup;
@@ -530,42 +531,37 @@ impl Core {
                 Ok(transparency::get_foreground_window_result())
             }),
 
-            // Async only because of the sidecar notification below: the scroll hook
-            // is still Python's and caches this file, so it has to be told the moment
-            // the core writes it.
-            "toggle_foreground_opacity" => {
-                let outcome = async {
-                    reject_unexpected(params, &[], "toggle_foreground_opacity")?;
-                    let result = transparency::toggle_foreground_opacity_result()?;
-                    self.session.notify_sidecar_of_opacity_change().await;
-                    Ok(result)
-                }
-                .await;
-                Dispatch::Handled(outcome)
-            }
+            "toggle_foreground_opacity" => handled(|| {
+                reject_unexpected(params, &[], "toggle_foreground_opacity")?;
+                transparency::toggle_foreground_opacity_result()
+            }),
 
             "get_opacity_settings" => handled(|| {
                 reject_unexpected(params, &[], "get_opacity_settings")?;
                 Ok(transparency::get_opacity_settings_result())
             }),
 
-            "save_opacity_settings" => {
-                let outcome = async {
-                    reject_unexpected(params, &["settings"], "save_opacity_settings")?;
-                    let settings = params.get("settings").ok_or_else(|| {
-                        CoreError::bad_params("missing a required argument: 'settings'")
-                    })?;
-                    let result = transparency::save_opacity_settings_result(settings)?;
-                    self.session.notify_sidecar_of_opacity_change().await;
-                    Ok(result)
-                }
-                .await;
-                Dispatch::Handled(outcome)
-            }
+            "save_opacity_settings" => handled(|| {
+                reject_unexpected(params, &["settings"], "save_opacity_settings")?;
+                let settings = params.get("settings").ok_or_else(|| {
+                    CoreError::bad_params("missing a required argument: 'settings'")
+                })?;
+                transparency::save_opacity_settings_result(settings)
+            }),
 
             "reapply_opacity_settings" => handled(|| {
                 reject_unexpected(params, &[], "reapply_opacity_settings")?;
                 Ok(transparency::reapply_opacity_settings_result())
+            }),
+
+            "sync_scroll_transparency" => handled(|| {
+                reject_unexpected(params, &[], "sync_scroll_transparency")?;
+                self.session.sync_scroll_transparency()
+            }),
+
+            "scroll_transparency_status" => handled(|| {
+                reject_unexpected(params, &[], "scroll_transparency_status")?;
+                self.session.scroll_transparency_status()
             }),
 
             // Each phase moves names out of this catch-all and into arms above it.
@@ -785,6 +781,8 @@ mod tests {
         "get_opacity_settings",
         "save_opacity_settings",
         "reapply_opacity_settings",
+        "sync_scroll_transparency",
+        "scroll_transparency_status",
     ];
 
     /// Which side answers each method, probed without letting any of them run.

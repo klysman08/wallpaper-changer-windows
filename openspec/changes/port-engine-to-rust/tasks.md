@@ -279,14 +279,72 @@ thing to fail is the shipping build.
 
 ## 7. Scroll transparency (2-3 days)
 
-Lands: `sync_scroll_transparency`, `scroll_transparency_status`.
+Lands: `sync_scroll_transparency`, `scroll_transparency_status`. **32 -> 34 of 45 methods.**
 
-- [ ] 7.1 Implement the hook on a dedicated thread: `SetWindowsHookExW(WH_MOUSE_LL)` + `GetMessageW` loop, stopped via `PostThreadMessageW(tid, WM_QUIT)`.
-- [ ] 7.2 Keep the callback minimal — filter `WM_MOUSEWHEEL`, `GetAsyncKeyState` the modifier, push to a channel. **It must return well under `LowLevelHooksTimeout` (300 ms) or Windows silently unhooks us.**
-- [ ] 7.3 Move process-name lookup, `SetLayeredWindowAttributes`, and the 0.6s debounced save to a worker thread (an improvement over the Python, which does the lookup inline on the hook thread).
-- [ ] 7.4 Port `next_alpha`, `normalize_modifier`, `STEP = 5`, `MIN_ALPHA = 20`, and the `alt|ctrl|shift|win` modifier set; emit `transparency_changed`.
-- [ ] 7.5 Drop the `pynput` dependency.
-- [ ] 7.6 Verify: manual; translate the pure-logic tests from `test_scroll_transparency.py`.
+- [x] 7.1 Hook on a dedicated thread: `SetWindowsHookExW(WH_MOUSE_LL)` + a bare `GetMessageW` loop, stopped with `PostThreadMessageW(tid, WM_QUIT)`.
+- [x] 7.2 The callback reads the wheel delta, polls the modifier with `GetAsyncKeyState`, and sends an integer down a channel. Nothing else — no file IO, no process handles, no window calls.
+- [x] 7.3 Process lookup, `SetLayeredWindowAttributes` and the 0.6 s debounced save all moved to a worker thread.
+- [x] 7.4 `next_alpha`, `normalize_modifier`, `STEP = 5`, `MIN_ALPHA = 20`, `alt|ctrl|shift|win`, and the `transparency_changed` event.
+- [x] 7.5 `pynput` dropped, with its five `hiddenimports` and the build probe that existed to catch them going missing.
+- [x] 7.6 Verify: 19 new unit tests; a full differential against the deleted Python; corpus 31/35 against the core and 33/35 strict against Python.
+
+**Outcome:** 173 core unit tests (154 -> 173), 3 golden, 9 shell, 150 pytest (176 -> 150; the 26 lost are `test_scroll_transparency.py`). `cargo check --workspace --all-targets` and `cargo check -p tauri-native` both clean with no warnings. Ruff unchanged at the phase-0 baseline of 99.
+
+### The start-up trap, again
+
+`serve()` called `sync_scroll_transparency()` directly, exactly as it called `restore_session()` in phase 5 — and neither is an RPC, so **neither passes the strangler seam**. Porting the method while leaving that call in place would have installed *two* system-wide `WH_MOUSE_LL` hooks, and every wheel notch would have stepped the alpha twice. The call is gone from `serve()`; `Engine::spawn` does it through the core.
+
+This is now a pattern worth naming: **anything the sidecar does outside `dispatch` is invisible to the seam**, so every phase should read `serve()` and `Engine.__init__` before porting a method. What remains there is the video half of `restore_session`, which phase 8 takes.
+
+### Three threads instead of one
+
+Windows gives a `WH_MOUSE_LL` callback `LowLevelHooksTimeout` — 300 ms by default — to return, and silently unhooks anything slower. No error, no event; the feature just stops until the app restarts. Python resolved the process name *inline on the hook thread*, opening a process handle behind a 64-entry cache. So the split is a hook thread that only pumps messages and sends an integer, a worker thread that does everything expensive, and the caller's thread for start/stop.
+
+The callback also cannot panic — a Rust panic unwinding into a Win32 callback aborts the process — so it uses `try_with` for a torn-down TLS, `try_borrow` against re-entry, and ignores a closed channel. The state it reads is **thread-local, not a static behind a `Mutex`**: a low-level hook is dispatched on the thread that installed it, so the callback needs no lock at all, and a lock is exactly the wrong thing to hold under a 300 ms deadline.
+
+Stopping is a chain of drops: `WM_QUIT` ends the message loop, the hook thread unhooks and drops its sender, the worker sees the disconnect, flushes, and returns. `stop()` joins both, so it keeps the promise Python's `stop()` made: the hook is really gone and the last scroll is really on disk.
+
+### The clobbering bug is fixed rather than worked around
+
+Phase 6 found that Python's hook loaded `transparency.json` once at `start()` and its debounced flush wrote that whole snapshot back, silently reverting a fade saved from the window. That needed a transitional `_reload_opacity_settings` RPC. The port does not have the bug: **the flush is a read-modify-write** — re-read the file, lay only the keys this hook actually changed on top, write that. Concurrent edits survive without anyone having to be told about them, and a test pins it.
+
+`_reload_opacity_settings`, `ScrollTransparency.reload_settings()` and `Session::notify_sidecar_of_opacity_change` are all gone, along with the two `async` dispatch arms that existed only to call the last one.
+
+### Differential: the arithmetic is identical
+
+`scroll_transparency.py` is deleted, so the comparison reads it back out of git rather than from a copy — the point is to diff against what shipped. `next_alpha` agrees across **all 5376 combinations** of `current` in 0..=255 and `notches` in -10..=10; `normalize_modifier` agrees on 20 spellings including the alias and whitespace cases; `STEP`, `MIN_ALPHA`, `MAX_ALPHA` and the modifier list all match. The `scroll` subcommand of `examples/probe.rs` emits the Rust half.
+
+### The corpus needed a third state
+
+This is the first phase where **Python legitimately loses a method**, and `CONFORMANCE_STRICT=1` — which exists to hold the sidecar to the whole corpus — read that as a regression. Skips now carry the method name, and `CONFORMANCE_MOVED` names the ones that have moved to the core, so strict mode can tell a port from a gap:
+
+```
+CONFORMANCE_ENGINE_CMD='["uv","run","--directory","<repo>","wallpaper-changer-rpc"]' \
+  CONFORMANCE_STRICT=1 \
+  CONFORMANCE_MOVED='sync_scroll_transparency,scroll_transparency_status' \
+  cargo test -p wallpaper-core-cli
+```
+
+Against the core the corpus is **31 passed, 4 skipped** (up from 29/6): all six transparency cases are green, and only `get_capabilities` and the three video cases are left. Against Python it is 33 passed, 2 moved.
+
+### Two deliberate behaviour changes
+
+- **`available` is now `cfg!(windows)`.** Python asked whether `pynput` could be imported, because a frozen build that missed the dynamically-chosen backend had to degrade rather than refuse to start. There is no optional dependency any more, so on Windows the hook is always available. The probe in `build_engine.ps1` that asserted `has_scroll_transparency: true` was checking exactly that import, and is retired with it.
+- **`get_capabilities` still answers from Python**, and now reports `sys.platform == "win32"` for the same key. It is one of the four remaining corpus skips and lands with phase 8.
+
+### pywin32 did not go, and here is why
+
+Phase 6 deferred it to here because `scroll_transparency.py` called `transparency._get_process_name_for_hwnd`. That caller is gone, but `transparency.py` itself still uses pywin32, and it still backs the four transparency conformance cases that hold Python to the contract. Removing it now would cost that baseline and save nothing — the sidecar ships either way until phase 9, which deletes `src/wallpaper_changer/` wholesale. **Moved to 9.3.**
+
+### Not verified, deliberately
+
+The hook is installed and removed for real in a test — `SetWindowsHookExW`, the `GetMessageW` loop and `PostThreadMessageW` are all exercised — but against a **faked desktop**, so no window is ever touched. What that cannot reach:
+
+- An actual modifier+wheel gesture fading an actual window. The path from `WM_MOUSEWHEEL` through `GetAsyncKeyState` to `SetLayeredWindowAttributes` is unproven end to end.
+- The 300 ms timeout. The design exists to stay far under it; nothing here measures the callback.
+- That the hook survives a long session. Windows unhooks silently, so the symptom is a feature that quietly stops working.
+
+Worth checking by hand: scroll with the modifier held and confirm the window fades in 5-alpha steps and the Transparency screen updates live; keep scrolling past the floor and confirm it stops at 20 rather than vanishing; change the modifier in Settings and confirm the old one stops working immediately rather than at the next restart; turn the switch off and confirm the wheel stops fading anything; and scroll, then quit within 0.6 s, and confirm the last alpha is still there on the next launch — that is the flush inside `stop()`.
 
 ## 8. Video (5-8 days — highest variance)
 
@@ -305,7 +363,7 @@ Lands: `video_start/stop/next/prev/set_sound/toggle/toggle_sound/status`, `resto
 
 - [ ] 9.1 Remove the sidecar plumbing from `engine.rs`: all three branches of `engine_command`, `parse_engine_override`, the reader threads, `CALL_TIMEOUT`, and `SHUTDOWN_GRACE`.
 - [ ] 9.2 Remove `"resources": { "engine": "engine" }` from `tauri.conf.json`.
-- [ ] 9.3 Delete `src/wallpaper_changer/`, `tests/` (Python), `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, and `scripts/build_engine.ps1`.
+- [ ] 9.3 Delete `src/wallpaper_changer/`, `tests/` (Python), `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, and `scripts/build_engine.ps1`. This is where **`pywin32`** finally goes (deferred from 6.5 and again from 7.5): its last caller is `transparency.py`, which still backs the Python side of the four transparency conformance cases until the whole package is removed.
 - [ ] 9.4 Remove the `-SkipEngine` switch and the engine-staging assert from `scripts/build_app.ps1`. Keep signing-key validation, `bun install`, `tauri build`, artifact collection, and `latest.json` generation.
 - [ ] 9.5 Port `cli.py` to a `clap`-based mode of the Tauri binary (`apply`, `watch`, `video`), preserving the `IntRange(1, 8)` collage-count and effect-choice validation.
 - [ ] 9.6 Update `CLAUDE.md` and `AGENTS.md` — the two-process architecture description is the first thing both documents explain.

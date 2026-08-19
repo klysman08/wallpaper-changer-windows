@@ -35,7 +35,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from . import gallery, i18n, scroll_transparency, startup, transparency
+from . import gallery, i18n, startup, transparency
 from .config import (
     get_default_config_path,
     load_config,
@@ -108,11 +108,6 @@ class Engine:
         # hotkey can step back through them. Bounded to keep memory flat.
         self._history: list[list[str]] = []
         self._history_idx = -1
-        # Modifier+wheel transparency. The listener edits real windows, so it is
-        # started explicitly rather than on import.
-        self._scroll = scroll_transparency.ScrollTransparency(
-            on_change=lambda data: self._emit("transparency_changed", data)
-        )
 
     # ── Config ────────────────────────────────────────────────────────────────
 
@@ -153,9 +148,8 @@ class Engine:
         lang = merged.get("general", {}).get("language")
         if lang:
             i18n.set_language(lang)
-        # The scroll listener holds a system-wide hook, so it has to follow the
-        # saved settings immediately rather than waiting for a restart.
-        self.sync_scroll_transparency()
+        # The scroll hook moved to the native core, which re-syncs it after its own
+        # save_config. Nothing here to do.
         return {"saved": True, "config_path": merged["_config_path"]}
 
     def _remember(self, section: str, key: str, value: object) -> None:
@@ -192,17 +186,6 @@ class Engine:
         lang = self._config().get("general", {}).get("language")
         if lang:
             i18n.set_language(lang)
-        return {"reloaded": True}
-
-    def _reload_opacity_settings(self) -> dict:
-        """Re-read `transparency.json`, which the native core now owns.
-
-        Transitional, for the Rust port, and the same hazard as `_reload_config`: the
-        scroll hook holds the opacities in memory from the moment it started, so a
-        setting saved through the core would be overwritten by the hook's next
-        debounced flush. Goes away when the hook itself moves across.
-        """
-        self._scroll.reload_settings()
         return {"reloaded": True}
 
     def restore_session(self) -> dict:
@@ -256,7 +239,10 @@ class Engine:
             "effects": list(EFFECTS),
             "has_mpv": has_mpv(),
             "startup_enabled": startup.is_startup_enabled(),
-            "has_scroll_transparency": scroll_transparency.is_available(),
+            # The native core owns the mouse hook now, and installing one needs no
+            # optional dependency the way pynput did — so on Windows it is always
+            # available. Reported from here only until `get_capabilities` moves across.
+            "has_scroll_transparency": sys.platform == "win32",
         }
 
     def list_folder_images(self, folder: str) -> dict:
@@ -707,38 +693,6 @@ class Engine:
     def reapply_opacity_settings(self) -> dict:
         return {"applied": transparency.reapply_saved_settings()}
 
-    # ── Modifier + wheel transparency ─────────────────────────────────────────
-
-    def sync_scroll_transparency(self) -> dict:
-        """Match the listener to the saved settings.
-
-        Called at start-up and after every save, so turning the switch off really
-        removes the hook rather than leaving it installed until the next restart.
-        """
-        hotkeys = self._config().get("hotkeys", {})
-        modifier = scroll_transparency.normalize_modifier(
-            hotkeys.get("scroll_modifier")
-        )
-        if hotkeys.get("scroll_enabled"):
-            self._scroll.start(modifier)
-        else:
-            self._scroll.stop()
-        return self.scroll_transparency_status()
-
-    def scroll_transparency_status(self) -> dict:
-        """Report what the listener is actually doing.
-
-        ``enabled`` is what the config asks for; ``running`` is whether the hook is
-        installed. They differ when the hook could not be installed at all, which
-        is the case the interface needs to surface.
-        """
-        status = self._scroll.status()
-        hotkeys = self._config().get("hotkeys", {})
-        status["enabled"] = bool(hotkeys.get("scroll_enabled"))
-        status["modifiers"] = list(scroll_transparency.SUPPORTED_MODIFIERS)
-        status["step"] = scroll_transparency.STEP
-        return status
-
     # ── Video wallpaper ───────────────────────────────────────────────────────
 
     def scan_videos(self, folder: str) -> dict:
@@ -840,11 +794,6 @@ class Engine:
             self._video.stop()
         except Exception as exc:
             log.warning("Video teardown failed during shutdown: %s", exc)
-        # Removes the system-wide mouse hook and flushes any debounced save.
-        try:
-            self._scroll.stop()
-        except Exception as exc:
-            log.warning("Scroll listener teardown failed during shutdown: %s", exc)
         return {"bye": True}
 
     # ── Dispatch ──────────────────────────────────────────────────────────────
@@ -880,8 +829,6 @@ class Engine:
         "get_opacity_settings",
         "save_opacity_settings",
         "reapply_opacity_settings",
-        "scroll_transparency_status",
-        "sync_scroll_transparency",
         "scan_videos",
         "video_start",
         "video_stop",
@@ -899,7 +846,6 @@ class Engine:
         # write so this process re-reads the settings file instead of trusting a
         # cache it can no longer keep current. Removed with the sidecar.
         "_reload_config",
-        "_reload_opacity_settings",
     )
 
     def dispatch(self, method: str, params: dict[str, Any]) -> Any:
@@ -940,12 +886,6 @@ def serve(stdin, stdout) -> int:
         write({"event": event, "data": data})
 
     engine = Engine(emit)
-    # Restore the mouse hook if the user left it on. A failure here must not stop
-    # the engine from serving: everything else still works without it.
-    try:
-        engine.sync_scroll_transparency()
-    except Exception as exc:
-        log.warning("Could not start scroll transparency: %s", exc)
     emit("ready", {"protocol": PROTOCOL_VERSION})
 
     # Come back up the way the user left it. On a thread because starting the video
