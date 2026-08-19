@@ -240,8 +240,15 @@ check unifies features across every crate in the graph — so the missing featur
 by a sibling the app does not depend on. Building the app alone drops the CLI, and the feature
 with it.
 
-`macros` is now declared where it is used. **Per-phase verification adds `cargo check -p
-tauri-native`**: the workspace check cannot catch an under-declared feature, and the first
+`macros` is now declared where it is used. **Per-phase verification adds a single-package
+check** — run from `desktop/src-tauri`, which is the workspace root (`desktop/` itself has no
+`Cargo.toml`):
+
+```
+cargo check -p tauri-native
+```
+
+The workspace check cannot catch an under-declared feature, and the first
 thing to fail is the shipping build.
 
 ## 7. Scroll transparency (2-3 days)
