@@ -11,6 +11,10 @@ description = "Wallpaper Changer engine core: config, composition, Win32, video.
 [dependencies]
 serde_json = "1"
 base64 = "0.22"
+# Not the `toml` crate: settings.toml ships with explanatory comments that the
+# hand-rolled Python writer destroys on every save. toml_edit keeps them.
+toml_edit = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 # `SUPPORTED` in image_utils.py is jpg/jpeg/png/bmp/webp, so those are the decoders
 # that must exist. Encoding is only ever JPEG (thumbnails, previews) and BMP (the
@@ -30,6 +34,7 @@ features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_UI_HiDpi",
+    "Win32_System_Registry",
 ]
 
 [dev-dependencies]

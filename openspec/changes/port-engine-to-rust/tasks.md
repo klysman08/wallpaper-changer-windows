@@ -60,17 +60,30 @@ Lands: `ping`, `get_translations`, `list_folder_images`, `get_thumbnails`, `get_
 
 Lands: `get_config`, `save_config`, `get_capabilities`, `get_startup_enabled`, `set_startup_enabled`, `notify`, plus `get_translations` and the gallery reads (`suggest_collage_path`, `list_saved_collages`, `forget_saved_collage`) — both deferred from phase 2, because they resolve the library folder and the current language through the config and would diverge if split off from it.
 
-- [ ] 3.9 Export `i18n.py`'s 807 strings to JSON, embed via `include_str!`, and serve `get_translations` with `current` read from `general.language`.
-- [ ] 3.10 Port `gallery.py`: `entries()` (with on-read disk reconciliation), `find`, `forget`, `suggest_name`, `get_library_dir`. Preserve the entry shape and `os.path.normcase`-equivalent identity; verify against a real `gallery.json`.
+- [x] 3.1 Path resolution ported: `user_config_dir`, `user_data_dir`, `resolve_output_dir`, `resolve_saved_dir`, `resolve_path`, and the `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` overrides.
+- [x] 3.2 `migrate_legacy_files` ported — copy, never move; never overwrite.
+- [x] 3.3 Read and write with `toml_edit`, reproducing the `startswith("_")` skip and the atomic write (sibling tempfile -> `sync_all` -> `rename`).
+- [ ] 3.4 ~~`_reload_config` in `rpc.py`~~ — **not needed.** `Core::config()` reads the file fresh on every call instead of caching, so nothing can go stale while Python still writes it. The cache returns with `save_config`.
+- [ ] 3.5 ~~round-trip the session flags to the sidecar~~ — **deferred with `save_config`,** see below.
+- [x] 3.6 `startup.py` ported to the registry API; `notify` deferred, see below.
+- [x] 3.7 Path and round-trip tests translated to Rust, including a load/save/load **fixpoint** property test.
+- [x] 3.8 Writer validated against the **real shipped `settings.toml`**, embedded as a fixture: values identical across a save, all 16 comments retained. For contrast, Python's writer drops all 16 and shrinks the file from 1970 to 781 bytes.
+- [x] 3.9 i18n exported to `assets/translations.json` (267 keys x 3 languages) and embedded with `include_str!`; `get_translations` serves it with `current` read from `general.language`.
+- [x] 3.10 `gallery.py` ported: `entries()` with on-read disk reconciliation, `find`, `record`, `forget`, `suggest_name`, `library_dir`, and `normcase`-equivalent identity.
 
-- [ ] 3.1 Port the path resolution from `config.py`: `get_user_config_dir`, `get_user_data_dir`, `resolve_output_dir`, `resolve_saved_dir`, `resolve_path`, and the `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` overrides.
-- [ ] 3.2 Port `_migrate_legacy_files` (copy, never move; never overwrite).
-- [ ] 3.3 Implement read/write with `toml_edit`. Reproduce the `startswith("_")` skip so `_config_path` is never written, and the atomic write via tempfile -> `File::sync_all` -> `fs::rename` on the same volume.
-- [ ] 3.4 Add `_reload_config` to `Engine._METHODS` in `rpc.py` (~5 lines) clearing `self._cfg`; call it from Rust after each write while Python methods remain.
-- [ ] 3.5 Have Rust's `save_config` round-trip `watch_status` and `video_status` to the sidecar before writing, reproducing the session-flag folding at `rpc.py:135`. Remove once phase 8 lands.
-- [ ] 3.6 Port `startup.py` to the `windows` registry API, and replace `notifications.py` with `tauri-plugin-notification`.
-- [ ] 3.7 Translate the 19 tests in `test_config_paths.py` to Rust; add a round-trip fixpoint property test.
-- [ ] 3.8 Verify: byte-diff the new writer against the hand-rolled one across real `settings.toml` files; confirm comments and unknown keys now survive (the intended behaviour change).
+**Methods landed (7):** `get_config`, `get_translations`, `get_startup_enabled`, `set_startup_enabled`, `suggest_collage_path`, `list_saved_collages`, `forget_saved_collage`. Running total: **13 of 45**.
+
+**Verified against Python, same seeded config directory, 7/7 byte-identical** — including `get_config` (the full nested structure), `get_translations` (40 KB across three languages) and `list_saved_collages` (with a vanished file pruned by both sides). 74 Rust tests green; corpus against the Rust core 13 -> **19**; Python still **35/35 strict** and **176 pytest**.
+
+### Deferred out of phase 3, with reasons
+
+- **`save_config` -> phase 5.** `rpc.py:135` folds `general.rotation_active` and `video.enabled` in from the live rotation timer and video player before writing. Those belong to units Python still owns, and the plan's workaround — round-tripping `watch_status`/`video_status` to the sidecar — needs a call path from `Core` back into the sidecar that does not exist. Cheaper and safer to land `save_config` with rotation in phase 5. Until then Python owns every write, and `Core::config()` stays uncached so it always sees them.
+- **`get_capabilities` -> phase 8.** It aggregates three units at once: `startup.is_startup_enabled()` (ported), `has_mpv()` (phase 8) and `scroll_transparency.is_available()` (phase 7).
+- **`notify` -> phase 9.** The plan's choice of `tauri-plugin-notification` cannot be called from `wallpaper-core`, which deliberately has no `tauri` dependency. It needs a `Notifier` trait alongside `EventSink`, which belongs with the shell wiring.
+
+### Inherited bug found, not fixed
+
+`startup.py` reads and writes the `Run` value **`WallpaperChanger`** (no space). The value the app actually uses is **`Wallpaper Changer`** (with a space), written by `tauri-plugin-autostart` and pointing at `tauri-native.exe --minimized`. So `get_startup_enabled` reports `false` on a machine where autostart is on, and `get_capabilities` carries that wrong answer; `set_startup_enabled` would add a *second* entry rather than change the real one. Nothing calls either method today — `engine.ts` declares them but the Settings screen uses the plugin. **Ported faithfully rather than fixed**, since changing it would add or remove a real autostart entry, which is beyond a parity port. Decide in phase 9 whether to point them at the plugin's value or drop them.
 
 ## 4. Composition (5-8 days — the risk concentrate)
 

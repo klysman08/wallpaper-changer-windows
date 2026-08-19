@@ -24,8 +24,12 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 mod error;
+pub mod config;
+pub mod gallery;
+pub mod i18n;
 pub mod images;
 pub mod monitor;
+pub mod startup;
 
 pub use error::{CoreError, ErrorKind};
 pub use monitor::{get_monitors, virtual_desktop, Monitor};
@@ -156,9 +160,57 @@ fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
+/// Shared test scaffolding.
+///
+/// The directory overrides are environment variables, and the environment is
+/// process-global while `cargo test` runs modules in parallel threads. One lock per
+/// module is not enough: a `config` test clearing the variables mid-run would send a
+/// `gallery` test at the real `%APPDATA%`. Every test that touches them takes *this*
+/// lock.
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::path::PathBuf;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// A temporary `%APPDATA%`/`%LOCALAPPDATA%` pair, restored on drop.
+    pub struct Sandbox {
+        pub dir: PathBuf,
+        _guard: MutexGuard<'static, ()>,
+    }
+
+    impl Sandbox {
+        pub fn new(tag: &str) -> Self {
+            let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let dir = std::env::temp_dir().join(format!("wc-test-{}-{tag}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("cfg")).unwrap();
+            std::fs::create_dir_all(dir.join("data")).unwrap();
+            std::env::set_var("WALLPAPER_CHANGER_CONFIG_DIR", dir.join("cfg"));
+            std::env::set_var("WALLPAPER_CHANGER_DATA_DIR", dir.join("data"));
+            Self { dir, _guard: guard }
+        }
+
+        /// A real file on disk, so the gallery's reconciliation keeps it.
+        pub fn file(&self, name: &str, contents: &[u8]) -> String {
+            let path = self.dir.join(name);
+            std::fs::write(&path, contents).unwrap();
+            path.to_string_lossy().into_owned()
+        }
+    }
+
+    impl Drop for Sandbox {
+        fn drop(&mut self) {
+            std::env::remove_var("WALLPAPER_CHANGER_CONFIG_DIR");
+            std::env::remove_var("WALLPAPER_CHANGER_DATA_DIR");
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+}
+
 /// The engine's state and method dispatch.
 pub struct Core {
-    #[allow(dead_code)] // Wired up as handlers land; see the phase plan.
     events: Arc<dyn EventSink>,
 }
 
@@ -170,6 +222,46 @@ impl Core {
     /// Raise an unsolicited engine event.
     pub fn emit(&self, event: &str, data: Value) {
         self.events.emit(event, data);
+    }
+
+    /// The live configuration, read fresh from disk.
+    ///
+    /// Deliberately **not** cached, unlike `Engine._config()` in `rpc.py`. While the
+    /// sidecar still owns `save_config` and `_remember`, Python is writing
+    /// `settings.toml` behind our back — a cache here would go stale the moment a
+    /// hotkey toggled rotation. Re-reading a 2 KB file on the handful of calls that
+    /// need it costs nothing, and the cache can come back with `save_config` in the
+    /// phase that owns the session flags.
+    fn config(&self) -> Result<Value, CoreError> {
+        config::load_config(None)
+    }
+
+    /// The configuration with a caller-supplied overlay applied per section.
+    ///
+    /// Mirrors `Engine._merged`: the preview and the save dialog send an unsaved
+    /// draft, and it must win over what is on disk without dropping the sections it
+    /// does not mention.
+    fn merged(&self, overlay: Option<&Value>) -> Result<Value, CoreError> {
+        let mut cfg = self.config()?;
+        let (Some(overlay), Some(base)) = (
+            overlay.and_then(Value::as_object),
+            cfg.as_object_mut(),
+        ) else {
+            return Ok(cfg);
+        };
+        for (section, values) in overlay {
+            match (base.get_mut(section), values.as_object()) {
+                (Some(Value::Object(existing)), Some(incoming)) => {
+                    for (key, value) in incoming {
+                        existing.insert(key.clone(), value.clone());
+                    }
+                }
+                _ => {
+                    base.insert(section.clone(), values.clone());
+                }
+            }
+        }
+        Ok(cfg)
     }
 
     /// Answer `method`, or decline it so the caller falls through to the sidecar.
@@ -211,6 +303,43 @@ impl Core {
                 let path = required_str(params, "path")?.to_string();
                 let max_width = optional_i64(params, "max_width", 1400)?;
                 images::get_image_preview(&path, max_width)
+            }),
+
+            "get_config" => handled(|| {
+                reject_unexpected(params, &[], "get_config")?;
+                Ok(config::get_config_result(&self.config()?))
+            }),
+
+            "get_translations" => handled(|| {
+                reject_unexpected(params, &[], "get_translations")?;
+                i18n::get_translations_result(&self.config()?)
+            }),
+
+            "get_startup_enabled" => handled(|| {
+                reject_unexpected(params, &[], "get_startup_enabled")?;
+                Ok(json!({ "enabled": startup::is_enabled() }))
+            }),
+
+            "set_startup_enabled" => handled(|| {
+                reject_unexpected(params, &["enabled"], "set_startup_enabled")?;
+                startup::set_enabled(required_bool(params, "enabled")?)?;
+                Ok(json!({ "enabled": startup::is_enabled() }))
+            }),
+
+            "suggest_collage_path" => handled(|| {
+                reject_unexpected(params, &["monitor", "config"], "suggest_collage_path")?;
+                let cfg = self.merged(params.get("config"))?;
+                gallery::suggest_collage_path_result(&cfg, optional_i64_opt(params, "monitor")?)
+            }),
+
+            "list_saved_collages" => handled(|| {
+                reject_unexpected(params, &["config"], "list_saved_collages")?;
+                Ok(gallery::list_saved_collages_result(&self.merged(params.get("config"))?))
+            }),
+
+            "forget_saved_collage" => handled(|| {
+                reject_unexpected(params, &["path"], "forget_saved_collage")?;
+                gallery::forget_saved_collage_result(required_str(params, "path")?)
             }),
 
             // Each phase moves names out of this catch-all and into arms above it.
@@ -282,6 +411,33 @@ fn required_str_list(params: &Value, key: &str) -> Result<Vec<String>, CoreError
     }
 }
 
+fn required_bool(params: &Value, key: &str) -> Result<bool, CoreError> {
+    match params.get(key) {
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a boolean, got {other}"
+        ))),
+        None => Err(CoreError::bad_params(format!(
+            "missing a required argument: '{key}'"
+        ))),
+    }
+}
+
+/// An optional whole number that is meaningfully absent — `monitor: null` means the
+/// whole desktop, which is not the same as a default.
+fn optional_i64_opt(params: &Value, key: &str) -> Result<Option<i64>, CoreError> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => n
+            .as_i64()
+            .map(Some)
+            .ok_or_else(|| CoreError::bad_params(format!("'{key}' must be a whole number"))),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a number, got {other}"
+        ))),
+    }
+}
+
 fn optional_i64(params: &Value, key: &str, default: i64) -> Result<i64, CoreError> {
     match params.get(key) {
         None | Some(Value::Null) => Ok(default),
@@ -334,6 +490,13 @@ mod tests {
         "scan_videos",
         "get_thumbnails",
         "get_image_preview",
+        "get_config",
+        "get_translations",
+        "get_startup_enabled",
+        "set_startup_enabled",
+        "suggest_collage_path",
+        "list_saved_collages",
+        "forget_saved_collage",
     ];
 
     #[tokio::test]
