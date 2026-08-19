@@ -98,11 +98,28 @@ Before Rust methods that need config exist, a ported method may simply call `sel
 
 ## Risks
 
-### DPI coordinate space — check this in phase 1, before anything is built on it
+### DPI coordinate space — investigated in phase 2, and **not a risk after all**
 
-The PyInstaller spec has **no DPI manifest** (verified), so `screeninfo` receives *virtualized* coordinates. The Tauri process is per-monitor-DPI-v2 aware and receives *physical* ones. On a 4K display at 150% scaling that is 2560x1440 versus 3840x2160 — **the composite resolution can change without a single line of layout code changing.**
+The original concern: the PyInstaller spec has no DPI manifest, so `screeninfo` would receive *virtualized* coordinates while a per-monitor-v2-aware Tauri process receives *physical* ones — on a 4K display at 150%, 2560x1440 versus 3840x2160, changing the composite resolution with no layout code touched.
 
-Test on a fractionally-scaled display, and confirm `Monitor.index` ordering matches `screeninfo`'s on a 3-monitor setup; a reshuffle silently moves which pictures land on which screen.
+**That premise was wrong.** `screeninfo`'s Windows enumerator calls `SetProcessDpiAwareness(2)` (`PROCESS_PER_MONITOR_DPI_AWARE`) *inside* `enumerate_monitors`, before it enumerates. Measured on the engine:
+
+| | DPI awareness |
+|---|---|
+| at interpreter start | `0` (UNAWARE) |
+| after `import screeninfo` | `0` (UNAWARE) |
+| after `get_monitors()` | **`2` (PER_MONITOR)** |
+
+So the Python engine has been reading physical coordinates all along — it just acquires the awareness lazily, on first enumeration. Both implementations are per-monitor aware at the moment they read `rcMonitor` from `GetMonitorInfoW`, so **they agree by construction at any scale factor**, and the composite resolution does not change.
+
+Verified empirically: `get_monitors` output is byte-for-byte identical between the Python sidecar and `wallpaper-core-cli`, monitor ordering and a negative-offset screen included.
+
+Two caveats on that verification:
+
+- **The development machine runs both displays at 96 DPI (100%)**, confirmed via `GetDpiForMonitor`. The identical-output test therefore does not exercise a fractionally-scaled display; the guarantee rests on the structural argument above, not on that measurement. Worth a spot check if a scaled display ever becomes available.
+- Python asks for per-monitor **v1**, Rust for **v2**. The difference is non-client-area scaling, dialog scaling and hit-testing — not monitor geometry, which is physical under both. Inside the Tauri process tao has already set v2 before our call runs, so it fails harmlessly and changes nothing.
+
+One latent hazard the port removes for free: because Python's awareness is set lazily, any Win32 call made *before* the first `get_monitors()` would see virtualized coordinates. In practice every apply path enumerates first, so it never bit — but the Rust core sets awareness once at first use rather than depending on call order.
 
 ### Two silent data-loss traps
 

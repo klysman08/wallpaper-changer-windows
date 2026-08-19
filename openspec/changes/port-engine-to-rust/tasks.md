@@ -33,18 +33,35 @@ Highest value/effort ratio in the plan. 2,441 lines, 37% of the Python, all supe
 
 Lands: `ping`, `get_translations`, `list_folder_images`, `get_thumbnails`, `get_image_preview`, `scan_videos`, `suggest_collage_path`, `list_saved_collages`, `forget_saved_collage`.
 
-- [ ] 2.1 **Do this first: the DPI check.** Compare `EnumDisplayMonitors` output from the Tauri process against `screeninfo` output from the unmanifested PyInstaller exe, on a fractionally-scaled display. Confirm whether the composite resolution changes, and confirm `index` ordering matches on a 3-monitor setup. Record the finding before building anything on top of it.
-- [ ] 2.2 Port `monitor.py` to `EnumDisplayMonitors` + `GetMonitorInfoW`, keeping `Monitor {index, x, y, width, height}` field-identical.
-- [ ] 2.3 Export `i18n.py`'s 807 strings to JSON, embed via `include_str!`, and serve `get_translations` as a pass-through.
-- [ ] 2.4 Port `gallery.py` read paths: `entries()` (with on-read disk reconciliation), `find`, `forget`, `suggest_name`, `get_library_dir`. Preserve the entry shape and `os.path.normcase`-equivalent identity.
-- [ ] 2.5 Port `list_images` and the `SUPPORTED` extension set from `image_utils.py`.
-- [ ] 2.6 Implement `get_thumbnails` (clamp 32-512, JPEG q75, drop unreadable files silently) and `get_image_preview` (clamp 64-4096, downscale only, q85).
-- [ ] 2.7 Measure how far `image`'s Lanczos3 sits from Pillow's LANCZOS on the thumbnail corpus; record the number to calibrate the phase 4 tolerance.
-- [ ] 2.8 Verify: conformance corpus passes against `wallpaper-core-cli` for these methods; gallery listing matches Python byte-for-byte on a real `gallery.json`.
+- [x] 2.1 **The DPI check — and it is a non-issue.** `screeninfo` calls `SetProcessDpiAwareness(2)` inside its enumerator, so the Python engine reads *physical* coordinates too; measured awareness goes `0 → 0 → 2` across start / import / `get_monitors()`. Both sides are per-monitor aware when they read `rcMonitor`, so they agree at any scale factor. See design.md for the full finding.
+- [x] 2.2 Port `monitor.py` to `EnumDisplayMonitors` + `GetMonitorInfoW`, `Monitor {index, x, y, width, height}` field-identical. **`get_monitors` output is byte-for-byte identical to Python's**, ordering and a negative-offset screen included.
+- [ ] 2.3 ~~i18n~~ — **moved to phase 3.** `get_translations` reports `current`, which is the language from `general.language`; without the config port it cannot be answered without diverging.
+- [ ] 2.4 ~~gallery~~ — **moved to phase 3.** `list_saved_collages` and `suggest_collage_path` resolve the library folder through `resolve_saved_dir(cfg)`. Splitting the unit would leave the index half-owned.
+- [x] 2.5 Port `list_images` / `SUPPORTED` and `scan_video_folder` / `VIDEO_EXTENSIONS`. The asymmetry is deliberate and copied: images are **unsorted** and do not check `is_file()`, videos are **sorted** and do.
+- [x] 2.6 `get_thumbnails` (clamp 32–512, JPEG q75, unreadable files dropped silently) and `get_image_preview` (clamp 64–4096, downscale only, q85), including Pillow's `round_aspect` thumbnail sizing and half-to-even rounding.
+- [x] 2.7 Resampler drift measured — see below.
+- [x] 2.8 Verify: 42 Rust tests green, `cargo check --workspace --all-targets` clean; corpus against the Rust core went 3 → **13 passing**; Python still **35/35 strict**.
 
-## 3. Config, startup, notifications (2-3 days)
+**Methods landed (6):** `ping`, `get_monitors`, `list_folder_images`, `scan_videos`, `get_thumbnails`, `get_image_preview`.
 
-Lands: `get_config`, `save_config`, `get_capabilities`, `get_startup_enabled`, `set_startup_enabled`, `notify`.
+**Resampler drift, `image` Lanczos3 vs Pillow LANCZOS** (900×600 source with a gradient, a 3px checkerboard and a fine sinusoid — deliberately hostile):
+
+| Operation | max Δ | mean Δ | % channels > 1 |
+|---|---|---|---|
+| 900×600 → 450×300 (downscale) | **1** | 0.004 | 0.00% |
+| 900×600 → 160×107 (downscale) | **1** | 0.002 | 0.00% |
+| 900×600 → 1800×1200 (upscale) | **16** | 0.739 | 7.42% |
+
+**This tightens phase 4's plan.** Downscaling is effectively identical, so the ≤3 tolerance the design assumed can be **≤1** for the common case — a wallpaper larger than its cell, and every thumbnail and preview. Upscaling is materially different and needs its own looser bound; it only occurs when a source image is smaller than the cell it fills. Split the `fit_image` comparison along that line rather than using one tolerance for both.
+
+**Verified against real data:** `list_folder_images` over a 4948-image folder returned an identical set **and identical order** to Python, confirming that leaving the listing unsorted (as `list_images` does) reproduces `Path.iterdir()`.
+
+## 3. Config, startup, notifications, i18n, gallery (3-4 days)
+
+Lands: `get_config`, `save_config`, `get_capabilities`, `get_startup_enabled`, `set_startup_enabled`, `notify`, plus `get_translations` and the gallery reads (`suggest_collage_path`, `list_saved_collages`, `forget_saved_collage`) — both deferred from phase 2, because they resolve the library folder and the current language through the config and would diverge if split off from it.
+
+- [ ] 3.9 Export `i18n.py`'s 807 strings to JSON, embed via `include_str!`, and serve `get_translations` with `current` read from `general.language`.
+- [ ] 3.10 Port `gallery.py`: `entries()` (with on-read disk reconciliation), `find`, `forget`, `suggest_name`, `get_library_dir`. Preserve the entry shape and `os.path.normcase`-equivalent identity; verify against a real `gallery.json`.
 
 - [ ] 3.1 Port the path resolution from `config.py`: `get_user_config_dir`, `get_user_data_dir`, `resolve_output_dir`, `resolve_saved_dir`, `resolve_path`, and the `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` overrides.
 - [ ] 3.2 Port `_migrate_legacy_files` (copy, never move; never overwrite).

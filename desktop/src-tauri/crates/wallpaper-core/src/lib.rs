@@ -21,10 +21,14 @@
 use std::panic::{AssertUnwindSafe, UnwindSafe};
 use std::sync::Arc;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 mod error;
+pub mod images;
+pub mod monitor;
+
 pub use error::{CoreError, ErrorKind};
+pub use monitor::{get_monitors, virtual_desktop, Monitor};
 
 /// Every method the engine answers, in the order `Engine._METHODS` lists them.
 ///
@@ -174,12 +178,120 @@ impl Core {
     /// while the sidecar exists it remains the allowlist gate, and letting it produce
     /// the rejection keeps one gate rather than two that can disagree.
     pub async fn dispatch(&self, method: &str, params: &Value) -> Dispatch {
-        let _ = params; // handlers arrive with the phases that own them
         match method {
-            // No methods are ported yet. Each phase moves names out of this
-            // catch-all and into arms above it.
+            "ping" => handled(|| {
+                reject_unexpected(params, &[], "ping")?;
+                Ok(json!({ "pong": true, "protocol": PROTOCOL_VERSION }))
+            }),
+
+            "get_monitors" => handled(|| {
+                reject_unexpected(params, &[], "get_monitors")?;
+                monitor::get_monitors_result()
+            }),
+
+            "list_folder_images" => handled(|| {
+                reject_unexpected(params, &["folder"], "list_folder_images")?;
+                Ok(images::list_folder_images(required_str(params, "folder")?))
+            }),
+
+            "scan_videos" => handled(|| {
+                reject_unexpected(params, &["folder"], "scan_videos")?;
+                Ok(images::scan_videos(required_str(params, "folder")?))
+            }),
+
+            "get_thumbnails" => handled(|| {
+                reject_unexpected(params, &["paths", "size"], "get_thumbnails")?;
+                let paths = required_str_list(params, "paths")?;
+                let size = optional_i64(params, "size", 160)?;
+                Ok(images::get_thumbnails(&paths, size))
+            }),
+
+            "get_image_preview" => handled(|| {
+                reject_unexpected(params, &["path", "max_width"], "get_image_preview")?;
+                let path = required_str(params, "path")?.to_string();
+                let max_width = optional_i64(params, "max_width", 1400)?;
+                images::get_image_preview(&path, max_width)
+            }),
+
+            // Each phase moves names out of this catch-all and into arms above it.
             _ => Dispatch::NotPorted,
         }
+    }
+}
+
+// ── parameter extraction ─────────────────────────────────────────────────────
+//
+// `rpc.py` splats `params` as keyword arguments, so Python's own signature checking
+// is what rejects a bad call, and a `TypeError` becomes `bad_params`. These helpers
+// reproduce that: an unexpected key, a missing required key, or a value of the wrong
+// shape all land on `bad_params` with a message naming the method.
+
+/// Reject any key the method does not accept, the way a Python signature would.
+///
+/// Without this a typo in the webview would be silently ignored here while the
+/// sidecar rejected it, so the two sides would disagree about the same request.
+fn reject_unexpected(params: &Value, accepted: &[&str], method: &str) -> Result<(), CoreError> {
+    let Some(object) = params.as_object() else {
+        // A null or absent `params` is the no-arguments call.
+        return if params.is_null() {
+            Ok(())
+        } else {
+            Err(CoreError::bad_params(format!(
+                "Bad params for {method}: params must be an object."
+            )))
+        };
+    };
+    for key in object.keys() {
+        if !accepted.contains(&key.as_str()) {
+            return Err(CoreError::bad_params(format!(
+                "Bad params for {method}: unexpected keyword argument '{key}'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn required_str<'a>(params: &'a Value, key: &str) -> Result<&'a str, CoreError> {
+    match params.get(key) {
+        Some(Value::String(s)) => Ok(s),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a string, got {other}"
+        ))),
+        None => Err(CoreError::bad_params(format!(
+            "missing a required argument: '{key}'"
+        ))),
+    }
+}
+
+fn required_str_list(params: &Value, key: &str) -> Result<Vec<String>, CoreError> {
+    match params.get(key) {
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_str().map(str::to_string).ok_or_else(|| {
+                    CoreError::bad_params(format!("'{key}' must contain only strings"))
+                })
+            })
+            .collect(),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a list, got {other}"
+        ))),
+        None => Err(CoreError::bad_params(format!(
+            "missing a required argument: '{key}'"
+        ))),
+    }
+}
+
+fn optional_i64(params: &Value, key: &str, default: i64) -> Result<i64, CoreError> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(Value::Number(n)) => n
+            .as_i64()
+            .or_else(|| n.as_f64().map(|f| f as i64))
+            .ok_or_else(|| CoreError::bad_params(format!("'{key}' must be a whole number"))),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a number, got {other}"
+        ))),
     }
 }
 
@@ -212,18 +324,40 @@ mod tests {
         assert_eq!(sorted.len(), METHODS.len(), "duplicate method name");
     }
 
-    /// Phase 1 ports nothing: every method still falls through to the sidecar. This
-    /// assertion is meant to fail as later phases land, and be narrowed each time.
+    /// Methods the core has taken over. Every phase adds to this list, and the test
+    /// below asserts the split is exactly as claimed — a method that quietly stopped
+    /// answering would otherwise fall back to Python and look like it still worked.
+    const PORTED: &[&str] = &[
+        "ping",
+        "get_monitors",
+        "list_folder_images",
+        "scan_videos",
+        "get_thumbnails",
+        "get_image_preview",
+    ];
+
     #[tokio::test]
-    async fn every_method_is_not_ported_yet() {
+    async fn ported_methods_answer_and_the_rest_fall_through() {
         let core = core();
         for method in METHODS {
-            let decision = core.dispatch(method, &Value::Null).await;
-            assert!(
-                decision.is_not_ported(),
-                "{method} claims to be ported; narrow this test as phases land"
+            let decision = core.dispatch(method, &json!({})).await;
+            let expected_ported = PORTED.contains(method);
+            assert_eq!(
+                !decision.is_not_ported(),
+                expected_ported,
+                "{method}: PORTED says {expected_ported}, dispatch disagrees"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn ping_reports_the_protocol_version() {
+        let core = core();
+        let Dispatch::Handled(Ok(result)) = core.dispatch("ping", &json!({})).await else {
+            panic!("ping did not answer");
+        };
+        assert_eq!(result["pong"], true);
+        assert_eq!(result["protocol"], PROTOCOL_VERSION);
     }
 
     /// An unrecognised name must fall through too, so the sidecar stays the single
