@@ -348,24 +348,86 @@ Worth checking by hand: scroll with the modifier held and confirm the window fad
 
 ## 8. Video (5-8 days — highest variance)
 
-Lands: `video_start/stop/next/prev/set_sound/toggle/toggle_sound/status`, `restore_session`, `shutdown`.
+Lands: `video_start/stop/next/prev/set_sound/toggle/toggle_sound/status`, `get_capabilities`, `shutdown`, and the video half of `restore_session`. **34 -> 44 of 45 methods.**
 
-- [ ] 8.1 Port `workerw.py`: the undocumented `0x052C` to Progman via `SendMessageTimeoutW`, the 100 ms settle, and the Win11 (`FindWindowExW` on Progman) / Win10 (`SHELLDLL_DefView` sibling walk) dual discovery with Progman fallback.
-- [ ] 8.2 Hand-roll the libmpv FFI with `libloading` and `LoadLibraryW` on an explicit absolute path (~10 symbols, ~150 lines), with graceful degradation when the DLL is absent. Set `wid` as a *string* option before `mpv_initialize`.
-- [ ] 8.3 Carry `_MPV_SAFE_VIDEO_OPTIONS` verbatim — these exist to dodge dxgi.dll access violations, do not "clean up".
-- [ ] 8.4 **Own all host windows on one dedicated thread**, fixing the current cross-thread `DestroyWindow` failure (created on the `restore-session` thread at `rpc.py:933`, destroyed from main).
-- [ ] 8.5 Preserve **mpv terminate strictly before `DestroyWindow`**, the `InvalidateRect` + `UpdateWindow` desktop repaint, audio on the first instance only, and `playlist_pos` navigation with wrap.
-- [ ] 8.6 Port `restore_session` and the `shutdown` teardown ordering.
-- [ ] 8.7 Verify: manual on real multi-monitor hardware; a soak test of 200 start/stop cycles that enumerates WORKERW children afterward and asserts none of ours survive.
-- [ ] 8.8 **Bail-out if this fights back** (pre-approved, no re-planning): extract a ~400-line `wallpaper-video-host.exe` taking monitor rects and a playlist on stdin, supervised with auto-restart.
+- [x] 8.1 `workerw.rs`: the undocumented `0x052C` through `SendMessageTimeoutW`, the 100 ms settle, and the Win11 (`FindWindowExW` on Progman) / Win10 (`SHELLDLL_DefView` sibling walk) discovery with the Progman fallback.
+- [x] 8.2 Hand-rolled libmpv FFI over `libloading`, eleven symbols, loaded from an explicit path with `LOAD_WITH_ALTERED_SEARCH_PATH` so libmpv's own dependents resolve beside it. `wid` set as a *string* option before `mpv_initialize`.
+- [x] 8.3 `_MPV_SAFE_VIDEO_OPTIONS` carried verbatim, with a test pinning the names.
+- [x] 8.4 One dedicated thread owns every host window and every mpv handle, fixing the cross-thread `DestroyWindow`.
+- [x] 8.5 mpv terminated strictly before `DestroyWindow`, the `InvalidateRect` + `UpdateWindow` repaint, audio on the first instance only, and `playlist-pos` navigation with wrap.
+- [x] 8.6 `restore_session` and the `shutdown` teardown ordering.
+- [x] 8.7 Verify: the soak test ran — **200 cycles, 0 stranded windows**. Real playback confirmed on a two-screen desktop.
+- [x] 8.8 Bail-out not needed. No sidecar was extracted.
+
+**Outcome:** 179 core unit tests (173 -> 179) plus 4 opt-in desktop tests, 3 golden, 9 shell, 121 pytest (150 -> 121; the 29 lost are `test_video_wallpaper.py` and ten `test_rpc.py` video/shutdown cases). `cargo check --workspace --all-targets` and `cargo check -p tauri-native` clean, no warnings. Ruff 99 -> 94, entirely from deleted files.
+
+### Verified for real, not just in theory
+
+This is the first phase where the deliverable could not be checked any other way, so it was checked directly and the results are the evidence for everything above:
+
+- **WORKERW discovery is byte-identical to Python's.** Same handle (`38408168`), same origin, on the same machine, run side by side.
+- **The origin offset earns its keep on this hardware.** The desktop layer starts at `(0, -1072)` because a 4K screen sits above the primary, so the second monitor's host window is placed at child `(1920, 0)` and the first at `(0, 1072)`. Dropping that offset puts every video off-screen — this layout would have caught it.
+- **Video really plays.** mpv rendered into WORKERW on both screens, `playlist-pos` stepped forward and back, and the file name round-tripped through the C API intact — including emoji and Japanese, which is what makes the `CString` path worth having a test for.
+- **Nothing is stranded.** 200 start/stop cycles, roughly 400 mpv instances created and destroyed, and the desktop layer had exactly as many children afterwards as before. That is the assertion 8.4 exists for: `DestroyWindow` from the wrong thread fails *silently*, so only a count proves it worked.
+- **The folder scan matches Python exactly**, including sort order over non-ASCII names, and it already had a native implementation (`images::list_videos`) from the stateless-leaves phase — the playlist now shares it rather than carrying a second copy.
+
+The desktop tests are all `#[ignore]`: `cargo test` must not embed windows in someone's desktop because they wanted to check a build. They run with `cargo test -p wallpaper-core --test desktop_layer -- --ignored`, and playback needs `WALLPAPER_TEST_VIDEOS` pointed at a folder.
+
+### The installer is not going to be 15 MB
+
+The plan's headline number is wrong, and it is worth correcting before phase 9 plans around it. The 145 MB engine bundle is:
+
+| | |
+|---|---|
+| `libmpv-2.dll` | **112 MB** |
+| Python runtime and dependencies | ~33 MB |
+
+Deleting Python saves about 33 MB, not 130. libmpv is the download, and it survives the port because video is a feature we are keeping. So the realistic figure after phase 9 is **roughly 120 MB**, unless libmpv is dealt with separately — a slimmer build, or an optional download, or accepting the size. That is a product decision, not a porting one.
+
+The one thing this phase could do about it, it did: libmpv no longer rides inside the sidecar. It ships as a Tauri resource (`tauri.conf.json`), the spec no longer bundles it, and the shell hands the core the resolved resource directory through `video::set_search_dir` before anything asks `has_mpv` — the core has no `tauri` dependency and cannot resolve a resource path itself. **The sidecar is now ~33 MB rather than 145.**
+
+### The start-up trap, for the last time
+
+`serve()` ran `restore_session` on a daemon thread — not through `dispatch`, so the seam never saw it, exactly as with the rotation timer in phase 5 and the scroll hook in phase 7. Two players fighting over one WORKERW layer would have been the result. `Engine::spawn` now restores both halves and emits the single `session_restored` event the UI already listens for.
+
+That is three phases in a row where the real hazard was a sidecar call outside `dispatch`. With `serve()` now down to reading stdin, the pattern has no more instances left to bite.
+
+### Three orderings that are not negotiable
+
+Written into the module docs because each one is a native crash or a visible artefact, not an exception:
+
+1. **mpv is terminated before its window is destroyed.** mpv renders from its own threads; freeing the HWND first leaves it painting into freed memory.
+2. **The event pump is stopped before `mpv_terminate_destroy`.** A handle must not be destroyed while another thread sits in `mpv_wait_event`, so the pump is woken with `mpv_wakeup` and joined first. This is new — Python got log forwarding from python-mpv and never had to think about it.
+3. **The desktop is repainted after teardown**, or the last frame stays frozen on the wallpaper.
+
+### A guard that was nearly lost in translation
+
+Python's `start()` refuses an empty playlist *before* touching the desktop. The first draft here checked only in `Session::video_start`, which left the lower-level `VideoPlayer::start` willing to create a host window and an mpv per screen with nothing to play — a black wallpaper rather than an error. Caught while writing the soak test, whose original premise was that an empty playlist would fail; it did not. There is now a test that a refused start leaves the desktop layer untouched.
+
+### Only `notify` is left
+
+`METHODS` is 45 and `PORTED` is 44. The sidecar exists for `notify`, which sends a Windows toast.
+
+**The phase 9 task list does not mention it**, which looks like an oversight — 9.1 removes the sidecar plumbing and 9.3 deletes the package, and between them `notify` has nowhere to go. It wants the same treatment as `WallpaperSetter`: a trait in the core with a shell implementation over `tauri-plugin-notification`, which is already a dependency. Added to phase 9 below.
+
+`Bridge` is likewise dead in practice — its one remaining caller keeps a config cache fresh for a process whose only method does not read the config. It survives to phase 9 because unpicking it means removing the sidecar plumbing it rides on.
+
+### Not verified
+
+- **A packaged build.** The libmpv resource path, `set_search_dir`, and the shrunken sidecar are only exercised in a dev build, where the DLL is found through `project_root()/libmpv` instead. `scripts/build_app.ps1` has not been run.
+- **Long-running playback.** The soak starts and stops; it never leaves a video playing for hours, which is the shape the `dxgi.dll` crash reports came from.
+- **A display change while playing.** Explorer recreates WORKERW on a resolution or monitor change, destroying our children and leaving stale handles. The code is written for it (`DestroyWindow` tolerates a stale handle) but nothing tested it.
+- **Audio.** Every check ran muted, so "audio on the first instance only" is unconfirmed by ear.
 
 ## 9. Delete the sidecar and ship (3-5 days)
 
-- [ ] 9.1 Remove the sidecar plumbing from `engine.rs`: all three branches of `engine_command`, `parse_engine_override`, the reader threads, `CALL_TIMEOUT`, and `SHUTDOWN_GRACE`.
+- [ ] 9.0 **Port `notify`, the last method the sidecar answers.** Missing from this list until phase 8 noticed it: 9.1 removes the plumbing and 9.3 deletes the package, and between them `notify` had nowhere to go. It needs the `WallpaperSetter` treatment — a trait in the core, implemented in the shell over `tauri-plugin-notification`, which is already a dependency. **Do this first**, or the steps below take the toast with them. Doing it also empties `Bridge`, whose one remaining caller (`notify_sidecar_of_config_change`) exists to keep a config cache fresh for a process that no longer reads the config.
+- [ ] 9.1 Remove the sidecar plumbing from `engine.rs`: all three branches of `engine_command`, `parse_engine_override`, the reader threads, `CALL_TIMEOUT`, and `SHUTDOWN_GRACE`. Also `Bridge`, `BridgeFuture`, `SidecarBridge`, `Core::set_bridge` and `Session::notify_sidecar_of_config_change`.
 - [ ] 9.2 Remove `"resources": { "engine": "engine" }` from `tauri.conf.json`.
 - [ ] 9.3 Delete `src/wallpaper_changer/`, `tests/` (Python), `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, and `scripts/build_engine.ps1`. This is where **`pywin32`** finally goes (deferred from 6.5 and again from 7.5): its last caller is `transparency.py`, which still backs the Python side of the four transparency conformance cases until the whole package is removed.
 - [ ] 9.4 Remove the `-SkipEngine` switch and the engine-staging assert from `scripts/build_app.ps1`. Keep signing-key validation, `bun install`, `tauri build`, artifact collection, and `latest.json` generation.
 - [ ] 9.5 Port `cli.py` to a `clap`-based mode of the Tauri binary (`apply`, `watch`, `video`), preserving the `IntRange(1, 8)` collage-count and effect-choice validation.
 - [ ] 9.6 Update `CLAUDE.md` and `AGENTS.md` — the two-process architecture description is the first thing both documents explain.
-- [ ] 9.7 Verify: `cargo test --workspace`; full signed installer build (~15 MB) with `latest.json`; install over an existing 5.4.0 install and confirm the updater upgrades in place rather than adding a second program entry.
+- [ ] 9.7 Verify: `cargo test --workspace`; a full signed installer build with `latest.json`; install over an existing 5.4.0 install and confirm the updater upgrades in place rather than adding a second program entry. **Expect roughly 120 MB, not the ~15 MB this plan originally claimed** — see phase 8: `libmpv-2.dll` is 112 MB of the old 145 MB bundle and it survives the port. Confirm the DLL resolves from the Tauri resource directory in a packaged build, which is the one path phase 8 could not exercise.
+- [ ] 9.9 **Decide what to do about libmpv's 112 MB**, now that it is the entire download. Options: ship a smaller mpv build, make it an optional download with the feature degrading as it already does when absent, or accept the size. A product decision, not a porting one, and the first honest opportunity to make it.
 - [ ] 9.8 Verify the scaled-display case end-to-end: a monitor at 150% must produce the same composite resolution as before the port.

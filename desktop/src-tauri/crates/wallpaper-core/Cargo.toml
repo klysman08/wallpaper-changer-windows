@@ -15,6 +15,12 @@ base64 = "0.22"
 # hand-rolled Python writer destroys on every save. toml_edit keeps them.
 toml_edit = "0.22"
 dunce = "1"
+# Runtime loading of libmpv from a path chosen at runtime, which is the whole reason
+# the `libmpv`/`libmpv2` crates do not fit: both link at build time.
+libloading = "0.8"
+# The engine logs through the shell's tauri-plugin-log, which installs a global
+# `log` implementation; the core only ever uses the facade.
+log = "0.4"
 rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # The apply lock and the rotation timer. `rt` is for `spawn_blocking`: compositing a

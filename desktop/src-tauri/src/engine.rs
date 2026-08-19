@@ -99,6 +99,15 @@ pub struct Engine {
 impl Engine {
     /// Build the core and start the sidecar that still backs the unported methods.
     pub fn spawn(app: &AppHandle) -> Result<Self, String> {
+        // Where the bundled libmpv landed. The core has no `tauri` dependency and so
+        // cannot resolve a resource path itself, and in a packaged build this is the
+        // only copy of the DLL — it used to ride inside the Python sidecar, where it
+        // was 112 of that bundle's 145 MB. Must happen before anything asks `has_mpv`,
+        // because the library is resolved once and cached.
+        if let Ok(dir) = app.path().resolve("libmpv", tauri::path::BaseDirectory::Resource) {
+            wallpaper_core::video::set_search_dir(dir);
+        }
+
         let core = Arc::new(Core::new(Arc::new(WebviewSink { app: app.clone() })));
         // While nothing is ported, a sidecar that will not start means no working
         // engine at all, so the failure is still fatal. As methods migrate this can
@@ -111,11 +120,18 @@ impl Engine {
         // The rotation timer belongs to the core now, so the sidecar's own
         // `restore_session` no longer brings it back — it would start a second,
         // invisible timer in the wrong process. Its video half still runs over there.
+        // Both halves of the old `restore_session`, which the sidecar ran on a daemon
+        // thread at start-up — never through `dispatch`, so the seam never saw it. On a
+        // task rather than inline because starting the video wallpaper spins up mpv and
+        // reparents windows, and that must not delay the first request the shell sends.
         let restoring = Arc::clone(&core);
         tauri::async_runtime::spawn(async move {
-            if restoring.session().restore_rotation().await {
-                log::info!("rotation restored from the saved session");
-            }
+            let restored = restoring.session().restore_session().await;
+            log::info!(
+                "session restored: rotation={} video={}",
+                restored["rotation"],
+                restored["video"]
+            );
         });
 
         // Same reason, and the same trap avoided: `serve()` in the sidecar used to call
@@ -164,6 +180,9 @@ impl Engine {
         // A WH_MOUSE_LL hook is system-wide. Leaving it installed would route every
         // wheel event on the machine through a process that is going away.
         self.core.session().stop_scroll_for_exit();
+        // The video host windows are children of WORKERW, so they outlive us and sit
+        // on the desktop until Explorer restarts if they are not destroyed here.
+        self.core.session().stop_video_for_exit();
         if let Some(sidecar) = &self.sidecar {
             sidecar.shutdown();
         }

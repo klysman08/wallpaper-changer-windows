@@ -45,7 +45,6 @@ from .config import (
 from .image_utils import list_images
 from .monitor import get_monitors, get_virtual_desktop_size
 from .notifications import send_windows_notification
-from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
 from .wallpaper import (
     EFFECTS,
     apply_desktop_image,
@@ -100,7 +99,6 @@ class Engine:
     def __init__(self, emit: Callable[[str, dict], None]) -> None:
         self._emit = emit
         self._cfg: dict = {}
-        self._video = VideoWallpaperPlayer()
         self._watch_timer: threading.Timer | None = None
         self._watch_lock = threading.Lock()
         self._apply_lock = threading.Lock()
@@ -138,10 +136,6 @@ class Engine:
         merged["general"] = {
             **merged.get("general", {}),
             "rotation_active": self.watch_status()["watching"],
-        }
-        merged["video"] = {
-            **merged.get("video", {}),
-            "enabled": self._video.is_running(),
         }
         save_config(merged)
         self._cfg = merged
@@ -188,23 +182,6 @@ class Engine:
             i18n.set_language(lang)
         return {"reloaded": True}
 
-    def restore_session(self) -> dict:
-        """Bring back what was running when the app was last closed.
-
-        Called once at startup. The rotation half is **not** here: the native core
-        owns the rotation timer, and starting one in this process would leave a second
-        timer running that nothing can see or stop. The shell restores it directly.
-        """
-        cfg = self._config()
-        restored = {"rotation": False, "video": False}
-        if bool(cfg.get("video", {}).get("enabled", False)) and has_mpv():
-            try:
-                self.video_start()
-                restored["video"] = True
-            except Exception as exc:
-                log.warning("Could not restore the video wallpaper: %s", exc)
-        return restored
-
     # ── Environment ───────────────────────────────────────────────────────────
 
     def get_monitors(self) -> dict:
@@ -231,18 +208,6 @@ class Engine:
             "supported": i18n.SUPPORTED_LANGUAGES,
             "default": i18n.DEFAULT_LANGUAGE,
             "current": i18n.get_language(),
-        }
-
-    def get_capabilities(self) -> dict:
-        return {
-            "protocol": PROTOCOL_VERSION,
-            "effects": list(EFFECTS),
-            "has_mpv": has_mpv(),
-            "startup_enabled": startup.is_startup_enabled(),
-            # The native core owns the mouse hook now, and installing one needs no
-            # optional dependency the way pynput did — so on Windows it is always
-            # available. Reported from here only until `get_capabilities` moves across.
-            "has_scroll_transparency": sys.platform == "win32",
         }
 
     def list_folder_images(self, folder: str) -> dict:
@@ -693,77 +658,11 @@ class Engine:
     def reapply_opacity_settings(self) -> dict:
         return {"applied": transparency.reapply_saved_settings()}
 
-    # ── Video wallpaper ───────────────────────────────────────────────────────
-
-    def scan_videos(self, folder: str) -> dict:
-        videos = scan_video_folder(folder)
-        return {"count": len(videos), "videos": [str(p) for p in videos]}
-
-    def video_start(self, config: dict | None = None) -> dict:
-        if not has_mpv():
-            raise RpcError("libmpv is not available.", "no_mpv")
-        cfg = self._merged(config)
-        video_cfg = cfg.get("video", {})
-        videos = scan_video_folder(video_cfg.get("folder", ""))
-        if not videos:
-            raise RpcError("No videos found in the configured folder.", "not_found")
-        monitors = get_monitors()
-        if not monitors:
-            raise RpcError("No monitors detected.", "no_monitors")
-        self._video.configure(
-            videos,
-            loop=bool(video_cfg.get("loop", True)),
-            sound=bool(video_cfg.get("sound", False)),
-            monitors=monitors,
-            on_status=lambda name: self._emit("video_status", {"current": name}),
-        )
-        self._video.start()
-        self._remember("video", "enabled", True)
-        return self.video_status()
-
-    def video_stop(self) -> dict:
-        self._video.stop()
-        self._remember("video", "enabled", False)
-        return self.video_status()
-
-    def video_next(self) -> dict:
-        self._video.next_video()
-        return self.video_status()
-
-    def video_prev(self) -> dict:
-        self._video.prev_video()
-        return self.video_status()
-
-    def video_set_sound(self, enabled: bool) -> dict:
-        self._video.set_sound(bool(enabled))
-        return self.video_status()
-
-    def video_toggle(self, config: dict | None = None) -> dict:
-        """Start the video wallpaper if stopped, stop it if running."""
-        if self._video.is_running():
-            return self.video_stop()
-        return self.video_start(config)
-
-    def video_toggle_sound(self) -> dict:
-        """Flip the audio state, live if something is playing."""
-        enabled = not bool(self._config().get("video", {}).get("sound", False))
-        self._config().setdefault("video", {})["sound"] = enabled
-        if self._video.is_running():
-            self._video.set_sound(enabled)
-        return {**self.video_status(), "sound": enabled}
-
     def watch_toggle(self) -> dict:
         """Start the rotation timer if idle, stop it if running."""
         with self._watch_lock:
             running = self._watch_timer is not None
         return self.watch_stop() if running else self.watch_start()
-
-    def video_status(self) -> dict:
-        return {
-            "running": self._video.is_running(),
-            "current": self._video.current_name(),
-            "has_mpv": has_mpv(),
-        }
 
     # ── Windows integration ───────────────────────────────────────────────────
 
@@ -781,26 +680,10 @@ class Engine:
     def ping(self) -> dict:
         return {"pong": True, "protocol": PROTOCOL_VERSION}
 
-    def shutdown(self) -> dict:
-        """Release desktop-layer resources before the process exits.
-
-        Video host windows are children of WORKERW; leaving them behind would strand
-        them on the desktop until Explorer restarts, so this must run on every exit
-        path the front end controls.
-        """
-        with self._watch_lock:
-            self._cancel_watch_locked()
-        try:
-            self._video.stop()
-        except Exception as exc:
-            log.warning("Video teardown failed during shutdown: %s", exc)
-        return {"bye": True}
-
     # ── Dispatch ──────────────────────────────────────────────────────────────
 
     _METHODS = (
         "ping",
-        "get_capabilities",
         "get_config",
         "save_config",
         "get_monitors",
@@ -829,19 +712,9 @@ class Engine:
         "get_opacity_settings",
         "save_opacity_settings",
         "reapply_opacity_settings",
-        "scan_videos",
-        "video_start",
-        "video_stop",
-        "video_next",
-        "video_prev",
-        "video_set_sound",
-        "video_toggle",
-        "video_toggle_sound",
-        "video_status",
         "get_startup_enabled",
         "set_startup_enabled",
         "notify",
-        "shutdown",
         # Transitional, for the Rust port: the native core calls this after every
         # write so this process re-reads the settings file instead of trusting a
         # cache it can no longer keep current. Removed with the sidecar.
@@ -888,17 +761,6 @@ def serve(stdin, stdout) -> int:
     engine = Engine(emit)
     emit("ready", {"protocol": PROTOCOL_VERSION})
 
-    # Come back up the way the user left it. On a thread because starting the video
-    # wallpaper spins up mpv and reparents windows, which must not delay the first
-    # request the shell sends.
-    def _restore() -> None:
-        try:
-            emit("session_restored", engine.restore_session())
-        except Exception as exc:
-            log.warning("Could not restore the previous session: %s", exc)
-
-    threading.Thread(target=_restore, name="restore-session", daemon=True).start()
-
     for raw_line in stdin:
         # Strip a stray BOM as well as whitespace: callers that reopen the stream
         # mid-flight can re-emit one, and it is never valid inside the protocol.
@@ -933,10 +795,9 @@ def serve(stdin, stdout) -> int:
             log.debug("RPC method %s failed", method, exc_info=True)
             write({"id": req_id, "ok": False, "error": _error_payload(exc)})
 
-        if method == "shutdown":
-            break
-
-    engine.shutdown()
+    # `shutdown` moved to the native core, which answers it without reaching this
+    # process. The loop therefore ends the only other way it can: the shell closes
+    # stdin, `for raw_line in stdin` runs out, and this returns.
     return 0
 
 

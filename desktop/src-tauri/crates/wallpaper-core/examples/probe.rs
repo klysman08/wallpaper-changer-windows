@@ -78,9 +78,9 @@ fn main() {
                 }
             }
             let names: Vec<&str> = [
-                "alt", "ALT", "  Ctrl  ", "control", "shift", "win", "windows", "super",
-                "meta", "", "nonsense", "ctrl+alt", "CONTROL", "Win", "SHIFT", "sHiFt",
-                "  ", "altt", "ctrl ", "meta ",
+                "alt", "ALT", "  Ctrl  ", "control", "shift", "win", "windows", "super", "meta",
+                "", "nonsense", "ctrl+alt", "CONTROL", "Win", "SHIFT", "sHiFt", "  ", "altt",
+                "ctrl ", "meta ",
             ]
             .iter()
             .map(|raw| scroll::normalize_modifier(Some(raw)))
@@ -94,6 +94,41 @@ fn main() {
                     "min_alpha": scroll::MIN_ALPHA,
                     "max_alpha": scroll::MAX_ALPHA,
                     "modifiers": scroll::SUPPORTED_MODIFIERS,
+                })
+            );
+        }
+        // Which of the three desktop shapes this machine has, and where. Read-only:
+        // the only side effect is the idempotent 0x052C to Progman, which is what
+        // asking for the layer means.
+        "workerw" => {
+            let worker = wallpaper_core::workerw::workerw();
+            let parent = wallpaper_core::workerw::desktop_parent();
+            let origin = parent.map(wallpaper_core::workerw::window_origin);
+            println!(
+                "{}",
+                serde_json::json!({
+                    "workerw": worker,
+                    "parent": parent,
+                    "parent_is_progman": worker.is_none() && parent.is_some(),
+                    "origin": origin,
+                })
+            );
+        }
+        // Whether libmpv resolves, and what a folder scan finds. Loads the DLL, which
+        // is the point; it plays nothing.
+        "mpv" => {
+            let available = wallpaper_core::video::has_mpv();
+            let folder = args.get(2).cloned().unwrap_or_default();
+            let videos = wallpaper_core::video::scan_video_folder(&folder);
+            println!(
+                "{}",
+                serde_json::json!({
+                    "has_mpv": available,
+                    "folder": folder,
+                    "count": videos.len(),
+                    "videos": videos.iter().map(|p| p.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()).collect::<Vec<_>>(),
                 })
             );
         }

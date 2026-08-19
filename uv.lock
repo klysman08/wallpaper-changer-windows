@@ -279,15 +279,6 @@ wheels = [
 ]
 
 [[package]]
-name = "python-mpv"
-version = "1.0.8"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/77/bc/6aa34c8805ff62e2fefc7d171563c60598aac215d5241186031a2c839935/python_mpv-1.0.8.tar.gz", hash = "sha256:017fa359da059c831a94c419083491903e6d2f7c81b9841c33c196cabf4b3fe3", size = 52680, upload-time = "2025-04-25T09:51:40.048Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/22/f3/4c632eaacebfc62ab9414586137aecf6c0ea2a1e99708cf5a4c0dec13ae0/python_mpv-1.0.8-py3-none-any.whl", hash = "sha256:b5296403e990fb7348df4ca2211937a030f524bf638657bda7e45a00bc2df0cd", size = 46169, upload-time = "2025-04-25T09:51:37.775Z" },
-]
-
-[[package]]
 name = "pywin32"
 version = "311"
 source = { registry = "https://pypi.org/simple" }
@@ -378,7 +369,6 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "pillow" },
-    { name = "python-mpv" },
     { name = "pywin32" },
     { name = "schedule" },
     { name = "screeninfo" },
@@ -395,7 +385,6 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.7" },
     { name = "pillow", specifier = ">=10.0.0" },
-    { name = "python-mpv", specifier = ">=1.0.5" },
     { name = "pywin32", specifier = ">=306" },
     { name = "schedule", specifier = ">=1.2.1" },
     { name = "screeninfo", specifier = ">=0.8.1" },

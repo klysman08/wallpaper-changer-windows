@@ -23,12 +23,12 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-mod error;
 pub mod apply;
 pub mod collage;
 pub mod compose;
 pub mod config;
 pub mod effects;
+mod error;
 pub mod gallery;
 pub mod i18n;
 pub mod images;
@@ -38,6 +38,8 @@ pub mod selection;
 pub mod session;
 pub mod startup;
 pub mod transparency;
+pub mod video;
+pub mod workerw;
 
 pub use apply::{WallpaperSetter, WindowsSetter};
 pub use error::{CoreError, ErrorKind};
@@ -367,7 +369,9 @@ impl Core {
 
             "list_saved_collages" => handled(|| {
                 reject_unexpected(params, &["config"], "list_saved_collages")?;
-                Ok(gallery::list_saved_collages_result(&self.merged(params.get("config"))?))
+                Ok(gallery::list_saved_collages_result(
+                    &self.merged(params.get("config"))?,
+                ))
             }),
 
             "forget_saved_collage" => handled(|| {
@@ -564,6 +568,83 @@ impl Core {
                 self.session.scroll_transparency_status()
             }),
 
+            "get_capabilities" => handled(|| {
+                reject_unexpected(params, &[], "get_capabilities")?;
+                Ok(json!({
+                    "protocol": PROTOCOL_VERSION,
+                    "effects": effects::EFFECTS,
+                    "has_mpv": video::has_mpv(),
+                    "startup_enabled": startup::is_enabled(),
+                    // Python asked whether pynput could be imported. The hook is
+                    // native now, so on Windows there is nothing left to be missing.
+                    "has_scroll_transparency": scroll::is_available(),
+                }))
+            }),
+
+            "video_status" => handled(|| {
+                reject_unexpected(params, &[], "video_status")?;
+                Ok(self.session.video_status())
+            }),
+
+            "video_start" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config"], "video_start")?;
+                    self.session.video_start(params.get("config")).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "video_stop" => {
+                let outcome = async {
+                    reject_unexpected(params, &[], "video_stop")?;
+                    self.session.video_stop().await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "video_toggle" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config"], "video_toggle")?;
+                    self.session.video_toggle(params.get("config")).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "video_next" => handled(|| {
+                reject_unexpected(params, &[], "video_next")?;
+                self.session.video_step(1)
+            }),
+
+            "video_prev" => handled(|| {
+                reject_unexpected(params, &[], "video_prev")?;
+                self.session.video_step(-1)
+            }),
+
+            "video_set_sound" => handled(|| {
+                reject_unexpected(params, &["enabled"], "video_set_sound")?;
+                self.session
+                    .video_set_sound(required_bool(params, "enabled")?)
+            }),
+
+            "video_toggle_sound" => handled(|| {
+                reject_unexpected(params, &[], "video_toggle_sound")?;
+                self.session.video_toggle_sound()
+            }),
+
+            // `shutdown` is what the shell sends on the way out. The core tears the
+            // desktop layer down; the sidecar is stopped separately by `Engine`, which
+            // owns the pipe and does not route that through here.
+            "shutdown" => handled(|| {
+                reject_unexpected(params, &[], "shutdown")?;
+                self.session.stop_rotation_for_exit();
+                self.session.stop_scroll_for_exit();
+                self.session.stop_video_for_exit();
+                Ok(json!({ "bye": true }))
+            }),
+
             // Each phase moves names out of this catch-all and into arms above it.
             _ => Dispatch::NotPorted,
         }
@@ -715,9 +796,7 @@ fn optional_i64(params: &Value, key: &str, default: i64) -> Result<i64, CoreErro
 ///
 /// Sugar for the shape ported handlers take, keeping `AssertUnwindSafe` in one place
 /// rather than repeated at every call site.
-pub fn handled<T: Into<Value>>(
-    f: impl FnOnce() -> Result<T, CoreError>,
-) -> Dispatch {
+pub fn handled<T: Into<Value>>(f: impl FnOnce() -> Result<T, CoreError>) -> Dispatch {
     Dispatch::Handled(guard(AssertUnwindSafe(f)).map(Into::into))
 }
 
@@ -783,6 +862,16 @@ mod tests {
         "reapply_opacity_settings",
         "sync_scroll_transparency",
         "scroll_transparency_status",
+        "get_capabilities",
+        "video_status",
+        "video_start",
+        "video_stop",
+        "video_toggle",
+        "video_next",
+        "video_prev",
+        "video_set_sound",
+        "video_toggle_sound",
+        "shutdown",
     ];
 
     /// Which side answers each method, probed without letting any of them run.
@@ -831,7 +920,10 @@ mod tests {
     #[tokio::test]
     async fn unknown_methods_fall_through_to_the_sidecar() {
         let core = core();
-        assert!(core.dispatch("no_such_method", &Value::Null).await.is_not_ported());
+        assert!(core
+            .dispatch("no_such_method", &Value::Null)
+            .await
+            .is_not_ported());
     }
 
     #[test]
@@ -872,7 +964,10 @@ mod tests {
 
         let recorder = Arc::new(Recorder(Mutex::new(Vec::new())));
         let core = Core::new(recorder.clone());
-        core.emit("wallpaper_applied", serde_json::json!({ "output": "a.bmp" }));
+        core.emit(
+            "wallpaper_applied",
+            serde_json::json!({ "output": "a.bmp" }),
+        );
 
         let seen = recorder.0.lock().unwrap();
         assert_eq!(seen.len(), 1);

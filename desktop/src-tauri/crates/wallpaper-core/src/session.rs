@@ -40,6 +40,7 @@ use serde_json::{json, Map, Value};
 
 use crate::apply::{self, WallpaperSetter};
 use crate::scroll::{self, ScrollHook};
+use crate::video::{self, VideoPlayer};
 use crate::{config, effects, gallery, monitor, CoreError, EventSink};
 
 /// How many applied image sets the "previous wallpaper" hotkey can step back
@@ -48,12 +49,15 @@ const HISTORY_LIMIT: usize = 50;
 
 /// A call back into the half of the engine that is still Python.
 ///
-/// The port advances one state-ownership unit at a time, and a few of them straddle:
-/// `save_config` has to know whether the video player is running, and the video
-/// player is not ours yet. Rather than guess, the core asks — this is the return
-/// path the sidecar seam did not previously have.
+/// Built when the port advanced one unit at a time and a few of them straddled:
+/// `save_config` had to know whether the video player was running while the player was
+/// still Python's. Now that video has moved, **one caller is left** —
+/// [`Session::notify_sidecar_of_config_change`], keeping a cache fresh for a sidecar
+/// whose only remaining method is `notify`, which does not read the configuration.
 ///
-/// Goes away with the sidecar. Nothing that is fully ported should ever use it.
+/// So this is already dead weight in practice. It survives to phase 9 rather than
+/// being unpicked here because removing it means removing the sidecar plumbing it
+/// rides on, which is that phase's whole job.
 pub trait Bridge: Send + Sync {
     fn call(&self, method: &str, params: Value) -> BridgeFuture;
 }
@@ -70,7 +74,10 @@ struct History {
 
 impl History {
     fn new() -> Self {
-        Self { entries: Vec::new(), cursor: -1 }
+        Self {
+            entries: Vec::new(),
+            cursor: -1,
+        }
     }
 
     /// Record an applied selection, dropping anything ahead of the cursor.
@@ -126,6 +133,8 @@ pub struct Session {
     apply_lock: tokio::sync::Mutex<()>,
     history: Mutex<History>,
     watch: Mutex<Watch>,
+    /// The video wallpaper. Owns a thread that owns the desktop-layer windows.
+    video: VideoPlayer,
     /// The modifier+wheel hook. Owns two threads of its own while it is running.
     scroll: ScrollHook,
 }
@@ -141,6 +150,7 @@ impl Session {
             apply_lock: tokio::sync::Mutex::new(()),
             history: Mutex::new(History::new()),
             watch: Mutex::new(Watch::default()),
+            video: VideoPlayer::new(Arc::clone(&events_for_scroll)),
             scroll: ScrollHook::new(events_for_scroll),
         }
     }
@@ -238,15 +248,14 @@ impl Session {
     /// `_remember` over there would write a stale copy back over what we just saved,
     /// silently undoing a rotation toggle.
     async fn notify_sidecar_of_config_change(&self) {
-        let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let bridge = self
+            .bridge
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(bridge) = bridge {
             let _ = bridge.call("_reload_config", json!({})).await;
         }
-    }
-
-    async fn ask_sidecar(&self, method: &str, params: Value) -> Option<Value> {
-        let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        bridge?.call(method, params).await.ok()
     }
 
     // ── applying ─────────────────────────────────────────────────────────────
@@ -547,7 +556,8 @@ impl Session {
     pub fn sync_scroll_transparency(&self) -> Result<Value, CoreError> {
         let cfg = self.config()?;
         let modifier = scroll::normalize_modifier(
-            cfg.pointer("/hotkeys/scroll_modifier").and_then(Value::as_str),
+            cfg.pointer("/hotkeys/scroll_modifier")
+                .and_then(Value::as_str),
         );
         if cfg
             .pointer("/hotkeys/scroll_enabled")
@@ -590,6 +600,109 @@ impl Session {
         self.scroll.stop();
     }
 
+    // ── video wallpaper ──────────────────────────────────────────────────────
+
+    /// `video_status` — what the player is doing, and whether it could play at all.
+    pub fn video_status(&self) -> Value {
+        video::status_result(&self.video)
+    }
+
+    /// `video_start` — play the configured folder on every screen.
+    pub async fn video_start(&self, draft: Option<&Value>) -> Result<Value, CoreError> {
+        let cfg = self.merged(draft)?;
+        let (videos, loop_playlist, sound, monitors) = video::start_inputs(&cfg)?;
+        self.video.start(videos, loop_playlist, sound, monitors)?;
+        // Session state, not a preference: the next launch comes back the way the user
+        // left it. Written the moment it changes, from wherever it changed.
+        self.remember("video", "enabled", Value::Bool(true)).await;
+        Ok(self.video_status())
+    }
+
+    /// `video_stop` — tear the player and its host windows down.
+    pub async fn video_stop(&self) -> Result<Value, CoreError> {
+        self.video.stop();
+        self.remember("video", "enabled", Value::Bool(false)).await;
+        Ok(self.video_status())
+    }
+
+    /// `video_next` / `video_prev` — move every screen to the same playlist entry.
+    pub fn video_step(&self, direction: i64) -> Result<Value, CoreError> {
+        self.video.step(direction);
+        Ok(self.video_status())
+    }
+
+    /// `video_set_sound` — turn audio on or off while it plays.
+    pub fn video_set_sound(&self, enabled: bool) -> Result<Value, CoreError> {
+        self.video.set_sound(enabled);
+        Ok(self.video_status())
+    }
+
+    /// `video_toggle` — start if stopped, stop if playing.
+    pub async fn video_toggle(&self, draft: Option<&Value>) -> Result<Value, CoreError> {
+        if self.video.is_running() {
+            self.video_stop().await
+        } else {
+            self.video_start(draft).await
+        }
+    }
+
+    /// `video_toggle_sound` — flip audio, live if something is playing.
+    ///
+    /// Like `set_effect`, the new value is a session override rather than a write: the
+    /// hotkey should not rewrite `settings.toml` on every press, and `save_config` will
+    /// adopt it if the user saves.
+    pub fn video_toggle_sound(&self) -> Result<Value, CoreError> {
+        let enabled = !self
+            .config()?
+            .pointer("/video/sound")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        self.set_override("video", "sound", Value::Bool(enabled));
+        if self.video.is_running() {
+            self.video.set_sound(enabled);
+        }
+        let mut status = self.video_status();
+        if let Some(status) = status.as_object_mut() {
+            status.insert("sound".to_string(), Value::Bool(enabled));
+        }
+        Ok(status)
+    }
+
+    /// Bring back what was running when the app was last closed.
+    ///
+    /// Both halves, and one event. `restore_session` in `rpc.py` did this on a daemon
+    /// thread at start-up — never through `dispatch`, so the strangler seam could not
+    /// see it — which is why each half had to move the moment its unit was ported.
+    pub async fn restore_session(self: &Arc<Self>) -> Value {
+        let rotation = self.restore_rotation().await;
+
+        let wanted = self
+            .config()
+            .ok()
+            .and_then(|cfg| cfg.pointer("/video/enabled").and_then(Value::as_bool))
+            .unwrap_or(false);
+        let mut video = false;
+        if wanted && video::has_mpv() {
+            match self.video_start(None).await {
+                Ok(_) => video = true,
+                // A video that will not come back must not stop the app from starting.
+                Err(e) => log::warn!("could not restore the video wallpaper: {}", e.message()),
+            }
+        }
+
+        let restored = json!({ "rotation": rotation, "video": video });
+        self.emit("session_restored", restored.clone());
+        restored
+    }
+
+    /// Tear the desktop layer down on the way out of the process.
+    ///
+    /// The host windows are children of WORKERW. Leaving them behind strands them on
+    /// the desktop until Explorer restarts, so this has to run on every exit path.
+    pub fn stop_video_for_exit(&self) {
+        self.video.stop();
+    }
+
     // ── saving the configuration ─────────────────────────────────────────────
 
     /// `save_config` — persist the client's settings and adopt them.
@@ -620,20 +733,18 @@ impl Session {
         }
         merged.insert("_config_path".into(), Value::String(config_path.clone()));
 
-        set_in(&mut merged, "general", "rotation_active", json!(self.is_watching()));
-        let video_enabled = self
-            .ask_sidecar("video_status", json!({}))
-            .await
-            .and_then(|status| status.get("running").and_then(Value::as_bool))
-            // The player is unreachable, so keep whatever the file already says
-            // rather than asserting it is off and losing the restore.
-            .unwrap_or_else(|| {
-                current
-                    .pointer("/video/enabled")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-            });
-        set_in(&mut merged, "video", "enabled", json!(video_enabled));
+        set_in(
+            &mut merged,
+            "general",
+            "rotation_active",
+            json!(self.is_watching()),
+        );
+        set_in(
+            &mut merged,
+            "video",
+            "enabled",
+            json!(self.video.is_running()),
+        );
 
         let merged = Value::Object(merged);
         config::save_config(&merged, None)?;
@@ -774,7 +885,9 @@ mod tests {
     async fn a_second_apply_is_refused_while_the_first_holds_the_lock() {
         let session = headless(Arc::new(Recorder::default()));
 
-        let held = session.begin_apply().expect("the first apply takes the lock");
+        let held = session
+            .begin_apply()
+            .expect("the first apply takes the lock");
         let err = session.begin_apply().unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Busy);
         assert_eq!(err.message(), "An apply is already running.");
@@ -823,7 +936,10 @@ mod tests {
         );
 
         assert_eq!(session.watch_stop().await.unwrap()["watching"], false);
-        assert_eq!(session.config().unwrap()["general"]["rotation_active"], false);
+        assert_eq!(
+            session.config().unwrap()["general"]["rotation_active"],
+            false
+        );
 
         // Toggling is start/stop, driven by the live state rather than the file.
         assert_eq!(session.watch_toggle().await.unwrap()["watching"], true);
@@ -973,7 +1089,8 @@ mod tests {
         let _ = session.set_effect("hdr").await;
         assert_eq!(session.config().unwrap()["display"]["effect"], "hdr");
 
-        let on_disk = std::fs::read_to_string(sandbox.dir.join("cfg").join("settings.toml")).unwrap();
+        let on_disk =
+            std::fs::read_to_string(sandbox.dir.join("cfg").join("settings.toml")).unwrap();
         assert!(
             on_disk.contains("effect = \"normal\""),
             "set_effect must not persist; saving stays an explicit action"
@@ -1008,17 +1125,25 @@ mod tests {
         assert_eq!(saved["saved"], true);
 
         let written = session.config().unwrap();
-        assert_eq!(written["general"]["interval"], 120, "the client's edit lands");
+        assert_eq!(
+            written["general"]["interval"], 120,
+            "the client's edit lands"
+        );
         assert_eq!(
             written["general"]["rotation_active"], true,
             "the live timer wins over the client's stale copy"
         );
         assert_eq!(
-            written["video"]["enabled"], true,
-            "with no sidecar to ask, the file's own value is kept rather than guessed off"
+            written["video"]["enabled"], false,
+            "the player is ours now, so a stale `enabled = true` is corrected rather \
+             than preserved — the guess it used to be kept from making is gone"
         );
-        let on_disk = std::fs::read_to_string(sandbox.dir.join("cfg").join("settings.toml")).unwrap();
-        assert!(!on_disk.contains("_config_path"), "internal keys are never written");
+        let on_disk =
+            std::fs::read_to_string(sandbox.dir.join("cfg").join("settings.toml")).unwrap();
+        assert!(
+            !on_disk.contains("_config_path"),
+            "internal keys are never written"
+        );
 
         let _ = session.watch_stop().await;
     }
@@ -1031,7 +1156,9 @@ mod tests {
         let pictures = empty_folder(&sandbox);
         write_settings(
             &sandbox,
-            &format!("[display]\neffect = \"normal\"\n\n[paths]\nwallpapers_folder = {pictures:?}\n"),
+            &format!(
+                "[display]\neffect = \"normal\"\n\n[paths]\nwallpapers_folder = {pictures:?}\n"
+            ),
         );
         let session = headless(Arc::new(Recorder::default()));
 
@@ -1054,9 +1181,15 @@ mod tests {
     #[test]
     fn the_cursor_follows_the_newest_entry() {
         let mut history = History::new();
-        assert!(history.peek_previous().is_none(), "nothing to step back to yet");
+        assert!(
+            history.peek_previous().is_none(),
+            "nothing to step back to yet"
+        );
         history.push(&set("a"));
-        assert!(history.peek_previous().is_none(), "one entry is not a history");
+        assert!(
+            history.peek_previous().is_none(),
+            "one entry is not a history"
+        );
         history.push(&set("b"));
         assert_eq!(history.peek_previous(), Some(set("a")));
     }
@@ -1082,7 +1215,11 @@ mod tests {
             history.push(&set(&i.to_string()));
         }
         assert_eq!(history.entries.len(), HISTORY_LIMIT);
-        assert_eq!(history.entries[0], set("10"), "the oldest entries went first");
+        assert_eq!(
+            history.entries[0],
+            set("10"),
+            "the oldest entries went first"
+        );
         assert_eq!(history.cursor, HISTORY_LIMIT as i64 - 1);
     }
 
@@ -1121,8 +1258,14 @@ mod tests {
         overlay(&mut base, &draft);
 
         assert_eq!(base["display"]["effect"], "hdr");
-        assert_eq!(base["display"]["fit_mode"], "fill", "untouched keys survive");
-        assert_eq!(base["general"]["interval"], 300, "untouched sections survive");
+        assert_eq!(
+            base["display"]["fit_mode"], "fill",
+            "untouched keys survive"
+        );
+        assert_eq!(
+            base["general"]["interval"], 300,
+            "untouched sections survive"
+        );
         assert_eq!(base["paths"]["wallpapers_folder"], "C:/pics");
         assert!(!base.contains_key("_config_path"));
     }

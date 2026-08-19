@@ -9,7 +9,6 @@ dependencies = [
     "schedule>=1.2.1",
     "click>=8.1.7",
     "screeninfo>=0.8.1",
-    "python-mpv>=1.0.5",
 ]
 
 [dependency-groups]

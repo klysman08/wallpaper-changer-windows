@@ -9,7 +9,6 @@ import schedule
 
 from .config import load_config, resolve_output_dir
 from .monitor import get_monitors
-from .video_wallpaper import VideoWallpaperPlayer, has_mpv, scan_video_folder
 from .wallpaper import EFFECTS, apply_wallpaper
 
 
@@ -92,56 +91,6 @@ def watch_cmd(config: str | None) -> None:
         click.echo("\n[INFO] Encerrado.")
 
 
-@main.command("video")
-@click.option("--folder", default=None, help="Pasta com os videos")
-@click.option("--loop/--no-loop", default=None, help="Repetir a playlist (padrao: config)")
-@click.option("--sound/--no-sound", default=None, help="Reproduzir o audio do video")
-@click.option("--config", default=None, help="Caminho para settings.toml")
-def video_cmd(
-    folder: str | None,
-    loop: bool | None,
-    sound: bool | None,
-    config: str | None,
-) -> None:
-    """Define um video como wallpaper (renderizado na camada WORKERW)."""
-    cfg = load_config(Path(config) if config else None)
-    vcfg = cfg.get("video", {})
-    folder = folder or vcfg.get("folder", "")
-    loop = vcfg.get("loop", True) if loop is None else loop
-    sound = vcfg.get("sound", False) if sound is None else sound
-
-    if not has_mpv():
-        click.echo("[ERRO] python-mpv/libmpv-2.dll nao disponivel. Instale python-mpv "
-                   "e coloque libmpv-2.dll no PATH (ou em MPV_DLL_DIR).")
-        return
-    if not folder:
-        click.echo("[ERRO] Informe --folder ou defina [video].folder em settings.toml.")
-        return
-
-    videos = scan_video_folder(folder)
-    if not videos:
-        click.echo(f"[ERRO] Nenhum video encontrado em: {folder}")
-        return
-
-    monitors = get_monitors()
-    if not monitors:
-        click.echo("[ERRO] Nenhum monitor detectado.")
-        return
-
-    player = VideoWallpaperPlayer()
-    player.configure(videos=videos, loop=loop, sound=sound, monitors=monitors)
-    try:
-        player.start()
-    except Exception as exc:
-        click.echo(f"[ERRO] {exc}")
-        return
-
-    click.echo(f"[OK] Reproduzindo {len(videos)} video(s) | Loop: {loop} | "
-               f"Som: {sound} | Monitores: {len(monitors)}. Ctrl+C para parar.")
-    try:
-        while player.is_running():
-            time.sleep(1)
-    except KeyboardInterrupt:
-        click.echo("\n[INFO] Parando video...")
-    finally:
-        player.stop()
+# The `video` subcommand lived here. The player is native now, and this module is
+# itself on its way out — phase 9 of the Rust port replaces this whole CLI with a
+# clap-based mode of the app binary, where `video` comes back driven by the core.

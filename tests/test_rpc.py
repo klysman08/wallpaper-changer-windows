@@ -95,13 +95,6 @@ def test_serve_rejects_non_object_params():
     assert response["error"]["type"] == "bad_params"
 
 
-def test_serve_stops_after_shutdown_and_ignores_later_requests():
-    out = _run([{"id": 1, "method": "shutdown"}, {"id": 2, "method": "ping"}])
-
-    assert any(o.get("id") == 1 and o.get("ok") for o in out)
-    assert not any(o.get("id") == 2 for o in out)
-
-
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 def test_dispatch_rejects_unknown_method(engine):
@@ -785,29 +778,6 @@ def test_watch_toggle_starts_then_stops(engine, cfg, monkeypatch):
     assert engine.watch_toggle()["watching"] is False
 
 
-def test_video_toggle_sound_flips_the_saved_flag(engine, cfg, monkeypatch):
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
-
-    first = engine.video_toggle_sound()
-    second = engine.video_toggle_sound()
-
-    assert first["sound"] is True     # cfg fixture starts with sound off
-    assert second["sound"] is False
-
-
-def test_video_toggle_starts_when_stopped(engine, cfg, monkeypatch):
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
-    monkeypatch.setattr(rpc, "scan_video_folder", lambda folder: [])
-
-    # Reaches video_start (which then fails on an empty folder) rather than stopping.
-    with pytest.raises(rpc.RpcError) as exc:
-        engine.video_toggle()
-
-    assert exc.value.kind == "not_found"
-
-
 # ── Rotation timer ────────────────────────────────────────────────────────────
 
 def test_watch_start_and_stop_toggle_status(engine, cfg, monkeypatch):
@@ -857,47 +827,6 @@ def test_save_config_ignores_a_stale_rotation_flag_from_the_client(engine, cfg, 
     assert persisted is True
 
 
-def test_restore_session_no_longer_touches_rotation(engine, cfg, monkeypatch):
-    """Rotation is the native core's now, and starting one here would be invisible.
-
-    The timer moved to `wallpaper-core` with the rest of the apply unit. If this
-    process still started one on restore there would be two timers running — the
-    core's, which the UI can see and stop, and this one, which nothing can reach.
-    """
-    cfg["general"]["rotation_active"] = True
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: False)
-
-    restored = engine.restore_session()
-
-    assert restored == {"rotation": False, "video": False}
-    assert engine.watch_status()["watching"] is False
-
-
-def test_restore_session_leaves_everything_idle_when_nothing_was_running(
-    engine, cfg, monkeypatch
-):
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
-
-    restored = engine.restore_session()
-
-    assert restored == {"rotation": False, "video": False}
-    assert engine.watch_status()["watching"] is False
-
-
-def test_restore_session_survives_a_video_that_cannot_start(engine, cfg, monkeypatch):
-    """No videos on disk must not turn the restore into a failed call."""
-    cfg["video"]["enabled"] = True
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
-    monkeypatch.setattr(rpc, "scan_video_folder", lambda folder: [])
-
-    restored = engine.restore_session()
-
-    assert restored == {"rotation": False, "video": False}
-
-
 def test_watch_tick_emits_error_event_when_apply_fails(engine, cfg, monkeypatch):
     monkeypatch.setattr(rpc, "load_config", lambda: cfg)
 
@@ -912,47 +841,6 @@ def test_watch_tick_emits_error_event_when_apply_fails(engine, cfg, monkeypatch)
 
 
 # ── Video ─────────────────────────────────────────────────────────────────────
-
-def test_video_start_without_mpv_raises_clean_error(engine, monkeypatch):
-    monkeypatch.setattr(rpc, "has_mpv", lambda: False)
-
-    with pytest.raises(rpc.RpcError) as exc:
-        engine.video_start()
-
-    assert exc.value.kind == "no_mpv"
-
-
-def test_video_start_without_videos_raises_not_found(engine, cfg, monkeypatch):
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    monkeypatch.setattr(rpc, "has_mpv", lambda: True)
-    monkeypatch.setattr(rpc, "scan_video_folder", lambda folder: [])
-
-    with pytest.raises(rpc.RpcError) as exc:
-        engine.video_start()
-
-    assert exc.value.kind == "not_found"
-
-
-def test_shutdown_stops_video_and_cancels_watch(engine, cfg, monkeypatch):
-    monkeypatch.setattr(rpc, "load_config", lambda: cfg)
-    stopped: list[bool] = []
-    monkeypatch.setattr(engine._video, "stop", lambda: stopped.append(True))
-    engine.watch_start(interval=999)
-
-    engine.shutdown()
-
-    assert stopped == [True]
-    assert engine.watch_status()["watching"] is False
-
-
-def test_shutdown_survives_video_teardown_failure(engine, monkeypatch):
-    """Shutdown is the last chance to clean up; one failing step must not abort it."""
-    def boom():
-        raise RuntimeError("mpv already gone")
-
-    monkeypatch.setattr(engine._video, "stop", boom)
-
-    assert engine.shutdown()["bye"] is True
 
 
 # ── i18n ──────────────────────────────────────────────────────────────────────

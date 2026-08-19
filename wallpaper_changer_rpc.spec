@@ -19,12 +19,10 @@ datas = [
     (str(HERE / "config" / "settings.toml"), "config"),
 ]
 
-# libmpv (video wallpaper) e opcional: so entra se o DLL estiver presente.
+# libmpv used to be bundled here, and at 112 MB it was most of this sidecar. The
+# video wallpaper is native now and the Rust side loads the DLL itself, so it ships
+# as a Tauri resource instead - see "libmpv" in tauri.conf.json.
 binaries = []
-for _dll in ("libmpv-2.dll", "mpv-2.dll", "mpv-1.dll"):
-    _candidate = HERE / "libmpv" / _dll
-    if _candidate.exists():
-        binaries.append((str(_candidate), "."))
 
 hidden = [
     "logging.handlers",
@@ -37,7 +35,6 @@ hidden = [
     "pywintypes",
     "tomllib",
     "ctypes.wintypes",
-    "mpv",
 ]
 
 a = Analysis(
@@ -84,6 +81,6 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=["libmpv-2.dll"],
+    upx_exclude=[],
     name=DIST_NAME,
 )
