@@ -21,3 +21,5 @@ desktop/app-icon-preview.png
 *.key
 .tauri/
 $USERPROFILE/
+# Differential harness scratch: regenerated on every run; only golden/ is committed.
+tests/differential/work/

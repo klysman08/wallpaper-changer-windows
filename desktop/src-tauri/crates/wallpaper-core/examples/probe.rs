@@ -1,0 +1,64 @@
+//! Exposes the composition stages individually, so they can be diffed against
+//! Pillow one at a time.
+//!
+//! The whole point is to *not* compare the finished collage: a single number mixing
+//! resampler noise with effect maths tells you nothing about which is wrong. Each
+//! subcommand isolates one stage.
+//!
+//! ```text
+//! cargo run -p wallpaper-core --example probe -- plan '<monitors json>' <count> <same>
+//! cargo run -p wallpaper-core --example probe -- effect <in.png> <effect> <out.png>
+//! cargo run -p wallpaper-core --example probe -- fit <in.png> <w> <h> <mode> <out.png>
+//! ```
+//!
+//! Disposable: it exists to produce the golden images, and the goldens outlive it.
+
+use wallpaper_core::{collage, effects, Monitor};
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("usage: probe <plan|effect|fit> ...");
+        std::process::exit(2);
+    }
+
+    match args[1].as_str() {
+        "plan" => {
+            let monitors: Vec<Monitor> = serde_json::from_str::<serde_json::Value>(&args[2])
+                .expect("monitors json")
+                .as_array()
+                .expect("an array")
+                .iter()
+                .enumerate()
+                .map(|(i, m)| Monitor {
+                    index: i,
+                    x: m["x"].as_i64().unwrap() as i32,
+                    y: m["y"].as_i64().unwrap() as i32,
+                    width: m["width"].as_i64().unwrap() as i32,
+                    height: m["height"].as_i64().unwrap() as i32,
+                    name: format!("D{i}"),
+                })
+                .collect();
+            let count: usize = args[3].parse().expect("count");
+            let same: bool = args[4] == "true";
+            let cells = collage::plan_collage(&monitors, count, same);
+            println!("{}", serde_json::to_string(&cells).unwrap());
+        }
+        "effect" => {
+            let source = image::open(&args[2]).expect("open source").to_rgb8();
+            let out = effects::apply_effect(&source, &args[3]).expect("apply effect");
+            out.save(&args[4]).expect("write output");
+        }
+        "fit" => {
+            let source = image::open(&args[2]).expect("open source").to_rgb8();
+            let w: i32 = args[3].parse().expect("width");
+            let h: i32 = args[4].parse().expect("height");
+            let out = collage::fit_image(&source, w, h, &args[5]);
+            out.save(&args[6]).expect("write output");
+        }
+        other => {
+            eprintln!("unknown subcommand: {other}");
+            std::process::exit(2);
+        }
+    }
+}

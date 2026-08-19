@@ -14,6 +14,8 @@ base64 = "0.22"
 # Not the `toml` crate: settings.toml ships with explanatory comments that the
 # hand-rolled Python writer destroys on every save. toml_edit keeps them.
 toml_edit = "0.22"
+dunce = "1"
+rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 # `SUPPORTED` in image_utils.py is jpg/jpeg/png/bmp/webp, so those are the decoders

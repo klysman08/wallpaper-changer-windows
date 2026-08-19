@@ -24,11 +24,15 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 mod error;
+pub mod collage;
+pub mod compose;
 pub mod config;
+pub mod effects;
 pub mod gallery;
 pub mod i18n;
 pub mod images;
 pub mod monitor;
+pub mod selection;
 pub mod startup;
 
 pub use error::{CoreError, ErrorKind};
@@ -342,6 +346,31 @@ impl Core {
                 gallery::forget_saved_collage_result(required_str(params, "path")?)
             }),
 
+            "preview" => handled(|| {
+                reject_unexpected(params, &["config", "max_width", "images"], "preview")?;
+                let cfg = self.merged(params.get("config"))?;
+                compose::preview(
+                    &cfg,
+                    optional_i64(params, "max_width", 960)?,
+                    optional_str_list(params, "images")?.as_deref(),
+                )
+            }),
+
+            "save_collage" => handled(|| {
+                reject_unexpected(
+                    params,
+                    &["config", "images", "monitor", "path"],
+                    "save_collage",
+                )?;
+                let cfg = self.merged(params.get("config"))?;
+                compose::save_collage(
+                    &cfg,
+                    optional_str_list(params, "images")?.as_deref(),
+                    optional_i64_opt(params, "monitor")?,
+                    params.get("path").and_then(Value::as_str),
+                )
+            }),
+
             // Each phase moves names out of this catch-all and into arms above it.
             _ => Dispatch::NotPorted,
         }
@@ -407,6 +436,29 @@ fn required_str_list(params: &Value, key: &str) -> Result<Vec<String>, CoreError
         ))),
         None => Err(CoreError::bad_params(format!(
             "missing a required argument: '{key}'"
+        ))),
+    }
+}
+
+/// An optional list of strings. Absent and empty are different: `images: []` means
+/// "no preset", the same as omitting it.
+fn optional_str_list(params: &Value, key: &str) -> Result<Option<Vec<String>>, CoreError> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(items)) => {
+            let list: Result<Vec<String>, CoreError> = items
+                .iter()
+                .map(|item| {
+                    item.as_str().map(str::to_string).ok_or_else(|| {
+                        CoreError::bad_params(format!("'{key}' must contain only strings"))
+                    })
+                })
+                .collect();
+            let list = list?;
+            Ok(if list.is_empty() { None } else { Some(list) })
+        }
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a list, got {other}"
         ))),
     }
 }
@@ -497,6 +549,8 @@ mod tests {
         "suggest_collage_path",
         "list_saved_collages",
         "forget_saved_collage",
+        "preview",
+        "save_collage",
     ];
 
     #[tokio::test]

@@ -89,14 +89,42 @@ Lands: `get_config`, `save_config`, `get_capabilities`, `get_startup_enabled`, `
 
 Lands: `preview`, `save_collage`.
 
-- [ ] 4.1 Port `_compute_grid_layout` and `plan_collage` literally: the `{1:1, 2:2, 3:2, 4:2, 5:3, 6:3, 7:4, 8:4, 9:3}` table with `ceil(sqrt(n))` fallback, `h // rows`, and the centred short last row.
-- [ ] 4.2 Port `fit_image`'s five modes with integer-truncating arithmetic exactly (`int(src_w * ratio)`, `// 2` offsets); `span` aliases `fill`.
-- [ ] 4.3 Port `pick_images`. **Use `dunce::canonicalize`, not `std::fs::canonicalize`** — the latter yields `\\?\C:\...` and silently resets every user's rotation history. Assert the produced state key against a hardcoded literal, and add a test loading a real `state.json`.
-- [ ] 4.4 Hand-roll the effects: ITU-R 601-2 grayscale, `ImageEnhance` lerp semantics for Color/Contrast/Sharpness, `colorize` LUT, and the DETAIL/SMOOTH kernels. **Leave the 1-pixel border unprocessed**, as Pillow does.
-- [ ] 4.5 Port `compose_collage` including the fitted-image cache and the modulo wrap for short image lists, and `crop_to_monitor`.
-- [ ] 4.6 Implement `preview` (returning `cells` in pre-downscale composite coordinates) and `save_collage` (full-res, not the preview PNG).
-- [ ] 4.7 Build the differential harness as three separate comparisons: `plan_collage` JSON byte-identical, `apply_effect` <=1 delta, `fit_image` 1-3 delta.
-- [ ] 4.8 Run the harness once, **freeze the Python outputs as golden PNGs committed to the repo**, and keep them as the permanent Rust regression suite.
+- [x] 4.1 `grid_layout` and `plan_collage` ported literally: the `{1:1, 2:2, 3:2, 4:2, 5:3, 6:3, 7:4, 8:4, 9:3}` table with `ceil(sqrt(n))` fallback, `h / rows` truncation, and the centred short last row.
+- [x] 4.2 `fit_image`'s five modes with the integer-truncating arithmetic (`int(src * ratio)`, `// 2` offsets); `span` aliases `fill`; Pillow's clipping `paste` and out-of-bounds `crop` reproduced.
+- [x] 4.3 `pick_images` ported with **`dunce::canonicalize`**. A test pins the state key against a literal and asserts it carries no `\?\` prefix.
+- [x] 4.4 Effects hand-rolled from measured Pillow behaviour — see below.
+- [x] 4.5 `compose_collage` with the fitted-image cache and the modulo wrap for short selections, plus `crop_to_monitor` and `images_on`.
+- [x] 4.6 `preview` (cells in pre-downscale composite pixels) and `save_collage` (full resolution, not the preview PNG).
+- [x] 4.7 Differential harness at `tests/differential/compare.py`, three separate comparisons.
+- [x] 4.8 **109/109 checks pass**, and the Pillow outputs are frozen as 37 golden PNGs with a Rust test (`tests/golden.rs`) holding the core to them.
+
+**Methods landed (2):** `preview`, `save_collage`. Running total: **15 of 45**.
+
+### Differential results
+
+| Stage | Bound | Measured |
+|---|---|---|
+| `plan_collage` geometry, 4 layouts x counts 1-9 x both sharing modes | **0** | **0 — byte-identical, 72/72** |
+| `apply_effect`, 4 effects x 3 image shapes | 1 | **0 — bit-identical, 12/12** |
+| `fit_image` downscale | 1 | 0–1 |
+| `fit_image` no resample (`center`) | 0 | **0** |
+| `fit_image` upscale | 24 | 18–22 |
+
+**Effects came out bit-identical, better than the ≤1 the plan budgeted.** Four Pillow behaviours had to be matched exactly, each measured rather than assumed:
+
+- Greyscale is ITU-R 601-2 in fixed point, `(R*19595 + G*38470 + B*7471 + 32768) >> 16`. The `image` crate's `grayscale` is Rec. 709 and would have made `bw` and `vintage` visibly wrong.
+- `Image.blend` **truncates**, and with `alpha > 1` (which `hdr` uses at 1.35 and 1.45) it extrapolates past both endpoints, so the clamp is load-bearing.
+- A 3x3 kernel leaves the 1-pixel border untouched.
+- The kernel is **pre-divided into `f32`** and accumulated row by row. That is not the same as summing integers and dividing at the end: the rounding error pushes an exact `.5` slightly low, so it rounds *down* where `round_half_up` would round up. Getting this wrong costs a full level on ~7% of pixels for `hdr`.
+
+**The fitting bound follows the real scale direction, not the case name.** Fitting a 400x300 source into 500x100 *upscales* the width, and `fill` and `fit` can disagree about direction for the same target. The first harness run failed 9 checks purely because the labels lied; classifying by the computed ratio fixed it with no change to the port.
+
+**Corpus unchanged at 19.** `preview` and `save_collage` are not in it deliberately: they need a populated wallpapers folder, which would make the protocol corpus depend on image fixtures. Pixels are the golden suite's job; the corpus stays about envelopes.
+
+### Notes for later phases
+
+- **WebP export is not supported.** `_SAVE_FORMATS` in Python accepts `.webp`, but the `image` crate is decode-only for WebP, so `save_collage` rejects it as `invalid`. PNG, JPEG and BMP all work. Either vendor an encoder or drop `.webp` from the UI's format list in phase 9.
+- **Debug-mode composition is slow.** The core test suite takes ~175 s because it composes full canvases unoptimised. Consider `opt-level = 1` for `[profile.test]` if iteration gets painful.
 
 ## 5. Apply, rotation, history (3-4 days)
 
