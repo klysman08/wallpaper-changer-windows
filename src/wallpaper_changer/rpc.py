@@ -194,6 +194,17 @@ class Engine:
             i18n.set_language(lang)
         return {"reloaded": True}
 
+    def _reload_opacity_settings(self) -> dict:
+        """Re-read `transparency.json`, which the native core now owns.
+
+        Transitional, for the Rust port, and the same hazard as `_reload_config`: the
+        scroll hook holds the opacities in memory from the moment it started, so a
+        setting saved through the core would be overwritten by the hook's next
+        debounced flush. Goes away when the hook itself moves across.
+        """
+        self._scroll.reload_settings()
+        return {"reloaded": True}
+
     def restore_session(self) -> dict:
         """Bring back what was running when the app was last closed.
 
@@ -888,6 +899,7 @@ class Engine:
         # write so this process re-reads the settings file instead of trusting a
         # cache it can no longer keep current. Removed with the sidecar.
         "_reload_config",
+        "_reload_opacity_settings",
     )
 
     def dispatch(self, method: str, params: dict[str, Any]) -> Any:

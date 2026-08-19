@@ -174,6 +174,19 @@ class ScrollTransparency:
             "available": is_available(),
         }
 
+    def reload_settings(self) -> None:
+        """Re-read the opacities from disk.
+
+        Transitional, for the Rust port. ``self._settings`` is loaded once at
+        ``start()``, and the native core now owns every other write to that file — so
+        without this the next debounced ``_flush`` would put a stale snapshot back
+        over a setting the user had just saved from the window.
+
+        Goes away with the sidecar, when the hook itself moves across.
+        """
+        with self._lock:
+            self._settings = transparency.load_opacity_settings()
+
     # ── Hook ──────────────────────────────────────────────────────────────────
 
     def _on_scroll(self, _x: int, _y: int, _dx: int, dy: int) -> None:

@@ -185,12 +185,51 @@ Worth watching for in that pass:
 
 Lands: `list_windows`, `set_window_opacity`, `get_foreground_window`, `toggle_foreground_opacity`, `get_opacity_settings`, `save_opacity_settings`, `reapply_opacity_settings`.
 
-- [ ] 6.1 Port `list_visible_windows` with the cloaked filter (`DwmGetWindowAttribute` / `DWMWA_CLOAKED`), the title blocklist, and the lowercased-title sort.
-- [ ] 6.2 Resolve process names via `GetWindowThreadProcessId` + `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `QueryFullProcessImageNameW` — better than pywin32's `GetModuleFileNameEx`, and no `VM_READ` needed.
-- [ ] 6.3 Port `set_window_opacity` using **`SetWindowLongPtrW`** (the Python binds `SetWindowLongW` as `c_long`, wrong on 64-bit). Preserve that alpha 255 **strips** `WS_EX_LAYERED` rather than setting 255.
-- [ ] 6.4 Port the process-keyed `transparency.json` persistence and `reapply_saved_settings`.
-- [ ] 6.5 Drop the `pywin32` dependency.
-- [ ] 6.6 Verify: manual fade/restore across several apps; unit tests for the alpha clamp and the 128/255 toggle.
+- [x] 6.1 `list_visible_windows` ported with the cloaked filter (`DwmGetWindowAttribute` / `DWMWA_CLOAKED`), the four-title blocklist, and the lowercased-title sort.
+- [x] 6.2 Process names via `GetWindowThreadProcessId` + `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `QueryFullProcessImageNameW`.
+- [x] 6.3 `set_window_opacity` ported using **`SetWindowLongPtrW`** (the Python binds `SetWindowLongW` as `c_long`, wrong on 64-bit). Alpha 255 **strips** `WS_EX_LAYERED` rather than setting 255.
+- [x] 6.4 Process-keyed `transparency.json` persistence and `reapply_saved_settings` ported.
+- [ ] 6.5 ~~Drop `pywin32`~~ — **moved to phase 7.** `scroll_transparency.py` calls `transparency._get_process_name_for_hwnd`, so the dependency belongs to the *scroll* unit, not this one. It drops when the hook moves.
+- [x] 6.6 Unit tests for the blocklist, the alpha clamp, the 128/255 toggle and the settings file, plus two differential checks against Python. Manual fade/restore is still open — see below.
+
+**Methods landed (7):** `list_windows`, `set_window_opacity`, `get_foreground_window`, `toggle_foreground_opacity`, `get_opacity_settings`, `save_opacity_settings`, `reapply_opacity_settings`. Running total: **32 of 45**.
+
+**Verification:** 153 core unit tests, 3 golden, 9 shell, 176 pytest — all green. Corpus against the Rust core 25 → **29**; Python still **35/35 strict**. The 6 remaining skips are `get_capabilities`, the two scroll-hook cases (phase 7) and the three video cases (phase 8).
+
+### Differential results
+
+**Window enumeration agreed exactly** — same handles, titles, process names and sort order, with no field differing. **Small sample: 3 windows on the machine that ran it**, so this confirms the shape and the ordering rule rather than the breadth of the filter.
+
+**`transparency.json` round-trips both ways**, which matters because the file outlives the port and a user upgrading mid-migration keeps what they saved:
+
+| Check | Result |
+|---|---|
+| Rust reads a file Python wrote | values identical |
+| Python reads a file Rust wrote | values identical |
+| Non-ASCII process names | written literally in UTF-8, matching `ensure_ascii=False` |
+
+One cosmetic difference: `serde_json`'s `Map` is a `BTreeMap`, so Rust writes the keys **sorted** where Python preserved insertion order. Both sides read either file identically; nothing keys off the order.
+
+### The scroll hook caches this file, and would have clobbered it
+
+`ScrollTransparency._settings` is loaded once at `start()` and never reread, and its debounced `_flush` writes the whole snapshot back. With the core now owning every other write, a fade saved from the window would be silently reverted by the user's next modifier-scroll. Same hazard as the config cache in phase 5, so the same fix: `reload_settings()` on the hook plus a `_reload_opacity_settings` RPC, called through the `Bridge` after `save_opacity_settings` and `toggle_foreground_opacity`. Both go away in phase 7 with the hook.
+
+### Two inherited bugs fixed rather than ported
+
+Phase 5 ported `startup.py`'s wrong registry value name faithfully, because changing it would have added or removed a real autostart entry. These two are different — they are strictly wrong, and fixing them cannot surprise anyone:
+
+- **`SetWindowLongW` bound as `c_long` is the 32-bit entry point.** It works today only because `GWL_EXSTYLE` happens to fit in 32 bits. The port uses `SetWindowLongPtrW`/`GetWindowLongPtrW`.
+- **The process query asked for far more rights than it needed.** pywin32's `GetModuleFileNameEx` path opens with `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ`, which an elevated or protected process refuses — and a window whose process cannot be named is *dropped from the list entirely*. `QueryFullProcessImageNameW` needs only `PROCESS_QUERY_LIMITED_INFORMATION`. Windows that used to be silently missing should now appear.
+
+The second is a visible behaviour change: the window list can get **longer**. The differential run above showed no difference, but it enumerated only 3 windows and no elevated ones, so that is not evidence either way — it is the case to look at during manual verification.
+
+### Not verified, deliberately
+
+Nothing in this session faded a real window. `list_windows`, `get_foreground_window` and the settings file are exercised for real; `set_window_opacity`, `toggle_foreground_opacity` and `reapply_opacity_settings` are covered only where they are no-ops, because the alternative is changing how the developer's own screen looks. Worth checking by hand:
+
+- Fade a window to 128 and back to 255, and confirm the window returns to its **ordinary** rendering path — that is the `WS_EX_LAYERED` strip, and the visible symptom of getting it wrong is subtle (a window that looks right but renders through the layered path).
+- Fade something running elevated, which is the case the old rights bug hid.
+- Fade from the window, then modifier-scroll on another app, and confirm the first setting is still there — that is the cache fix above.
 
 ## 7. Scroll transparency (2-3 days)
 

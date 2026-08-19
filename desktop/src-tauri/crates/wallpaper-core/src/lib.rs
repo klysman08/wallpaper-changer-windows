@@ -36,6 +36,7 @@ pub mod monitor;
 pub mod selection;
 pub mod session;
 pub mod startup;
+pub mod transparency;
 
 pub use apply::{WallpaperSetter, WindowsSetter};
 pub use error::{CoreError, ErrorKind};
@@ -507,6 +508,66 @@ impl Core {
                 Dispatch::Handled(outcome)
             }
 
+            // ── window transparency ──────────────────────────────────────────
+            //
+            // Unrelated to the wallpaper: a separate feature sharing the engine, with
+            // its own file keyed by process name. All synchronous — the Win32 calls
+            // are cheap and none of them composites anything.
+            "list_windows" => handled(|| {
+                reject_unexpected(params, &[], "list_windows")?;
+                Ok(transparency::list_windows_result())
+            }),
+
+            "set_window_opacity" => handled(|| {
+                reject_unexpected(params, &["hwnd", "alpha"], "set_window_opacity")?;
+                let hwnd = required_i64(params, "hwnd")?;
+                let alpha = required_i64(params, "alpha")?;
+                Ok(transparency::set_window_opacity_result(hwnd, alpha))
+            }),
+
+            "get_foreground_window" => handled(|| {
+                reject_unexpected(params, &[], "get_foreground_window")?;
+                Ok(transparency::get_foreground_window_result())
+            }),
+
+            // Async only because of the sidecar notification below: the scroll hook
+            // is still Python's and caches this file, so it has to be told the moment
+            // the core writes it.
+            "toggle_foreground_opacity" => {
+                let outcome = async {
+                    reject_unexpected(params, &[], "toggle_foreground_opacity")?;
+                    let result = transparency::toggle_foreground_opacity_result()?;
+                    self.session.notify_sidecar_of_opacity_change().await;
+                    Ok(result)
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "get_opacity_settings" => handled(|| {
+                reject_unexpected(params, &[], "get_opacity_settings")?;
+                Ok(transparency::get_opacity_settings_result())
+            }),
+
+            "save_opacity_settings" => {
+                let outcome = async {
+                    reject_unexpected(params, &["settings"], "save_opacity_settings")?;
+                    let settings = params.get("settings").ok_or_else(|| {
+                        CoreError::bad_params("missing a required argument: 'settings'")
+                    })?;
+                    let result = transparency::save_opacity_settings_result(settings)?;
+                    self.session.notify_sidecar_of_opacity_change().await;
+                    Ok(result)
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "reapply_opacity_settings" => handled(|| {
+                reject_unexpected(params, &[], "reapply_opacity_settings")?;
+                Ok(transparency::reapply_opacity_settings_result())
+            }),
+
             // Each phase moves names out of this catch-all and into arms above it.
             _ => Dispatch::NotPorted,
         }
@@ -595,6 +656,21 @@ fn optional_str_list(params: &Value, key: &str) -> Result<Option<Vec<String>>, C
         }
         Some(other) => Err(CoreError::bad_params(format!(
             "'{key}' must be a list, got {other}"
+        ))),
+    }
+}
+
+fn required_i64(params: &Value, key: &str) -> Result<i64, CoreError> {
+    match params.get(key) {
+        Some(Value::Number(n)) => n
+            .as_i64()
+            .or_else(|| n.as_f64().map(|f| f as i64))
+            .ok_or_else(|| CoreError::bad_params(format!("'{key}' must be a whole number"))),
+        Some(other) => Err(CoreError::bad_params(format!(
+            "'{key}' must be a number, got {other}"
+        ))),
+        None => Err(CoreError::bad_params(format!(
+            "missing a required argument: '{key}'"
         ))),
     }
 }
@@ -702,6 +778,13 @@ mod tests {
         "watch_stop",
         "watch_status",
         "watch_toggle",
+        "list_windows",
+        "set_window_opacity",
+        "get_foreground_window",
+        "toggle_foreground_opacity",
+        "get_opacity_settings",
+        "save_opacity_settings",
+        "reapply_opacity_settings",
     ];
 
     /// Which side answers each method, probed without letting any of them run.

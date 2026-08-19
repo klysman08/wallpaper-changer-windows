@@ -239,6 +239,19 @@ impl Session {
         }
     }
 
+    /// Tell the sidecar to re-read `transparency.json`.
+    ///
+    /// Transitional, and the same hazard as [`Self::notify_sidecar_of_config_change`]:
+    /// the scroll hook over there holds the opacities in memory from the moment it
+    /// started, and its next debounced flush would put that stale snapshot back over
+    /// whatever the core just wrote. Goes away when the hook moves across.
+    pub async fn notify_sidecar_of_opacity_change(&self) {
+        let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if let Some(bridge) = bridge {
+            let _ = bridge.call("_reload_opacity_settings", json!({})).await;
+        }
+    }
+
     async fn ask_sidecar(&self, method: &str, params: Value) -> Option<Value> {
         let bridge = self.bridge.lock().unwrap_or_else(|e| e.into_inner()).clone();
         bridge?.call(method, params).await.ok()
