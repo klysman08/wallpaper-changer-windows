@@ -231,6 +231,19 @@ Nothing in this session faded a real window. `list_windows`, `get_foreground_win
 - Fade something running elevated, which is the case the old rights bug hid.
 - Fade from the window, then modifier-scroll on another app, and confirm the first setting is still there — that is the cache fix above.
 
+### A build break the workspace check could not see
+
+`bun run tauri dev` failed after this phase with `could not find select in tokio`, on code
+`cargo check --workspace --all-targets` had just accepted. `wallpaper-core` asked tokio for
+`sync`/`time`/`rt` but not `macros`; `wallpaper-core-cli` asks for `macros`, and a workspace
+check unifies features across every crate in the graph — so the missing feature was supplied
+by a sibling the app does not depend on. Building the app alone drops the CLI, and the feature
+with it.
+
+`macros` is now declared where it is used. **Per-phase verification adds `cargo check -p
+tauri-native`**: the workspace check cannot catch an under-declared feature, and the first
+thing to fail is the shipping build.
+
 ## 7. Scroll transparency (2-3 days)
 
 Lands: `sync_scroll_transparency`, `scroll_transparency_status`.
