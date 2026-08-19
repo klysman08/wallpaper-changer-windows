@@ -231,6 +231,32 @@ Nothing in this session faded a real window. `list_windows`, `get_foreground_win
 - Fade something running elevated, which is the case the old rights bug hid.
 - Fade from the window, then modifier-scroll on another app, and confirm the first setting is still there — that is the cache fix above.
 
+### Two teardown faults found by running the app
+
+Neither showed up in any test, and only one was ours.
+
+**A log feedback loop, pre-existing.** Ctrl-C on `tauri dev` produced hundreds of
+`tauri_runtime_wry ERROR WebView2 error: HRESULT(0x8007139F)` lines, all stamped the same
+second, stopping only when the process was killed. `0x8007139F` is `ERROR_INVALID_STATE` —
+WebView2 refusing `ExecuteScript` on a control that is already closing. The flood is the
+interesting part: `tauri_plugin_log`'s `TargetKind::Webview` emits every log record to the
+webview, which is an `eval`; when the eval fails, tauri-runtime-wry logs the failure, which
+comes straight back to the same target and emits again. Unbounded, and it `spawn`s rather
+than blocking so it fans out. The webview target now filters out `tauri_runtime_wry`, which
+cuts the only self-referencing edge; stdout and the log file still carry the message.
+
+**The rotation ticker outlived shutdown, ours.** `Engine::shutdown` stopped the sidecar and
+nothing else, because until phase 5 the rotation timer *was* the sidecar's — Python's
+`threading.Timer` died with the process. The native ticker does not, so a tick could fire
+during teardown and composite and call `SystemParametersInfoW` on a process on its way out.
+`Session::stop_rotation_for_exit` ends the task without persisting `rotation_active = false`,
+so a rotation left running still comes back on the next launch; `watch_stop` would have
+written the flag off and made quitting silently disable rotation.
+
+This did not cause the flood — `settings.toml` had no `rotation_active` key, so
+`restore_rotation` returned false and no ticker ever started that session. It is a separate
+defect that tracing the flood turned up.
+
 ### A build break the workspace check could not see
 
 `bun run tauri dev` failed after this phase with `could not find select in tokio`, on code

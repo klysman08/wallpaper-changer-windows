@@ -485,6 +485,18 @@ impl Session {
         Ok(json!({ "watching": true, "interval": secs }))
     }
 
+    /// Silence the rotation on the way out of the process.
+    ///
+    /// Deliberately *not* `watch_stop`: that persists `rotation_active = false`, and
+    /// the whole point of the flag is that a rotation left running comes back on the
+    /// next launch. This only ends the task, so an apply cannot still be compositing
+    /// and calling `SystemParametersInfoW` while the process tears down. Sync, because
+    /// it runs from the exit handler where there is no runtime to await on.
+    pub fn stop_rotation_for_exit(&self) {
+        let mut watch = self.watch.lock().unwrap_or_else(|e| e.into_inner());
+        stop_locked(&mut watch);
+    }
+
     /// `watch_stop` — end the rotation. A tick already in flight still finishes.
     pub async fn watch_stop(&self) -> Result<Value, CoreError> {
         {
@@ -826,6 +838,48 @@ mod tests {
             recorder.of("error").len(),
             after_stop,
             "the timer kept ticking after it was stopped"
+        );
+    }
+
+    /// Exiting stops the timer without forgetting that rotation was on.
+    ///
+    /// `watch_stop` would write `rotation_active = false`, which would mean quitting
+    /// the app silently turns rotation off for the next launch.
+    #[tokio::test]
+    async fn stopping_for_exit_ends_the_ticker_but_keeps_the_flag() {
+        let sandbox = Sandbox::new("exit-stop");
+        let pictures = empty_folder(&sandbox);
+        write_settings(
+            &sandbox,
+            &format!("[general]\ninterval = 1\nselection = \"sequential\"\n\n[paths]\nwallpapers_folder = {pictures:?}\n"),
+        );
+        let recorder = Arc::new(Recorder::default());
+        let session = headless(recorder.clone());
+
+        session.watch_start(Some(1)).await.unwrap();
+        let settings = sandbox.dir.join("cfg").join("settings.toml");
+        assert!(
+            std::fs::read_to_string(&settings)
+                .unwrap()
+                .contains("rotation_active = true"),
+            "watch_start should have remembered the rotation"
+        );
+
+        session.stop_rotation_for_exit();
+        assert_eq!(session.watch_status()["watching"], false);
+
+        let after_stop = recorder.of("error").len();
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        assert_eq!(
+            recorder.of("error").len(),
+            after_stop,
+            "the timer kept ticking after the exit stop"
+        );
+        assert!(
+            std::fs::read_to_string(&settings)
+                .unwrap()
+                .contains("rotation_active = true"),
+            "exiting must not turn rotation off for the next launch"
         );
     }
 

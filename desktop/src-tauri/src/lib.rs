@@ -252,7 +252,16 @@ pub fn run() {
                 .targets([
                     Target::new(TargetKind::Stdout),
                     Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
+                    // The webview target emits `log://log` for the debug panel to
+                    // mirror. That emit is an `eval` in the webview, and when the
+                    // webview is gone — Ctrl-C, or any teardown — the eval fails and
+                    // tauri_runtime_wry logs the failure, which comes straight back
+                    // here and emits again: an unbounded feedback loop that fills the
+                    // console with the same error until the process is killed. Cutting
+                    // its own target out of this one destination breaks the cycle
+                    // without hiding anything: stdout and the log file still get it.
+                    Target::new(TargetKind::Webview)
+                        .filter(|m| m.target() != "tauri_runtime_wry"),
                 ])
                 .build(),
         )

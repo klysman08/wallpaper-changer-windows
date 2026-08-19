@@ -140,6 +140,12 @@ impl Engine {
 
     /// Ask the engine to shut down, then make sure the process is gone.
     pub fn shutdown(&self) {
+        // The rotation timer lives in the core now, so it no longer dies with the
+        // sidecar the way Python's `threading.Timer` did. Stop it first: a tick that
+        // fires during teardown would composite and call `SystemParametersInfoW` on a
+        // process on its way out. This does not clear `rotation_active`, so a rotation
+        // left running still comes back on the next launch.
+        self.core.session().stop_rotation_for_exit();
         if let Some(sidecar) = &self.sidecar {
             sidecar.shutdown();
         }
