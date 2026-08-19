@@ -41,7 +41,10 @@ impl EventSink for StdoutSink {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
+// Multi-threaded on purpose. The request loop below blocks on stdin, and the rotation
+// timer is a spawned task: on a current-thread runtime it would never be polled while
+// the engine sat waiting for the next line, and rotation would silently never fire.
+#[tokio::main]
 async fn main() {
     let out = Arc::new(Mutex::new(std::io::stdout()));
     let core = Core::new(Arc::new(StdoutSink { out: Arc::clone(&out) }));

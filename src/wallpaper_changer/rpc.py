@@ -178,20 +178,31 @@ class Engine:
             # running session is unaffected, so this must not fail the call.
             log.warning("Could not persist %s.%s: %s", section, key, exc)
 
+    def _reload_config(self) -> dict:
+        """Drop the cached configuration so the next read comes from disk.
+
+        Transitional, for the Rust port. The native core owns ``save_config`` and the
+        session flags now, so this process no longer sees its own settings file being
+        written. Without this the next ``_remember`` here would write a stale copy
+        back over what the core just saved — silently undoing a rotation toggle.
+
+        Goes away with the sidecar.
+        """
+        self._cfg = {}
+        lang = self._config().get("general", {}).get("language")
+        if lang:
+            i18n.set_language(lang)
+        return {"reloaded": True}
+
     def restore_session(self) -> dict:
         """Bring back what was running when the app was last closed.
 
-        Called once at startup. Each half is independent: no videos (or no libmpv)
-        must not stop the rotation timer from coming back.
+        Called once at startup. The rotation half is **not** here: the native core
+        owns the rotation timer, and starting one in this process would leave a second
+        timer running that nothing can see or stop. The shell restores it directly.
         """
         cfg = self._config()
         restored = {"rotation": False, "video": False}
-        if bool(cfg.get("general", {}).get("rotation_active", False)):
-            try:
-                self.watch_start()
-                restored["rotation"] = True
-            except Exception as exc:
-                log.warning("Could not restore the rotation timer: %s", exc)
         if bool(cfg.get("video", {}).get("enabled", False)) and has_mpv():
             try:
                 self.video_start()
@@ -873,6 +884,10 @@ class Engine:
         "set_startup_enabled",
         "notify",
         "shutdown",
+        # Transitional, for the Rust port: the native core calls this after every
+        # write so this process re-reads the settings file instead of trusting a
+        # cache it can no longer keep current. Removed with the sidecar.
+        "_reload_config",
     )
 
     def dispatch(self, method: str, params: dict[str, Any]) -> Any:

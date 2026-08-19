@@ -94,6 +94,10 @@ Two cross-unit couplings to plan around:
 - **Config cache staleness.** Once Rust owns `save_config`, Python's `Engine._config()` cache goes stale for still-Python methods. Add a `_reload_config` method to `Engine._METHODS` (~5 lines in `rpc.py`) that clears `self._cfg`; Rust calls it after each write. Legitimate — we own the Python during migration.
 - **`save_config` folds in live session state.** `rpc.py:135` overwrites `general.rotation_active` from `watch_status()` and `video.enabled` from `_video.is_running()`, so the config unit depends on the apply and video units. While those are still Python, Rust's `save_config` must round-trip `watch_status` and `video_status` to the sidecar before writing. Two extra calls, fails safe, drops out at phase 7.
 
+  **Resolved in phase 5, and it needed a new seam.** `save_config` shipped with the rotation unit rather than the config unit, so `rotation_active` is read locally and only `video_status` has to be asked for. Asking at all required a return path the sidecar seam never had — `trait Bridge`, the mirror of `EventSink`, implemented in `engine.rs` over the sidecar it already owns. It carries exactly three calls: `video_status`, `sync_scroll_transparency`, and `_reload_config`. A `video_status` that cannot be answered keeps whatever `video.enabled` the file already holds, rather than asserting "off" and losing the user's video wallpaper on the next launch.
+
+  A second coupling only became visible once the timer moved. `serve()` in `rpc.py` calls `restore_session()` on a startup thread — it is not an RPC method, so it cannot be intercepted by the seam. Porting `watch_start` while leaving that alone would have produced **two rotation timers**, one of them in a process the UI cannot address. `restore_session` therefore lost its rotation half in the same commit, and the shell restores rotation through the core instead.
+
 Before Rust methods that need config exist, a ported method may simply call `self.call_sidecar("get_config", ...)`. One round trip, correctness preserved, deleted later.
 
 ## Risks

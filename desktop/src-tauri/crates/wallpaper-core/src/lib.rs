@@ -24,6 +24,7 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 mod error;
+pub mod apply;
 pub mod collage;
 pub mod compose;
 pub mod config;
@@ -33,10 +34,13 @@ pub mod i18n;
 pub mod images;
 pub mod monitor;
 pub mod selection;
+pub mod session;
 pub mod startup;
 
+pub use apply::{WallpaperSetter, WindowsSetter};
 pub use error::{CoreError, ErrorKind};
 pub use monitor::{get_monitors, virtual_desktop, Monitor};
+pub use session::{Bridge, BridgeFuture, Session};
 
 /// Every method the engine answers, in the order `Engine._METHODS` lists them.
 ///
@@ -211,61 +215,84 @@ pub(crate) mod testing {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
+
+    /// An [`EventSink`](crate::EventSink) that keeps what it was given, so a test can
+    /// assert on the events a call raised as well as on its return value.
+    #[derive(Default)]
+    pub struct Recorder {
+        pub events: Mutex<Vec<(String, serde_json::Value)>>,
+    }
+
+    impl crate::EventSink for Recorder {
+        fn emit(&self, event: &str, data: serde_json::Value) {
+            self.events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((event.to_string(), data));
+        }
+    }
+
+    impl Recorder {
+        /// Every payload raised under `name`, in order.
+        pub fn of(&self, name: &str) -> Vec<serde_json::Value> {
+            self.events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|(event, _)| event == name)
+                .map(|(_, data)| data.clone())
+                .collect()
+        }
+    }
 }
 
-/// The engine's state and method dispatch.
+/// The engine's method dispatch, over the state in [`Session`].
+///
+/// Everything that outlives a single call — the apply lock, the wallpaper history,
+/// the rotation timer, the unsaved settings — lives in the session behind an `Arc`,
+/// so the rotation task can hold it without holding the dispatcher.
 pub struct Core {
-    events: Arc<dyn EventSink>,
+    session: Arc<Session>,
 }
 
 impl Core {
+    /// The real engine: applies wallpapers through Windows.
     pub fn new(events: Arc<dyn EventSink>) -> Self {
-        Self { events }
+        Self::with_setter(events, Arc::new(WindowsSetter))
+    }
+
+    /// The engine with the desktop swapped out, for tests.
+    pub fn with_setter(events: Arc<dyn EventSink>, setter: Arc<dyn WallpaperSetter>) -> Self {
+        Self {
+            session: Arc::new(Session::new(events, setter)),
+        }
+    }
+
+    /// The state behind the dispatcher, for the shell's startup and teardown paths.
+    pub fn session(&self) -> &Arc<Session> {
+        &self.session
+    }
+
+    /// Give the core a way to reach the methods the sidecar still owns.
+    ///
+    /// Only `save_config` needs it today, to ask whether the video player is running
+    /// and to tell Python to re-read the file we just wrote. It disappears with the
+    /// sidecar.
+    pub fn set_bridge(&self, bridge: Arc<dyn Bridge>) {
+        self.session.set_bridge(bridge);
     }
 
     /// Raise an unsolicited engine event.
     pub fn emit(&self, event: &str, data: Value) {
-        self.events.emit(event, data);
+        self.session.emit(event, data);
     }
 
-    /// The live configuration, read fresh from disk.
-    ///
-    /// Deliberately **not** cached, unlike `Engine._config()` in `rpc.py`. While the
-    /// sidecar still owns `save_config` and `_remember`, Python is writing
-    /// `settings.toml` behind our back — a cache here would go stale the moment a
-    /// hotkey toggled rotation. Re-reading a 2 KB file on the handful of calls that
-    /// need it costs nothing, and the cache can come back with `save_config` in the
-    /// phase that owns the session flags.
     fn config(&self) -> Result<Value, CoreError> {
-        config::load_config(None)
+        self.session.config()
     }
 
-    /// The configuration with a caller-supplied overlay applied per section.
-    ///
-    /// Mirrors `Engine._merged`: the preview and the save dialog send an unsaved
-    /// draft, and it must win over what is on disk without dropping the sections it
-    /// does not mention.
     fn merged(&self, overlay: Option<&Value>) -> Result<Value, CoreError> {
-        let mut cfg = self.config()?;
-        let (Some(overlay), Some(base)) = (
-            overlay.and_then(Value::as_object),
-            cfg.as_object_mut(),
-        ) else {
-            return Ok(cfg);
-        };
-        for (section, values) in overlay {
-            match (base.get_mut(section), values.as_object()) {
-                (Some(Value::Object(existing)), Some(incoming)) => {
-                    for (key, value) in incoming {
-                        existing.insert(key.clone(), value.clone());
-                    }
-                }
-                _ => {
-                    base.insert(section.clone(), values.clone());
-                }
-            }
-        }
-        Ok(cfg)
+        self.session.merged(overlay)
     }
 
     /// Answer `method`, or decline it so the caller falls through to the sidecar.
@@ -370,6 +397,115 @@ impl Core {
                     params.get("path").and_then(Value::as_str),
                 )
             }),
+
+            // ── apply, rotation and history ──────────────────────────────────
+            //
+            // These are async because they hold the apply lock across a
+            // `spawn_blocking`. The panic guard the synchronous arms get from
+            // `handled` is provided instead by `spawn_blocking` itself, which turns a
+            // panic in the composition into a `JoinError` rather than unwinding
+            // through the shell — what is left here is parameter shuffling.
+            "apply_wallpaper" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config", "images"], "apply_wallpaper")?;
+                    let images = optional_str_list(params, "images")?;
+                    self.session
+                        .apply_wallpaper(params.get("config"), images)
+                        .await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "apply_previous_wallpaper" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config"], "apply_previous_wallpaper")?;
+                    self.session
+                        .apply_previous_wallpaper(params.get("config"))
+                        .await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "apply_default_wallpaper" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config"], "apply_default_wallpaper")?;
+                    self.session
+                        .apply_default_wallpaper(params.get("config"))
+                        .await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "apply_saved_collage" => {
+                let outcome = async {
+                    reject_unexpected(params, &["path"], "apply_saved_collage")?;
+                    let path = required_str(params, "path")?.to_string();
+                    self.session.apply_saved_collage(&path).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "set_effect" => {
+                let outcome = async {
+                    reject_unexpected(params, &["effect"], "set_effect")?;
+                    let effect = required_str(params, "effect")?.to_string();
+                    self.session.set_effect(&effect).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "watch_start" => {
+                let outcome = async {
+                    reject_unexpected(params, &["interval"], "watch_start")?;
+                    let interval = optional_i64_opt(params, "interval")?;
+                    self.session.watch_start(interval).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "watch_stop" => {
+                let outcome = async {
+                    reject_unexpected(params, &[], "watch_stop")?;
+                    self.session.watch_stop().await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "watch_toggle" => {
+                let outcome = async {
+                    reject_unexpected(params, &[], "watch_toggle")?;
+                    self.session.watch_toggle().await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
+
+            "watch_status" => handled(|| {
+                reject_unexpected(params, &[], "watch_status")?;
+                Ok(self.session.watch_status())
+            }),
+
+            "save_config" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config"], "save_config")?;
+                    let incoming = params
+                        .get("config")
+                        .ok_or_else(|| {
+                            CoreError::bad_params("missing a required argument: 'config'")
+                        })?
+                        .clone();
+                    self.session.save_config(&incoming).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
 
             // Each phase moves names out of this catch-all and into arms above it.
             _ => Dispatch::NotPorted,
@@ -518,8 +654,13 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
+    /// Never `Core::new` in a test: that one applies wallpapers through Windows, and
+    /// `cargo test` runs on a machine with a desktop the developer is looking at.
     fn core() -> Core {
-        Core::new(Arc::new(NullSink))
+        Core::with_setter(
+            Arc::new(NullSink),
+            Arc::new(apply::testing::FakeSetter::default()),
+        )
     }
 
     /// The allowlist must stay in step with `Engine._METHODS` in `rpc.py`.
@@ -551,19 +692,46 @@ mod tests {
         "forget_saved_collage",
         "preview",
         "save_collage",
+        "save_config",
+        "apply_wallpaper",
+        "apply_previous_wallpaper",
+        "apply_default_wallpaper",
+        "apply_saved_collage",
+        "set_effect",
+        "watch_start",
+        "watch_stop",
+        "watch_status",
+        "watch_toggle",
     ];
 
+    /// Which side answers each method, probed without letting any of them run.
+    ///
+    /// The parameter is a name no method accepts, so every ported arm stops at its
+    /// `reject_unexpected` call and answers `bad_params`. That is still
+    /// `Dispatch::Handled`, which is what this test is about — and it means the probe
+    /// cannot composite a collage or change the desktop of the machine running
+    /// `cargo test`. It also pins that every ported arm validates its parameters
+    /// before doing any work.
     #[tokio::test]
     async fn ported_methods_answer_and_the_rest_fall_through() {
         let core = core();
         for method in METHODS {
-            let decision = core.dispatch(method, &json!({})).await;
+            let decision = core
+                .dispatch(method, &json!({ "__not_a_parameter": true }))
+                .await;
             let expected_ported = PORTED.contains(method);
             assert_eq!(
                 !decision.is_not_ported(),
                 expected_ported,
                 "{method}: PORTED says {expected_ported}, dispatch disagrees"
             );
+            if let Dispatch::Handled(result) = decision {
+                assert_eq!(
+                    result.unwrap_err().kind(),
+                    ErrorKind::BadParams,
+                    "{method} accepted a parameter it does not have"
+                );
+            }
         }
     }
 

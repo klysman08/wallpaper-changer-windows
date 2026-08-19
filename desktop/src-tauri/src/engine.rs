@@ -63,6 +63,24 @@ impl EventSink for WebviewSink {
     }
 }
 
+/// Lets the core reach back into the methods the sidecar still owns.
+///
+/// `save_config` folds the live session flags into what it writes, and one of them —
+/// whether a video wallpaper is playing — belongs to a unit that is still Python. It
+/// also has to tell the sidecar to drop its cached configuration, since Python no
+/// longer sees its own writes. Both disappear when the sidecar does.
+struct SidecarBridge {
+    sidecar: Arc<Sidecar>,
+}
+
+impl wallpaper_core::Bridge for SidecarBridge {
+    fn call(&self, method: &str, params: Value) -> wallpaper_core::BridgeFuture {
+        let sidecar = Arc::clone(&self.sidecar);
+        let method = method.to_string();
+        Box::pin(async move { sidecar.call(&method, params).await })
+    }
+}
+
 /// The Python sidecar process and its protocol plumbing.
 struct Sidecar {
     stdin: Mutex<Option<ChildStdin>>,
@@ -75,7 +93,7 @@ pub struct Engine {
     core: Arc<Core>,
     /// `None` once the port is complete. Until then, the fallback for every method
     /// the core has not taken over.
-    sidecar: Option<Sidecar>,
+    sidecar: Option<Arc<Sidecar>>,
 }
 
 impl Engine {
@@ -85,7 +103,21 @@ impl Engine {
         // While nothing is ported, a sidecar that will not start means no working
         // engine at all, so the failure is still fatal. As methods migrate this can
         // soften to a warning: the ported half would keep working without it.
-        let sidecar = Sidecar::spawn(app)?;
+        let sidecar = Arc::new(Sidecar::spawn(app)?);
+        core.set_bridge(Arc::new(SidecarBridge {
+            sidecar: Arc::clone(&sidecar),
+        }));
+
+        // The rotation timer belongs to the core now, so the sidecar's own
+        // `restore_session` no longer brings it back — it would start a second,
+        // invisible timer in the wrong process. Its video half still runs over there.
+        let restoring = Arc::clone(&core);
+        tauri::async_runtime::spawn(async move {
+            if restoring.session().restore_rotation().await {
+                log::info!("rotation restored from the saved session");
+            }
+        });
+
         Ok(Self {
             core,
             sidecar: Some(sidecar),

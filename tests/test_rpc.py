@@ -857,17 +857,21 @@ def test_save_config_ignores_a_stale_rotation_flag_from_the_client(engine, cfg, 
     assert persisted is True
 
 
-def test_restore_session_starts_rotation_when_it_was_left_running(engine, cfg, monkeypatch):
+def test_restore_session_no_longer_touches_rotation(engine, cfg, monkeypatch):
+    """Rotation is the native core's now, and starting one here would be invisible.
+
+    The timer moved to `wallpaper-core` with the rest of the apply unit. If this
+    process still started one on restore there would be two timers running — the
+    core's, which the UI can see and stop, and this one, which nothing can reach.
+    """
     cfg["general"]["rotation_active"] = True
     monkeypatch.setattr(rpc, "load_config", lambda: cfg)
     monkeypatch.setattr(rpc, "has_mpv", lambda: False)
 
     restored = engine.restore_session()
-    watching = engine.watch_status()["watching"]
-    engine.watch_stop()
 
-    assert restored == {"rotation": True, "video": False}
-    assert watching is True
+    assert restored == {"rotation": False, "video": False}
+    assert engine.watch_status()["watching"] is False
 
 
 def test_restore_session_leaves_everything_idle_when_nothing_was_running(
@@ -883,17 +887,15 @@ def test_restore_session_leaves_everything_idle_when_nothing_was_running(
 
 
 def test_restore_session_survives_a_video_that_cannot_start(engine, cfg, monkeypatch):
-    """No videos on disk must not cost the user their rotation timer."""
-    cfg["general"]["rotation_active"] = True
+    """No videos on disk must not turn the restore into a failed call."""
     cfg["video"]["enabled"] = True
     monkeypatch.setattr(rpc, "load_config", lambda: cfg)
     monkeypatch.setattr(rpc, "has_mpv", lambda: True)
     monkeypatch.setattr(rpc, "scan_video_folder", lambda folder: [])
 
     restored = engine.restore_session()
-    engine.watch_stop()
 
-    assert restored == {"rotation": True, "video": False}
+    assert restored == {"rotation": False, "video": False}
 
 
 def test_watch_tick_emits_error_event_when_apply_fails(engine, cfg, monkeypatch):

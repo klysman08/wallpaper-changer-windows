@@ -17,6 +17,9 @@ toml_edit = "0.22"
 dunce = "1"
 rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# The apply lock and the rotation timer. `rt` is for `spawn_blocking`: compositing a
+# 5760x2160 canvas must not sit on an async worker.
+tokio = { version = "1", features = ["sync", "time", "rt"] }
 
 # `SUPPORTED` in image_utils.py is jpg/jpeg/png/bmp/webp, so those are the decoders
 # that must exist. Encoding is only ever JPEG (thumbnails, previews) and BMP (the
@@ -37,6 +40,7 @@ features = [
     "Win32_Graphics_Gdi",
     "Win32_UI_HiDpi",
     "Win32_System_Registry",
+    "Win32_UI_WindowsAndMessaging",
 ]
 
 [dev-dependencies]

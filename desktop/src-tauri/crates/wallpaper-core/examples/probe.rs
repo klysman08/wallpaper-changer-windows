@@ -56,6 +56,16 @@ fn main() {
             let out = collage::fit_image(&source, w, h, &args[5]);
             out.save(&args[6]).expect("write output");
         }
+        // The wallpaper is always written as BMP, because that is what
+        // SystemParametersInfoW reliably accepts. Pillow and the `image` crate write
+        // their own headers, so "the pixels match" is not the same claim as "the file
+        // matches" — this subcommand is what lets the two be compared as bytes.
+        "bmp" => {
+            let source = image::open(&args[2]).expect("open source").to_rgb8();
+            source
+                .save_with_format(&args[3], image::ImageFormat::Bmp)
+                .expect("write bmp");
+        }
         other => {
             eprintln!("unknown subcommand: {other}");
             std::process::exit(2);

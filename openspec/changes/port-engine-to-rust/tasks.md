@@ -128,16 +128,58 @@ Lands: `preview`, `save_collage`.
 
 ## 5. Apply, rotation, history (3-4 days)
 
-Lands: `apply_wallpaper`, `apply_default_wallpaper`, `apply_previous_wallpaper`, `apply_saved_collage`, `set_effect`, `watch_start/stop/status/toggle`.
+Lands: `apply_wallpaper`, `apply_default_wallpaper`, `apply_previous_wallpaper`, `apply_saved_collage`, `set_effect`, `watch_start/stop/status/toggle`, plus `save_config` deferred from phase 3.
 
-- [ ] 5.1 Port `set_wallpaper_win`: `SystemParametersInfoW` with **`SPIF_UPDATEINIFILE` only** (never `SPIF_SENDWININICHANGE`), plus the `WallpaperStyle = "22"` / `TileWallpaper = "0"` registry writes.
-- [ ] 5.2 Port `apply_single_wallpaper` and `apply_desktop_image`, preserving that a saved desktop-wide export spans all screens while a single-screen crop repeats per screen, and that neither re-applies a baked-in effect.
-- [ ] 5.3 Implement the apply lock with `tokio::sync::Mutex::try_lock()` returning `busy` — **never `.lock().await`**. Composite inside `spawn_blocking` while holding the guard.
-- [ ] 5.4 Port the history ring: 50 cap with pop-from-front, truncate-forward on push, `no_history` when `idx <= 0`. Keep `apply_saved_collage` out of history.
-- [ ] 5.5 Implement the rotation timer so it **re-arms after the tick completes** (period = interval + work time), not as a fixed-rate `tokio::time::interval`. Persist `general.rotation_active` on every toggle.
-- [ ] 5.6 Emit `wallpaper_applied` and the `error` event with `source: "watch"` through `EventSink`.
-- [ ] 5.7 Define `trait WallpaperSetter` with a fake, and drive the history / lock / timer logic headlessly in tests.
-- [ ] 5.8 Verify: manual apply, rotation, and back-navigation on real multi-monitor hardware.
+- [x] 5.1 Port `set_wallpaper_win`: `SystemParametersInfoW` with **`SPIF_UPDATEINIFILE` only** (never `SPIF_SENDWININICHANGE`), plus the `WallpaperStyle = "22"` / `TileWallpaper = "0"` registry writes.
+- [x] 5.2 Port `apply_single_wallpaper` and `apply_desktop_image`, preserving that a saved desktop-wide export spans all screens while a single-screen crop repeats per screen, and that neither re-applies a baked-in effect.
+- [x] 5.3 Apply lock via `Session::begin_apply`, a `try_lock` that answers `busy` — **never `.lock().await`**. The composition runs in `spawn_blocking` while the guard is held.
+- [x] 5.4 History ring ported: 50 cap with pop-from-front, truncate-forward on push, `no_history` when the cursor is at or before 0. `apply_saved_collage` stays out of it.
+- [x] 5.5 Rotation timer **re-arms after the tick completes**, so the period is interval + work time. Deliberately a `sleep` loop rather than `tokio::time::interval`, which would fire immediately and then catch up on missed ticks. `general.rotation_active` is persisted on every toggle.
+- [x] 5.6 `wallpaper_applied` and the `error` event with `source: "watch"` go through `EventSink`.
+- [x] 5.7 `trait WallpaperSetter` with a `FakeSetter`; the lock, the history, the timer, `set_effect` and `save_config` are all driven headlessly.
+- [x] 5.8 `save_config` landed with rotation, as planned — see below for the return path it needed.
+- [ ] 5.9 Verify: manual apply, rotation and back-navigation on real hardware. **Not done** — every check here stops short of changing the developer's own desktop; see below.
+
+**Methods landed (10):** `apply_wallpaper`, `apply_previous_wallpaper`, `apply_default_wallpaper`, `apply_saved_collage`, `set_effect`, `watch_start`, `watch_stop`, `watch_status`, `watch_toggle`, `save_config`. Running total: **25 of 45**.
+
+**Verification:** 143 core unit tests, 3 golden, 9 shell, 176 pytest — all green. Corpus against the Rust core 19 → **25**, with the whole `rotation` area now passing; Python still **35/35 strict**. The 10 remaining skips are exactly `get_capabilities` plus the transparency and video areas, i.e. phases 6-8.
+
+### `Bridge` — the return path phase 3 said was missing
+
+`save_config` folds `general.rotation_active` and `video.enabled` into what it writes. Rotation is ours now; the video player is not. Phase 3 deferred this because "it needs a call path from `Core` back into the sidecar that does not exist" — so this phase built it: `trait Bridge` alongside `EventSink`, implemented in `engine.rs` by the sidecar it already owns. Three uses, all transitional:
+
+- `video_status` → the real `video.enabled`. If the sidecar cannot answer, the value **already in the file** is kept rather than asserting "off", which would silently lose the user's video wallpaper on the next launch.
+- `sync_scroll_transparency` after a save, because the mouse hook has to follow the new settings immediately.
+- `_reload_config`, six new lines in `rpc.py`. This one is not optional: `Engine._config()` over there caches, and Python no longer sees its own settings file being written. Without it the next `_remember` in the sidecar would write a **stale copy back over what the core just saved**, silently undoing a rotation toggle.
+
+### The rotation timer had to move whole, not by method
+
+`rpc.py`'s `serve()` calls `restore_session()` on a thread at startup — it is not an RPC method, so porting `watch_start` alone would have left the sidecar starting *its own* timer on every launch: two rotations running, one of them invisible to the UI and unstoppable from it. So `restore_session` lost its rotation half (the video half stays), and `Engine::spawn` now restores rotation through the core. Two Python tests asserted the old contract and were rewritten to assert the new one.
+
+### The settings are read fresh, with an overlay — not cached
+
+`Engine._config()` caches, and `set_effect` works by *mutating that cache*: the effect goes live without being written. A cache in the core would be actively wrong while the sidecar exists, because Python writes `settings.toml` whenever `video_start` toggles `video.enabled`. So the file stays the single source of truth and the only thing held in memory is `Session::overrides` — the sparse set of values changed but not saved, cleared when `save_config` adopts them. `get_config` and `preview` both read through it, so the live effect is visible exactly where it was before.
+
+### The BMP is not byte-identical to Pillow's, and that is fine
+
+The wallpaper file is the one byte-level surface this phase adds — composition was already pinned by the golden PNGs, but the *file* handed to `SystemParametersInfoW` now comes from a different encoder. Compared across four shapes including a 2x2 and a 40x1:
+
+| | |
+|---|---|
+| Pixel data | **identical**, every byte |
+| File size, `biSizeImage`, `bfOffBits`, bit depth, compression | identical |
+| `biXPelsPerMeter` / `biYPelsPerMeter` | **0 (Rust) vs 3780 (Pillow)** |
+
+The only difference is the declared pixel density, 96 DPI versus unspecified. `WallpaperStyle` is what decides how the desktop lays the picture out, not the BMP's density fields, so this changes nothing about what appears on screen.
+
+### Not verified, deliberately
+
+Task 5.9 is open. Everything above is checked against fakes, fixtures and the Python engine; nothing in this session applied a real wallpaper, started a real rotation tick that composed, or exercised the tray and hotkey paths end to end. That check changes the desktop of whoever runs it, so it is the developer's to make: `bun run tauri dev`, then apply a collage, step back, toggle rotation, and confirm `settings.toml` picks up `rotation_active`.
+
+Worth watching for in that pass:
+
+- The apply goes through `spawn_blocking` now. A long composite must leave the window responsive rather than freezing it, which is the visible half of the lock behaviour.
+- Rotation restored at startup comes from the core, not the sidecar — confirm exactly one timer runs by toggling it off from the tray and checking it stays off across a restart.
 
 ## 6. Transparency (2-3 days)
 

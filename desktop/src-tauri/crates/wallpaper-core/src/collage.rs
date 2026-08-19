@@ -166,7 +166,7 @@ pub fn fit_image(source: &RgbImage, target_w: i32, target_h: i32, mode: &str) ->
 ///
 /// Pillow's `paste` silently clips rather than failing, and `center` mode relies on
 /// that for a picture larger than its cell.
-fn paste(canvas: &mut RgbImage, source: &RgbImage, x: i32, y: i32) {
+pub(crate) fn paste(canvas: &mut RgbImage, source: &RgbImage, x: i32, y: i32) {
     let (cw, ch) = canvas.dimensions();
     let (sw, sh) = source.dimensions();
     for sy in 0..sh {
