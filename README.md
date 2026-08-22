@@ -72,6 +72,7 @@ anything, and still reaches the engine only through its own method allowlist.
 ## Features
 
 - **Collage Grid**: automatic grid layouts of 1 to 8 images per monitor.
+- **Honest About Formats**: reads `jpg`, `jpeg`, `png`, `bmp`, and `webp`, deciding the format from the file's *contents* rather than its extension — roughly one picture in ten is named for a format it is not. Pictures it cannot decode (HEIC, AVIF, camera raw) are counted and named under the folder rather than quietly left out, and a single unreadable file costs its own thumbnail and nothing else.
 - **Live Preview**: the interface renders the real composited collage before anything touches your desktop, so effect and fit changes are visible immediately. Monitor outlines are drawn over it, any screen can be zoomed to on its own, the whole thing expands to fill the window, and what you are looking at can be applied as-is.
 - **Editable Preview**: drag one picture in the preview onto another to swap them, or click one to choose a different image, before anything is applied.
 - **Save & Gallery**: keep any collage as an image file - the whole desktop or a single monitor's share of it, composed at full resolution - and find every one you have saved on the Gallery screen, ready to view again or put straight back on the desktop.
@@ -148,6 +149,15 @@ Switch rendering styles on the current collage:
 - Opacity is remembered per executable, not per window, so it survives closing and reopening the application.
 - Settings persist in `transparency.json` under `%APPDATA%\WallpaperChanger\`.
 
+### 4. Image Formats
+
+`jpg`, `jpeg`, `png`, `bmp`, and `webp` are read. Two details matter more than the list:
+
+- **The format is decided by content, not by the extension.** In one real folder of 4948 wallpapers, 470 files — 9.5% — were named for a format they were not, in every direction: JPEGs called `.webp`, WebPs called `.jpeg` and `.png`, PNGs called `.jpeg`. Anything that trusts the extension fails on about a third of the collages drawn from a folder like that.
+- **What cannot be read is reported, not hidden.** HEIC, AVIF, JXL, TIFF, GIF, PSD, and camera raw have no decoder here — HEIC needs libheif and AVIF needs dav1d, both C libraries, and neither is worth carrying next to a 112 MB libmpv. The folder line says how many were skipped and which formats they were, so a folder that shows fewer pictures than Explorer does explains itself.
+
+A file that will not open costs its own thumbnail and nothing else. The reason is written to the app log and returned to the interface, so it can be named rather than merely missing.
+
 ---
 
 ## Global Hotkeys
@@ -211,10 +221,10 @@ User files live outside the installation directory, so the app works correctly w
 
 | Location | Contents |
 | :--- | :--- |
-| `%APPDATA%\WallpaperChanger\` | `settings.toml`, `state.json`, `transparency.json` |
-| `%LOCALAPPDATA%\WallpaperChanger\` | Composed wallpaper output |
+| `%APPDATA%\WallpaperChanger\` | `settings.toml`, `state.json`, `transparency.json`, `gallery.json` |
+| `%LOCALAPPDATA%\WallpaperChanger\` | Composed wallpaper output, and `saved/` for exported collages |
 
-On first run the app copies any settings from an older in-install `config/` directory into `%APPDATA%`; it never moves or overwrites. Both locations can be redirected with the `WALLPAPER_CHANGER_CONFIG_DIR` and `WALLPAPER_CHANGER_DATA_DIR` environment variables.
+On first run the app writes a `settings.toml` with the defaults below, comments and all. If an older in-install `config/` directory is there it is copied across first, so an upgrade keeps its settings; nothing is ever moved or overwritten. Both locations can be redirected with the `WALLPAPER_CHANGER_CONFIG_DIR` and `WALLPAPER_CHANGER_DATA_DIR` environment variables.
 
 ```toml
 [general]
@@ -287,7 +297,8 @@ a GitHub release needs.
 ```powershell
 cd desktop/src-tauri
 cargo test --workspace              # engine, shell, golden images, protocol corpus
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets   # clean, and expected to stay clean
+cargo fmt --all -- --check
 cargo check -p tauri-native         # the shipping build, on its own
 
 cd ../..; cd desktop
@@ -308,8 +319,8 @@ cargo test -p wallpaper-core --test desktop_layer -- --ignored --nocapture
 ```
 wallpaper-changer/
 ├── assets/icon/wpaper-logo.png   # Icon source
-├── config/settings.toml          # Default settings, seeded into %APPDATA%
-├── libmpv/libmpv-2.dll           # Bundled as a Tauri resource
+├── libmpv/libmpv-2.dll           # Not committed; bundled as a Tauri resource
+├── openspec/                     # Change proposals, designs, and task records
 ├── scripts/
 │   ├── build_app.ps1             # App, signed installer, updater manifest
 │   └── make_icon.py              # Logo to icon source (standalone, needs Pillow)
@@ -330,6 +341,9 @@ wallpaper-changer/
         │   └── tray.rs           # System tray icon and menu
         └── crates/
             ├── wallpaper-core/   # The engine. No Tauri dependency.
+            │   ├── assets/
+            │   │   ├── settings.default.toml  # Seeded on first run
+            │   │   └── translations.json      # en, pt_BR, ja
             │   └── src/
             │       ├── collage.rs      # Grid layout, fitting, composition
             │       ├── apply.rs        # BMP write and SystemParametersInfoW

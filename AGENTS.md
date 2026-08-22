@@ -70,6 +70,11 @@ removes the system-wide mouse hook, and destroys the video host windows.
 - `parallel.rs` — the bounded worker pool both composition and thumbnails use
 - `cli.rs` (in the shell) — `apply`, `watch`, `video`, driving the same `dispatch`
 
+**The engine says what it could not read.** Both halves of this were silence that got reported as "it does not support different formats":
+
+- `get_thumbnails` returns `failed` — `{path, reason}` in input order — as well as logging each one at `warn`. A file that will not open costs its own tile and nothing else, but it is named rather than merely absent; without that a user cannot find the bad picture in a folder of five thousand.
+- `list_folder_images` returns `skipped` and `skipped_formats`, counting the files whose format has no decoder. `images::UNSUPPORTED` is that table — HEIC, AVIF, JXL, TIFF, GIF, PSD, camera raw. Adding a decoder was the alternative and was rejected: HEIC needs libheif and AVIF needs dav1d, both C libraries. `.txt` is deliberately *not* counted; only formats a picture is plausibly stored in belong in the table, and a test asserts nothing is claimed by both it and `SUPPORTED`.
+
 **Two image rules that are not style preferences:**
 - **Never `image::open`.** It picks the decoder from the *file extension*, and roughly
   one picture in ten is named for a format it is not. Use `images::open_image`, which
@@ -84,7 +89,7 @@ windows in someone's desktop, apply a wallpaper, or fade a window because they w
 check a build.
 
 **Data flow for applying a wallpaper:**
-1. `config.rs` — reads `settings.toml` from `%APPDATA%\WallpaperChanger`, migrating it out of an old in-install `config/` on first run
+1. `config.rs` — reads `settings.toml` from `%APPDATA%\WallpaperChanger`, seeding it from the compiled-in defaults on first run
 2. `monitor.rs` — enumerates displays with `EnumDisplayMonitors`, computes the virtual desktop
 3. `selection.rs` — picks images (random with JSON history, or sequential)
 4. `collage.rs` — plans the grid, fits each picture (`fill`/`fit`/`stretch`/`center`/`span`), pastes the composite
@@ -108,10 +113,14 @@ check a build.
 **Output format:** Always BMP (required by `SystemParametersInfoW`). Written to `paths.output_folder`; a relative value resolves under `%LOCALAPPDATA%\WallpaperChanger`, never the install directory.
 
 **User files** live outside the installation, so the app works when installed under `Program Files`:
-- `%APPDATA%\WallpaperChanger\` — `settings.toml`, `state.json`, `transparency.json`
+- `%APPDATA%\WallpaperChanger\` — `settings.toml`, `state.json`, `transparency.json`, `gallery.json`
 - `%LOCALAPPDATA%\WallpaperChanger\` — composed wallpaper output
 
-`config.rs` migrates these out of the old in-install `config/` directory on first run (copy, never move; never overwrites). Override both locations with `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` — the `Sandbox` helper in `lib.rs` does this for every test that touches them, behind a process-wide lock, so the suite cannot reach real user files.
+**A first run must always end up with a `settings.toml`.** `load_config(None)` migrates the old in-install `config/` directory first (copy, never move; never overwrites), and writes `DEFAULT_SETTINGS` — `assets/settings.default.toml`, embedded with `include_str!` — when there is nothing to migrate. That second half was missing until 6.0.1, and it was invisible: the NSIS bundler ships no `config/`, so a genuinely fresh install had every config-reading method answer `not_found`, while a developer checkout worked because the repo carried a `config/` at its root for the migration to find. Passing an explicit path stays strict — a file the caller named and that is not there is `not_found`, not something to invent.
+
+`project_root()` depended on that same folder to recognise a checkout, and now anchors on `desktop/src-tauri/Cargo.toml`. It is not only the migration seed: `video.rs` uses it to find the vendored `libmpv/`, so getting it wrong shows up as the video wallpaper being unavailable rather than as a broken path.
+
+Override both locations with `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` — the `Sandbox` helper in `lib.rs` does this for every test that touches them, behind a process-wide lock, so the suite cannot reach real user files.
 
 ## Testing conventions
 
@@ -149,6 +158,6 @@ Updates are `tauri-plugin-updater` against a static manifest: the installed app 
 
 Rust owns the global hotkeys (`hotkeys.rs`) so they survive an engine restart and can reach the window. Bindings keep the old GUI's syntax (`ctrl+alt+right`); `parse_shortcut` translates it. Windows grants a global hotkey to one owner, so a binding held by another app (including the legacy GUI, if it is running) will fail to register and is surfaced in the UI.
 
-**No shortcut ships bound.** Every `[hotkeys]` entry in `config/settings.toml` is `""` except `scroll_modifier`, which is not a shortcut. Claiming a dozen combinations on first run steals them from whatever the user already runs, and Windows gives no warning to the loser. Empty means "not registered" everywhere: `register_all` skips it, and `HotkeyManager.update` skips it rather than reporting it as a malformed shortcut.
+**No shortcut ships bound.** Every `[hotkeys]` entry in `assets/settings.default.toml` is `""` except `scroll_modifier`, which is not a shortcut. Claiming a dozen combinations on first run steals them from whatever the user already runs, and Windows gives no warning to the loser. Empty means "not registered" everywhere: `register_all` skips it, and `HotkeyManager.update` skips it rather than reporting it as a malformed shortcut.
 
 The app icon is generated, not hand-edited: `assets/icon/wpaper-logo.png` is the source, `uv run python scripts/make_icon.py` squares and pads it into `desktop/app-icon.png` plus `desktop/public/icon.png`, and `cd desktop; bunx tauri icon app-icon.png` regenerates the platform set under `desktop/src-tauri/icons/`.

@@ -490,16 +490,86 @@ Measured over the reporter's own 4948-image folder, thumbnailed to 160 px:
 **470 of 4948 files in the reporter's folder — 9.5% — are named for a format they are not**, in every direction: 228 JPEGs called `.webp`, 189 WebPs called `.jpeg`, 25 WebPs called `.png`, 23 PNGs called `.jpeg`, 5 JPEGs called `.png`. A four-image collage from that folder failed about a third of the time. Pillow sniffs content in `Image.open`, so the Python engine never saw any of it — this was a regression the port introduced.
 
 - [x] 11.1 **Fixed.** `images::open_image` is now the crate's single loader and sniffs content; `compose_collage` and apply's `open_rgb` both go through it. Regression test asserts a PNG named `.jpg` opens, *and* that `image::open` still fails on it — so the wrapper cannot be quietly removed later.
-- [ ] 11.2 **A corpus of awkward images**, asserted file-for-file against Pillow: CMYK JPEG, progressive JPEG, EXIF-rotated, 16-bit PNG, greyscale with alpha, animated WebP, lossless WebP, a truncated file, and a file whose extension lies about its contents. Everything the suite covers today is a format that works.
-- [ ] 11.3 **Name the file that failed.** Skipping one unreadable picture rather than failing the batch is right, but silently is not — `get_thumbnails` drops failures with no record, so a user cannot find out which picture is bad or why. Log it, and consider returning the list.
-- [ ] 11.4 **Decide about HEIC and AVIF.** 302 of the reporter's 4948 files are invisible to the app because `SUPPORTED` does not list them, which may be the real complaint behind "different formats". Neither is supported by `image` out of the box. A product decision: add a decoder, or say so in the UI rather than silently omitting them.
+- [x] 11.2 **A corpus of awkward images — done, with one honest gap.** The odd-but-valid shapes (greyscale with alpha, 16-bit PNG, RGBA, greyscale JPEG, lossless WebP) all decode and all survive `to_rgb8`, which is the conversion that matters — the whole pipeline flattens to RGB before it resizes. The broken shapes (truncated mid-stream, empty, text with a `.jpg` name, a real HEIC) assert an **error naming the file** rather than a panic, because `get_thumbnails` and `compose_collage` both have to survive them.
+  **CMYK and progressive JPEG are absent on purpose.** The plan said "asserted file-for-file against Pillow", and neither half of that is possible any more: the Python composer is gone, and the `image` crate cannot *write* either form, so pinning them needs committed fixtures. A fixture nobody can regenerate is exactly what the goldens already are, and one set of those is enough. Noted rather than faked.
+- [x] 11.3 **Name the file that failed — done.** `get_thumbnails` logs each failure at `warn` and returns them in `failed` as `{path, reason}`, in input order — `map_bounded` already guarantees that, which is what makes the list stable enough to pin. `use-thumbnails.ts` mirrors them to the console, so they are reachable from devtools without opening the app log. Two conformance cases pin the shape, one of them the reason **exactly**, so a later refactor cannot quietly stop naming the file.
+- [x] 11.4 **Decided: say so.** Not adding a decoder. HEIC needs libheif and AVIF needs dav1d, both C libraries, and neither is worth carrying next to a 112 MB libmpv that is already most of the download. So the app reports instead: `images::UNSUPPORTED` names the formats a picture is plausibly stored in but that we cannot open, `list_folder_images` returns `skipped` and `skipped_formats`, and the folder line reads "302 in formats the app cannot open (.avif, .heic)".
+  **Naming the formats is the point.** A bare count reads as a bug rather than a limit, and the limit is the true answer. `.txt` and `.ini` are deliberately not counted — only plausible picture formats belong in the table — and a test asserts no extension is claimed by both `UNSUPPORTED` and `SUPPORTED`, or by the video list.
 
 ## Testing gaps these two phases expose
 
 Three kinds of failure got through everything the suite does today, and each wants a permanent guard rather than a one-off fix:
 
 - **A performance regression is invisible to every test we have.** Add a benchmark over a fixture folder with a **committed budget**, failing when thumbnail throughput crosses a threshold. Correctness tests cannot catch "correct but ten times slower", and that is exactly what shipped.
-- **The format tests only cover formats that work.** 11.2 is the fix, and it belongs in the permanent suite rather than in a phase.
+- **The format tests only cover formats that work.** ~~11.2 is the fix~~ — **closed.** The corpus is in `images.rs` beside the tests it guards, covering the odd-but-valid colour types and, more importantly, the broken files: each asserts an error that *names the file* rather than a panic.
 - **Memory has never been measured at all.** Add a ceiling assertion to the soak test so a leak surfaces as a failing test rather than a user report.
 
 One process note worth keeping: **the port was tested with `tauri dev` throughout, and that build is not representative.** Every phase's "verify" step ran `cargo test` and `cargo check`, neither of which says anything about how the app feels. Any future phase that touches a hot path should be checked in a release build before it is called done.
+
+## 12. Residue, and the bug it was hiding
+
+**Not a planned phase.** Clearing out what the port left behind turned up a first-run
+failure that nothing in the suite could have caught, because the repository itself was
+the workaround.
+
+- [x] 12.1 **`cargo clippy --workspace --all-targets` did not warn — it failed to
+  compile.** `erasing_op` is deny-by-default, and `assert_eq!(cells[3].0, (900 - 2 *
+  450) / 2)` is always zero. Worth more than the lint: the test called that "the last
+  row of two is offset", and a short last row *widens* its cells to fill the row, so
+  the offset is only the division remainder — which with two cells can never exceed
+  one. **That assertion had never exercised centring at all.** Replaced with a case
+  that does: seven images over 1001 px, last row of three, 333 each, 2 left to split.
+  The workspace is now clippy- and `cargo fmt --all`-clean, and `cargo fmt` had drifted
+  across nine files nobody had reformatted since.
+
+- [x] 12.2 **Nothing ever created a default `settings.toml`.** Found by deleting the
+  repo-root `config/`, which broke the build — `config/settings.toml` was
+  `include_str!`'d from five directories up, so a source asset was living in a folder
+  that also held `state.json` and `transparency.json`: one developer machine's actual
+  wallpaper history and window list, committed to a public repository.
+
+  Moving it to `crates/wallpaper-core/assets/` exposed the real fault. `load_config`
+  answers `not_found` when the file is missing, and the **only** way one ever appeared
+  was `migrate_legacy_files` copying it out of an in-install `config/` — which the NSIS
+  bundler does not ship. So a genuinely fresh install had every config-reading method
+  fail. Eight conformance cases said so the moment the folder was gone; before that,
+  every developer checkout worked, because the repo carried the seed the migration
+  needed. **The workaround and the bug were the same file.**
+
+  `load_config(None)` now writes the compiled-in defaults, comments intact, when there
+  is nothing to migrate. An explicit path stays strict — a file the caller named and
+  that is not there is `not_found`, not something to invent.
+
+- [x] 12.3 **`project_root()` had the same dependency, with a quieter symptom.** It
+  recognised a checkout by whether `config/` existed, so removing the folder silently
+  made it `target/debug`. It is not only the migration seed: `video.rs` uses it to find
+  the vendored `libmpv/`, and a wrong answer there surfaces as *the video wallpaper
+  being unavailable* rather than as a broken path. Anchored on the workspace manifest,
+  with a test that fails if it ever lands in a build directory again.
+
+- [x] 12.4 **The residue itself, about 530 MB.** `src/` (nothing but `__pycache__`),
+  `build/` and `desktop/src-tauri/engine/` (PyInstaller work and sidecar staging), the
+  5.x trees in `dist/` (350 MB, and unrebuildable now the Python is gone —
+  `dist/release/` was left alone), `.pytest_cache/`, `.ruff_cache/`,
+  `.python-version`, `DLLs/*.7z` (29 MB of vendored mpv archive that
+  `libmpv/README.md` tells you where to re-download), `tasks/` (the 2024
+  ttkbootstrap/Inno Setup plan, superseded by this file and contradicted by the
+  architecture), and a root `image.png` referenced by nothing.
+
+  **The `.gitignore` began with a UTF-8 BOM**, which git reads as part of the first
+  pattern — line one had never matched anything. Rewritten without it, and without the
+  entries for a toolchain that no longer exists.
+
+- [x] 12.5 **Documentation caught up with the deletion.** All three translation tables
+  still told users the video wallpaper needs `python-mpv`, a binding deleted with the
+  sidecar; `libmpv/README.md` still documented the PyInstaller bundling and a
+  `_prepare_libmpv` that no longer exists; four frontend comments still described the
+  engine as Python. The README gained the format section that 11.4 made true.
+
+### Still open
+
+Everything in phases 9 and 10 that needed a machine rather than a change: the signed
+installer build and the over-the-top upgrade (9.7), the scaled-display check (9.8), the
+libmpv download size (9.9), scaled JPEG decode (10.5), the memory measurements (10.6),
+and the release-build benchmark numbers (10.8). None of them are code waiting to be
+written; they are all a build or a measurement someone has to run.
