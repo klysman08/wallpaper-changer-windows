@@ -1,6 +1,6 @@
 [package]
 name = "wallpaper-core"
-version = "5.4.0"
+version = "6.0.0"
 edition = "2021"
 description = "Wallpaper Changer engine core: config, composition, Win32, video."
 

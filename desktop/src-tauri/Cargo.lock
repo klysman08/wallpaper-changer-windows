@@ -4188,7 +4188,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-native"
-version = "5.4.0"
+version = "6.0.0"
 dependencies = [
  "clap",
  "log",
@@ -5098,7 +5098,7 @@ dependencies = [
 
 [[package]]
 name = "wallpaper-core"
-version = "5.4.0"
+version = "6.0.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5116,7 +5116,7 @@ dependencies = [
 
 [[package]]
 name = "wallpaper-core-cli"
-version = "5.4.0"
+version = "6.0.0"
 dependencies = [
  "serde_json",
  "tokio",

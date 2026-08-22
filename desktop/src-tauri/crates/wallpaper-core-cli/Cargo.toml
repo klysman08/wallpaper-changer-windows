@@ -1,6 +1,6 @@
 [package]
 name = "wallpaper-core-cli"
-version = "5.4.0"
+version = "6.0.0"
 edition = "2021"
 description = "Speaks the engine's stdio protocol against wallpaper-core, for conformance testing."
 

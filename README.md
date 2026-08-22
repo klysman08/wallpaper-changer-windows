@@ -5,7 +5,6 @@
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white&style=flat-square)](https://tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=flat-square)](https://react.dev)
 [![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white&style=flat-square)](https://rust-lang.org)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white&style=flat-square)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white&style=flat-square)](https://microsoft.com)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](https://opensource.org/license/mit)
 [![Docs](https://img.shields.io/badge/Docs-Live%20Site-df7356?style=flat-square)](https://wallpaper.astrofocus.app/)
@@ -31,7 +30,7 @@ Most wallpaper utilities are either simplistic slideshows that cannot handle mul
 
 ## Architecture
 
-The desktop app is two processes that speak newline-delimited JSON-RPC over stdio.
+The desktop app is a single native process, in two halves.
 
 ```
 +------------------------------------------+
@@ -39,15 +38,24 @@ The desktop app is two processes that speak newline-delimited JSON-RPC over stdi
 |  React 19 + shadcn/ui + Tailwind 4        |
 |  Owns: window, tray, global hotkeys       |
 +---------------------+--------------------+
-                      |  JSON-RPC over stdio
+                      |  in-process dispatch
 +---------------------v--------------------+
-|  src/wallpaper_changer/  -  engine        |
-|  Python 3.11+, frozen with PyInstaller    |
+|  crates/wallpaper-core/  -  engine        |
+|  Rust 2021, no Tauri dependency           |
 |  Owns: everything touching Win32          |
 +------------------------------------------+
 ```
 
-**Why the split.** Every Win32 behaviour that took real effort to get right - the `WorkerW` video layer, layered-window alpha, `SystemParametersInfoW` composition - stays in Python, untouched. The Tauri shell replaces only the interface. Rust owns the global hotkeys so they survive an engine restart and can reach the window itself, and it supervises the engine process; the webview can never spawn anything, it can only call methods on the engine's own allowlist.
+**Why one process.** It used to be two: the engine was Python, frozen with PyInstaller,
+speaking JSON-RPC over a pipe. v6.0 replaced it with a native crate one piece at a time,
+behind a seam that kept the app working at every step. The split had bought a crash
+boundary the app never actually used — there was no restart logic, so a dead engine left
+a window that could only be closed — while costing a 145 MB sidecar, a second toolchain,
+and a teardown that ran in the wrong process.
+
+The engine deliberately has **no Tauri dependency**, so it stays testable without a
+window; the shell injects the few things that need one. The webview still cannot spawn
+anything, and still reaches the engine only through its own method allowlist.
 
 | Layer | Technology |
 | :--- | :--- |
@@ -55,10 +63,9 @@ The desktop app is two processes that speak newline-delimited JSON-RPC over stdi
 | **Interface** | React 19, TypeScript, Vite 8 |
 | **Components** | shadcn/ui on Base UI, Tailwind CSS 4, lucide icons |
 | **Native integration** | `tauri-plugin-global-shortcut`, `-autostart`, `-dialog`, `-notification`, `-opener`, `-log` |
-| **Engine** | Python 3.11+, Pillow, pywin32, screeninfo, python-mpv |
-| **Packaging** | PyInstaller sidecar + Tauri bundler (NSIS) |
+| **Engine** | Rust, `image` + `fast_image_resize`, `windows`, libmpv via runtime FFI |
+| **Packaging** | Tauri bundler (NSIS), with libmpv as a bundled resource |
 
-The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI still run against the same engine modules.
 
 ---
 
@@ -97,10 +104,7 @@ The legacy ttkbootstrap interface (`uv run wallpaper-changer-gui`) and the CLI s
 git clone https://github.com/klysman08/wallpaper-changer-windows.git
 cd wallpaper-changer-windows
 
-# 2. Sync the Python engine's dependencies
-uv sync --dev
-
-# 3. Run the desktop app (spawns the engine through `uv run`, no packaging step)
+# 2. Run the desktop app — the engine compiles with it
 cd desktop
 bun install
 bun run tauri dev
@@ -111,8 +115,6 @@ bun run tauri dev
 | Tool | Minimum Version | Reference |
 | :--- | :--- | :--- |
 | **Windows** | 10 / 11 | - |
-| **Python** | 3.11+ | [python.org](https://python.org) |
-| **uv** | 0.4+ | [docs.astral.sh/uv](https://docs.astral.sh/uv/) |
 | **Rust** | 1.77+ | [rustup.rs](https://rustup.rs) |
 | **Bun** | 1.1+ | [bun.sh](https://bun.sh) |
 | **WebView2** | Runtime | Preinstalled on Windows 11 |
@@ -179,21 +181,26 @@ If a binding fails to register, another application already owns it - the interf
 
 Execute core wallpaper routines from PowerShell or script pipelines:
 
+The application binary *is* the CLI — give it a subcommand and it runs headless instead
+of opening a window.
+
 ```powershell
-# Apply wallpaper immediately
-uv run wallpaper-changer apply
+$app = "$env:LOCALAPPDATA\Programs\Wallpaper Changer\Wallpaper Changer.exe"
 
-# Apply collage with 6 images per monitor randomly selected
-uv run wallpaper-changer apply --collage-count 6 --selection random
+# Apply the wallpaper immediately
+& $app apply
 
-# Apply with a custom image effect
-uv run wallpaper-changer apply --effect vintage
+# Six images per monitor, chosen at random
+& $app apply --collage-count 6 --selection random
 
-# Enable watch mode (auto rotation)
-uv run wallpaper-changer watch
+# Apply with an effect
+& $app apply --effect vintage
 
-# Launch video wallpaper playback loop
-uv run wallpaper-changer video --folder "C:\Videos\live" --loop
+# Rotate on the configured interval until Ctrl+C
+& $app watch
+
+# Play a folder as a video wallpaper until Ctrl+C
+& $app video --folder "C:\Videos\live"
 ```
 
 ---
@@ -262,28 +269,36 @@ sound   = true
 The Tauri bundler produces the installers, so there is no separate Inno Setup step and nothing is written to the registry at install time.
 
 ```powershell
-# Full release: engine sidecar, app, and both installers
+# Full release: app, signed installer, and the updater manifest
 .\scripts\build_app.ps1
 
 # Debug binary, no installers (fast smoke test)
 .\scripts\build_app.ps1 -NoBundle
-
-# Reuse the already-staged engine
-.\scripts\build_app.ps1 -SkipEngine
-
-# Engine sidecar only
-.\scripts\build_engine.ps1
 ```
 
-`build_engine.ps1` freezes the Python engine with PyInstaller, probes the frozen binary to catch missing hidden imports, and stages it into `desktop/src-tauri/engine/`, which Tauri ships as a bundle resource. Installers land in `desktop/src-tauri/target/release/bundle/`.
+A bundled build is signed for the in-app updater, so it needs the minisign key in the
+environment first — the script says so and stops before the long compile rather than
+after it. `libmpv-2.dll` ships as a Tauri resource beside the executable. Installers land
+in `desktop/src-tauri/target/release/bundle/`, and `dist/release/` collects exactly what
+a GitHub release needs.
 
 ### Tests and linting
 
 ```powershell
-uv run pytest                       # Python engine
-uv run ruff check src/              # Python lint
-cd desktop/src-tauri; cargo test    # Rust shell
-cd desktop; bun run build           # Type-check and build the interface
+cd desktop/src-tauri
+cargo test --workspace              # engine, shell, golden images, protocol corpus
+cargo clippy --workspace --all-targets
+cargo check -p tauri-native         # the shipping build, on its own
+
+cd ../..; cd desktop
+bun run build                       # type-check and build the interface
+```
+
+Tests that would take over the screen — applying a wallpaper, fading a window, embedding
+anything in the desktop layer — are `#[ignore]`d and run only when asked for:
+
+```powershell
+cargo test -p wallpaper-core --test desktop_layer -- --ignored --nocapture
 ```
 
 ---
@@ -292,41 +307,42 @@ cd desktop; bun run build           # Type-check and build the interface
 
 ```
 wallpaper-changer/
-├── main.py                       # CLI & legacy GUI entry point
-├── main_rpc.py                   # Engine sidecar entry point
-├── pyproject.toml                # Python dependencies & metadata
-├── wallpaper_changer_rpc.spec    # PyInstaller spec for the sidecar
 ├── assets/icon/wpaper-logo.png   # Icon source
 ├── config/settings.toml          # Default settings, seeded into %APPDATA%
+├── libmpv/libmpv-2.dll           # Bundled as a Tauri resource
 ├── scripts/
-│   ├── build_app.ps1             # Engine + app + installers
-│   ├── build_engine.ps1          # Engine sidecar only
-│   └── make_icon.py              # Logo to icon source
-├── desktop/                      # Tauri 2 desktop application
-│   ├── src/
-│   │   ├── App.tsx               # Sidebar shell, sections, action bar
-│   │   ├── components/           # Screens plus shadcn/ui primitives
-│   │   └── lib/                  # Typed engine client and React hooks
-│   └── src-tauri/src/
-│       ├── lib.rs                # Plugins, setup, engine_call command
-│       ├── engine.rs             # Sidecar supervision and JSON-RPC
-│       ├── hotkeys.rs            # Global shortcut registration
-│       └── tray.rs               # System tray icon and menu
-└── src/wallpaper_changer/
-    ├── rpc.py                    # JSON-RPC adapter over the engine
-    ├── cli.py                    # Command-line router
-    ├── config.py                 # TOML parsing and user-directory migration
-    ├── gallery.py                # Index of collages saved as image files
-    ├── gui.py                    # Legacy ttkbootstrap interface
-    ├── hotkeys.py                # Win32 global hotkey registration
-    ├── i18n.py                   # Locales (en, pt_BR, ja)
-    ├── image_utils.py            # Grids, sizing, and effect modifiers
-    ├── monitor.py                # Win32 screen positioning
-    ├── transition.py             # Native Windows wallpaper transition
-    ├── transparency.py           # Win32 window alpha
-    ├── video_wallpaper.py        # libmpv player lifecycle
-    ├── workerw.py                # Desktop WorkerW discovery
-    └── wallpaper.py              # Canvas rendering and composition
+│   ├── build_app.ps1             # App, signed installer, updater manifest
+│   └── make_icon.py              # Logo to icon source (standalone, needs Pillow)
+├── tests/
+│   ├── conformance/              # Protocol corpus, language-neutral
+│   └── differential/golden/      # Composition pinned against Pillow's output
+└── desktop/                      # Tauri 2 desktop application
+    ├── src/
+    │   ├── App.tsx               # Sidebar shell, sections, action bar
+    │   ├── components/           # Screens plus shadcn/ui primitives
+    │   └── lib/                  # Typed engine client and React hooks
+    └── src-tauri/
+        ├── src/
+        │   ├── lib.rs            # Plugins, setup, engine_call command
+        │   ├── engine.rs         # The single route into the engine
+        │   ├── cli.rs            # apply / watch / video, headless
+        │   ├── hotkeys.rs        # Global shortcut registration
+        │   └── tray.rs           # System tray icon and menu
+        └── crates/
+            ├── wallpaper-core/   # The engine. No Tauri dependency.
+            │   └── src/
+            │       ├── collage.rs      # Grid layout, fitting, composition
+            │       ├── apply.rs        # BMP write and SystemParametersInfoW
+            │       ├── images.rs       # Listing, thumbnails, the one loader
+            │       ├── session.rs      # Apply lock, history, rotation timer
+            │       ├── video.rs        # libmpv over runtime FFI
+            │       ├── workerw.rs      # Desktop WorkerW discovery
+            │       ├── transparency.rs # Win32 window alpha
+            │       ├── scroll.rs       # Modifier+wheel fading
+            │       ├── config.rs       # TOML and user-directory migration
+            │       ├── gallery.rs      # Index of collages saved as images
+            │       └── i18n.rs         # Locales (en, pt_BR, ja)
+            └── wallpaper-core-cli/     # Speaks the stdio protocol, for the corpus
 ```
 
 ---
