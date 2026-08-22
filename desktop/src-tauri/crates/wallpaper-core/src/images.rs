@@ -221,9 +221,13 @@ pub fn scan_videos(folder: &str) -> Value {
 /// unreadable picture in a folder should still let the user see the rest.
 pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
     let box_size = size.clamp(32, 512) as u32;
-    let mut out = serde_json::Map::new();
-    for raw in paths {
-        let Ok(image) = open_image(raw) else { continue };
+
+    // Decoding dominates a batch — shrinking to 160 px was never the expensive part —
+    // and each picture is independent, so the whole job goes across threads. The
+    // picker asks in batches of 24, and this is what stands between a folder appearing
+    // and a folder appearing eventually.
+    let done = crate::parallel::map_bounded(paths, |raw| {
+        let image = open_image(raw).ok()?;
         let (w, h) = thumbnail_size(image.width(), image.height(), box_size);
         // To RGB before resizing, not after: the output is JPEG either way, and
         // `to_rgb8` drops alpha without compositing, so the channels that survive are
@@ -234,8 +238,18 @@ pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
         } else {
             resize_lanczos3(&rgb, w, h)
         };
-        let Ok(bytes) = encode_jpeg(&thumb, 75) else { continue };
-        out.insert(raw.clone(), Value::String(to_base64(&bytes)));
+        Some(to_base64(&encode_jpeg(&thumb, 75).ok()?))
+    });
+
+    // A batch that panicked outright still answers with what it has rather than
+    // failing the call: this method's contract is that one bad picture costs its own
+    // tile and nothing else.
+    let done = done.unwrap_or_default();
+    let mut out = serde_json::Map::new();
+    for (raw, thumb) in paths.iter().zip(done) {
+        if let Some(thumb) = thumb {
+            out.insert(raw.clone(), Value::String(thumb));
+        }
     }
     json!({ "thumbnails": out })
 }

@@ -33,6 +33,7 @@ pub mod gallery;
 pub mod i18n;
 pub mod images;
 pub mod monitor;
+pub(crate) mod parallel;
 pub mod scroll;
 pub mod selection;
 pub mod session;

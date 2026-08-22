@@ -11,7 +11,6 @@
 //! column table changes.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::path::{Path, PathBuf};
 
 use image::RgbImage;
@@ -253,70 +252,18 @@ fn fit_one(
 /// of a preview — and each piece is independent, so this is where the parallelism
 /// belongs. `paste` stays serial: it is a memory copy, and cells are allowed to
 /// overlap, so order has to be the plan's order.
-///
-/// **The worker count is deliberately small.** Each one holds a decoded source *and*
-/// its fitted output at the same time, which for large pictures is tens of megabytes
-/// each; memory use was half of what made this worth fixing, so the cap trades some
-/// speed on many-celled collages for a bounded peak.
 fn fit_all(
     wanted: &[(usize, i32, i32)],
     chosen: &[PathBuf],
     fit_mode: &str,
 ) -> Result<HashMap<(usize, i32, i32), RgbImage>, CoreError> {
-    const MAX_WORKERS: usize = 4;
-
-    let workers = std::thread::available_parallelism()
-        .map(usize::from)
-        .unwrap_or(1)
-        .min(MAX_WORKERS)
-        .min(wanted.len())
-        .max(1);
-
-    if workers == 1 {
-        let mut fitted = HashMap::new();
-        for key in wanted {
-            fitted.insert(*key, fit_one(*key, chosen, fit_mode)?);
-        }
-        return Ok(fitted);
-    }
-
-    let next = AtomicUsize::new(0);
-    let mut gathered: Vec<(usize, Result<RgbImage, CoreError>)> = Vec::new();
-    let mut panicked = false;
-
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..workers)
-            .map(|_| {
-                scope.spawn(|| {
-                    let mut mine = Vec::new();
-                    loop {
-                        let at = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(key) = wanted.get(at) else { return mine };
-                        mine.push((at, fit_one(*key, chosen, fit_mode)));
-                    }
-                })
-            })
-            .collect();
-        for handle in handles {
-            match handle.join() {
-                Ok(mine) => gathered.extend(mine),
-                // Losing a worker silently would leave a hole that the paste loop
-                // would index into. Say so instead.
-                Err(_) => panicked = true,
-            }
-        }
-    });
-
-    if panicked {
-        return Err(CoreError::internal("A worker panicked while fitting images."));
-    }
-
-    // Report the *first* failure in plan order, not whichever thread finished first,
-    // so the same broken folder always produces the same message.
-    gathered.sort_by_key(|(at, _)| *at);
+    let results = crate::parallel::map_bounded(wanted, |key| fit_one(*key, chosen, fit_mode))?;
+    // `map_bounded` restores plan order, so `?` here reports the *first* broken picture
+    // rather than whichever thread happened to lose first — the same folder gives the
+    // same message every run.
     let mut fitted = HashMap::new();
-    for (at, result) in gathered {
-        fitted.insert(wanted[at], result?);
+    for (key, result) in wanted.iter().zip(results) {
+        fitted.insert(*key, result?);
     }
     Ok(fitted)
 }
