@@ -2,9 +2,12 @@
 //!
 //! `tests/differential/compare.py --freeze` wrote `golden/` from the Python engine
 //! while both implementations still existed. This test replays the same inputs
-//! through the Rust core and holds it to them, which is what keeps the port honest
-//! after `src/wallpaper_changer/` is deleted — at that point the goldens are the only
-//! remaining record of what the composition used to produce.
+//! through the Rust core and holds it to them.
+//!
+//! **`src/wallpaper_changer/` and the harness that produced these are both gone**, so
+//! the 37 images beside this file are now the *only* record of what the composition
+//! used to produce. There is no way to make more of them. That is what makes the
+//! rule below absolute rather than fastidious.
 //!
 //! The tolerances differ per stage on purpose, and the reasoning is the same as the
 //! harness's:
@@ -19,8 +22,8 @@
 //!   golden image, not the bound, is what pins it.
 //!
 //! **The goldens are Pillow's output and are never regenerated from Rust.** Doing that
-//! would leave them comparing the port against itself, and `src/wallpaper_changer/` is
-//! on its way out, so there is no second chance to produce them. When the composition
+//! would leave them comparing the port against itself, and there is no second chance
+//! to produce them from Pillow. When the composition
 //! changes deliberately, what moves is the *bound* — re-derived from
 //! `fit_drift_against_the_goldens` rather than loosened until the failure stops. If one
 //! of these fails without such a change, the question is what changed in the

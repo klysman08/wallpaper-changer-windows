@@ -8,30 +8,22 @@
 //! cannot be reused: it patches `wallpaper_changer.rpc` internals, a seam that ceases
 //! to exist. This runner replaces that half of it and outlives the Python.
 //!
-//! Two ways to run it:
+//! Run it against the core:
 //!
 //! ```text
-//! cargo test -p wallpaper-core-cli                     # against the Rust core
-//! CONFORMANCE_ENGINE_CMD='["uv","run","--directory","<repo>","wallpaper-changer-rpc"]' \
-//!   CONFORMANCE_STRICT=1 cargo test -p wallpaper-core-cli
+//! cargo test -p wallpaper-core-cli
 //! ```
 //!
-//! Against the Rust core, a method that is not ported yet answers `unknown_method`
-//! and the case is counted as skipped rather than failed, so the corpus goes green
-//! progressively as the phases land. `CONFORMANCE_STRICT=1` forbids skips, which is
-//! how the Python sidecar is held to the full corpus today.
+//! `CONFORMANCE_ENGINE_CMD` still points it at any other binary speaking the protocol
+//! — a release build, say — as a JSON array of program and arguments.
 //!
-//! The two directions meet in the middle: as a unit lands in the core, Python stops
-//! having those methods at all, and a skip on *that* side is a port rather than a gap.
-//! `CONFORMANCE_MOVED` names them so strict mode can tell the difference — the same
-//! names the core's `PORTED` list carries. Phase 7 moved the first two:
-//!
-//! ```text
-//! CONFORMANCE_ENGINE_CMD='["uv","run","--directory","<repo>","wallpaper-changer-rpc"]' \
-//!   CONFORMANCE_STRICT=1 \
-//!   CONFORMANCE_MOVED='sync_scroll_transparency,scroll_transparency_status' \
-//!   cargo test -p wallpaper-core-cli
-//! ```
+//! **A method the target does not know is now a failure.** While the port was running
+//! this counted `unknown_method` as a *skip*, so the corpus could go green
+//! progressively as phases landed, and `CONFORMANCE_STRICT` / `CONFORMANCE_MOVED`
+//! existed to hold the Python sidecar to the whole thing meanwhile. There is no second
+//! implementation any longer: a method that answers `unknown_method` has regressed,
+//! and treating that as "skipped" would hide exactly the failure this suite exists to
+//! catch.
 //!
 //! Every run gets its own `WALLPAPER_CHANGER_CONFIG_DIR` and `..._DATA_DIR`, so a case
 //! that writes — `watch_start` persists `rotation_active` — cannot touch real user
@@ -228,26 +220,6 @@ fn target_command() -> (String, Vec<String>) {
     }
 }
 
-fn strict() -> bool {
-    std::env::var("CONFORMANCE_STRICT").is_ok_and(|v| v == "1")
-}
-
-/// Methods the target is no longer expected to answer, from `CONFORMANCE_MOVED`.
-///
-/// Strict mode exists to hold the Python sidecar to the whole corpus while it is the
-/// reference implementation. Once a unit has moved to the core, Python legitimately
-/// stops having those methods, and a skip is then the correct outcome rather than a
-/// regression — so strict mode has to be told which ones. This list is the record of
-/// what has moved, and it empties itself when the sidecar goes.
-fn moved() -> Vec<String> {
-    std::env::var("CONFORMANCE_MOVED")
-        .unwrap_or_default()
-        .split(',')
-        .map(|m| m.trim().to_string())
-        .filter(|m| !m.is_empty())
-        .collect()
-}
-
 // ── assertions ───────────────────────────────────────────────────────────────
 
 /// Does `actual` contain everything `expected` specifies? Extra fields are fine —
@@ -333,14 +305,6 @@ fn check(response: &Value, expect: &Value) -> Option<String> {
     (!problems.is_empty()).then(|| problems.join("; "))
 }
 
-/// A method the target has not taken over yet. Only ever a skip, never a pass.
-fn not_ported(response: &Value, expect: &Value) -> bool {
-    let expected_unknown =
-        expect.get("error_type").and_then(Value::as_str) == Some("unknown_method");
-    !expected_unknown
-        && response.pointer("/error/type").and_then(Value::as_str) == Some("unknown_method")
-}
-
 // ── the test ─────────────────────────────────────────────────────────────────
 
 #[test]
@@ -358,8 +322,6 @@ fn corpus_holds_against_the_target_engine() {
     );
 
     let mut passed = 0usize;
-    // (label, method). Strict mode needs the method to tell a port from a gap.
-    let mut skipped: Vec<(String, String)> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
     let mut by_area: BTreeMap<String, (usize, usize)> = BTreeMap::new();
 
@@ -389,11 +351,6 @@ fn corpus_holds_against_the_target_engine() {
                 }
             };
 
-            if not_ported(&response, &step.expect) {
-                skipped.push((label.clone(), step.method.clone().unwrap_or_default()));
-                continue 'cases;
-            }
-
             if let Some(reason) = check(&response, &step.expect) {
                 failed.push(format!("{label}: step {index}: {reason}"));
                 continue 'cases;
@@ -406,39 +363,12 @@ fn corpus_holds_against_the_target_engine() {
 
     let (program, _) = target_command();
     println!("\nconformance target: {program}");
-    println!("  {passed} passed, {} skipped, {} failed", skipped.len(), failed.len());
+    println!("  {passed} passed, {} failed", failed.len());
     for (area, (count, _)) in &by_area {
         println!("    {area}: {count}");
     }
-    let moved = moved();
-    if !skipped.is_empty() {
-        println!("  not answered by this target:");
-        for (label, method) in &skipped {
-            let why = if moved.contains(method) {
-                "  (moved to the core)"
-            } else {
-                ""
-            };
-            println!("    - {label}{why}");
-        }
-    }
-
     assert!(failed.is_empty(), "\n{}", failed.join("\n"));
 
-    if strict() {
-        let unexpected: Vec<&str> = skipped
-            .iter()
-            .filter(|(_, method)| !moved.contains(method))
-            .map(|(label, _)| label.as_str())
-            .collect();
-        assert!(
-            unexpected.is_empty(),
-            "CONFORMANCE_STRICT=1 forbids skips, but {} case(s) answered unknown_method \
-             without being listed in CONFORMANCE_MOVED:\n{}",
-            unexpected.len(),
-            unexpected.join("\n")
-        );
-    }
 }
 
 // ── a tiny temp-dir helper ───────────────────────────────────────────────────

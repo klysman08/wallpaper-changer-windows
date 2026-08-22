@@ -1,4 +1,4 @@
-# One-shot release build: Python engine sidecar + Tauri desktop app + installers.
+# One-shot release build: Tauri desktop app + installers.
 #
 # Replaces the previous build_exe.ps1 / installer.iss pair. Tauri's own bundler
 # produces the NSIS installer, so there is no Inno Setup step any more, and
@@ -7,7 +7,6 @@
 #
 # Run from the repository root:
 #   .\scripts\build_app.ps1
-#   .\scripts\build_app.ps1 -SkipEngine     # reuse the staged engine
 #   .\scripts\build_app.ps1 -NoBundle       # faster, unoptimised, no installers
 #   .\scripts\build_app.ps1 -Tag v5.2 -Notes "..."
 #
@@ -22,8 +21,6 @@
 
 [CmdletBinding()]
 param(
-    # Reuse desktop/src-tauri/engine as-is. Only safe when no Python file changed.
-    [switch]$SkipEngine,
     # Build a debug binary and skip bundling. Much faster for a smoke test.
     # Not named -Debug: that collides with CmdletBinding's common parameter.
     [switch]$NoBundle,
@@ -39,7 +36,6 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $desktop = Join-Path $repoRoot 'desktop'
-$engineDir = Join-Path $desktop 'src-tauri\engine'
 
 # Where the updater looks. Must match plugins.updater.endpoints in tauri.conf.json.
 $repoUrl = 'https://github.com/klysman08/wallpaper-changer-windows'
@@ -107,18 +103,12 @@ password, or the signer will stop and wait for a prompt nobody is there to answe
 '@
 }
 
-# ── 1. Python engine ──────────────────────────────────────────────────────────
-if ($SkipEngine) {
-    if (-not (Test-Path (Join-Path $engineDir 'wallpaper-changer-rpc.exe'))) {
-        throw "-SkipEngine was passed but no engine is staged at $engineDir."
-    }
-    Write-Host '==> Reusing the staged engine' -ForegroundColor Yellow
-}
-else {
-    & (Join-Path $PSScriptRoot 'build_engine.ps1')
-}
+# The engine used to be built and staged here by build_engine.ps1, as a frozen Python
+# sidecar of about 145 MB. It is native now and compiles as part of the app, so that
+# step and the -SkipEngine switch that skipped it are both gone. What still ships
+# beside the executable is libmpv, as a Tauri resource.
 
-# ── 2. Frontend + Tauri ───────────────────────────────────────────────────────
+# ── 1. Frontend + Tauri ───────────────────────────────────────────────────────
 Push-Location $desktop
 try {
     Write-Host '==> Installing frontend dependencies' -ForegroundColor Cyan
@@ -138,7 +128,7 @@ finally {
     Pop-Location
 }
 
-# ── 3. Collect the installers ─────────────────────────────────────────────────
+# ── 2. Collect the installers ─────────────────────────────────────────────────
 # tauri.conf.json is the version the updater compares against, so it is the only
 # version this script trusts.
 $conf = Get-Content (Join-Path $desktop 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json
@@ -168,7 +158,7 @@ if ($stale) {
     "    ({0} installer(s) from earlier versions ignored)" -f $stale.Count | Write-Host -ForegroundColor DarkGray
 }
 
-# ── 4. Updater manifest ───────────────────────────────────────────────────────
+# ── 3. Updater manifest ───────────────────────────────────────────────────────
 if (-not $Tag) {
     $parts = $version.Split('.')
     # v5.1 for 5.1.0, but v4.0.1 for 4.0.1 — the tags in this repo drop a zero patch.

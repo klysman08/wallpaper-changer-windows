@@ -33,7 +33,6 @@
     ],
     "createUpdaterArtifacts": true,
     "resources": {
-      "engine": "engine",
       "../../libmpv/libmpv-2.dll": "libmpv/libmpv-2.dll"
     },
     "icon": [

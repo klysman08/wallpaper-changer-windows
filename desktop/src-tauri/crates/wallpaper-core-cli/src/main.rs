@@ -47,7 +47,10 @@ impl EventSink for StdoutSink {
 #[tokio::main]
 async fn main() {
     let out = Arc::new(Mutex::new(std::io::stdout()));
-    let core = Core::new(Arc::new(StdoutSink { out: Arc::clone(&out) }));
+    let core = Core::new(
+        Arc::new(StdoutSink { out: Arc::clone(&out) }),
+        Arc::new(wallpaper_core::LoggingNotifier),
+    );
 
     emit(&out, &json!({ "event": "ready", "data": { "protocol": PROTOCOL_VERSION } }));
 

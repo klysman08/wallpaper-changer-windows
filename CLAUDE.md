@@ -5,70 +5,109 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```powershell
-# Install dependencies
-uv sync --dev
+# Run tests (from desktop/src-tauri, which is the workspace root)
+cargo test --workspace
+cargo test -p wallpaper-core --lib collage::   # one module
+cargo check -p tauri-native                    # the shipping build, on its own
 
-# Run tests
-uv run pytest
-uv run pytest tests/test_wallpaper.py   # single test module
+# Tests that take over the screen are opt-in
+cargo test -p wallpaper-core --test desktop_layer -- --ignored --nocapture
 
 # Lint / format
-uv run ruff check src/
-uv run ruff format src/
+cargo clippy --workspace --all-targets
+cargo fmt -p wallpaper-core
 
-# Run GUI
-uv run wallpaper-changer-gui
-
-# Run CLI
-uv run wallpaper-changer apply
-uv run wallpaper-changer apply --mode split2 --config path/to/settings.toml
-uv run wallpaper-changer watch
-
-# Run the Tauri desktop app (dev)
+# Run the desktop app (dev)
 cd desktop; bun run tauri dev
 
-# Build distributable (engine sidecar + app + signed NSIS installer + latest.json)
+# The same binary is the CLI
+cargo run -p tauri-native -- apply --effect bw
+cargo run -p tauri-native -- watch
+cargo run -p tauri-native -- video --folder C:/videos
+
+# Build distributable (app + signed NSIS installer + latest.json)
 .\scripts\build_app.ps1
 .\scripts\build_app.ps1 -NoBundle     # debug binary, no installers
-.\scripts\build_app.ps1 -SkipEngine   # reuse the staged engine
-.\scripts\build_engine.ps1            # engine sidecar only
 ```
 
 ## Architecture
 
-Windows-only desktop app for multi-monitor collage wallpapers. Two processes:
+Windows-only desktop app for multi-monitor collage wallpapers. **One process**, two
+halves:
 
-- **`desktop/`** — Tauri v2 + React + shadcn/ui. Owns the window, tray, and global hotkeys.
-- **`desktop/src-tauri/crates/wallpaper-core/`** — the native engine. Owns everything touching Win32: composition, the WORKERW video layer, window transparency, the scroll hook. **44 of the 45 RPC methods are answered here.**
-- **`src/wallpaper_changer/`** — what is left of the Python engine, on its way out. It still answers exactly one method, `notify`, and phase 9 of the Rust port deletes it.
+- **`desktop/`** — Tauri v2 + React + shadcn/ui. Owns the window, tray, and global
+  hotkeys.
+- **`desktop/src-tauri/crates/wallpaper-core/`** — the engine. Owns everything touching
+  Win32: composition, applying, the WORKERW video layer, window transparency, the
+  scroll hook. It answers **all 45 methods**, and deliberately has **no `tauri`
+  dependency**, so it stays testable headless.
 
-They speak newline-delimited JSON over stdio (`rpc.py` ⟷ `desktop/src-tauri/src/engine.rs`). Rust spawns the engine and correlates requests by id; the webview reaches it only through the `engine_call` command, and only via the engine's own method allowlist (`Engine._METHODS`).
+The webview reaches the engine only through the `engine_call` command, which funnels
+into `Engine::call` in `desktop/src-tauri/src/engine.rs` — the single choke point that
+`lib.rs`, `tray.rs` and `hotkeys.rs` also use. `Core::dispatch` answers by method name;
+anything it does not know comes back as `unknown_method`, so that match *is* the
+allowlist.
 
-The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the CLI still work against the same modules.
+**This used to be two processes.** A Python engine (`src/wallpaper_changer/`) spoke
+newline-delimited JSON over stdio to the shell, and the Rust port replaced it one
+state-ownership unit at a time through a strangler seam at `Engine::call`. The Python is
+gone; `openspec/changes/port-engine-to-rust/tasks.md` records what was learned doing it,
+including several behaviours that look arbitrary and are not.
+
+Because the engine is in-process, three things must be given up explicitly on the way
+out — they used to die with the sidecar. `Engine::shutdown` stops the rotation timer,
+removes the system-wide mouse hook, and destroys the video host windows.
+
+**Where things live:**
+- `collage.rs` — grid layout, `fit_image`, and `compose_collage`
+- `apply.rs` — writing the BMP and calling `SystemParametersInfoW`
+- `images.rs` — folder listing, thumbnails, and **the crate's only image loader and
+  resampler**
+- `session.rs` — everything that outlives a call: the apply lock, history, the rotation
+  timer, unsaved settings
+- `video.rs` / `workerw.rs` — libmpv and the desktop layer
+- `transparency.rs` / `scroll.rs` — window fading, by slider and by wheel
+- `parallel.rs` — the bounded worker pool both composition and thumbnails use
+- `cli.rs` (in the shell) — `apply`, `watch`, `video`, driving the same `dispatch`
+
+**Two image rules that are not style preferences:**
+- **Never `image::open`.** It picks the decoder from the *file extension*, and roughly
+  one picture in ten is named for a format it is not. Use `images::open_image`, which
+  sniffs the content. A `.jpeg` that is really a WebP otherwise reaches the JPEG decoder
+  and fails with `Illegal start bytes: 5249`.
+- **Never `image::imageops::resize`.** Use `images::resize_lanczos3`, which is SIMD.
+  Resampling is what composition spends its time on, and the scalar version made the app
+  slower than the Python it replaced.
+
+**Tests that touch the real desktop are `#[ignore]`.** `cargo test` must never embed
+windows in someone's desktop, apply a wallpaper, or fade a window because they wanted to
+check a build.
 
 **Data flow for applying a wallpaper:**
-1. `config.py` — loads `config/settings.toml` relative to the package root; raises `FileNotFoundError` if missing
-2. `monitor.py` — enumerates displays via `screeninfo`, computes virtual desktop dimensions
-3. `image_utils.py` — selects images (random with JSON history, or sequential); resizes with `fit_mode` (`fill`/`fit`/`stretch`/`center`/`span`)
-4. `wallpaper.py` — composites a BMP collage, optionally applies effects (`normal`/`bw`/`vintage`/`hdr`), and calls `ctypes.windll.user32.SystemParametersInfoW` to apply
-5. GUI preview (`gui.py`) renders a live scaled thumbnail of the layout using the same pipeline
+1. `config.rs` — reads `settings.toml` from `%APPDATA%\WallpaperChanger`, migrating it out of an old in-install `config/` on first run
+2. `monitor.rs` — enumerates displays with `EnumDisplayMonitors`, computes the virtual desktop
+3. `selection.rs` — picks images (random with JSON history, or sequential)
+4. `collage.rs` — plans the grid, fits each picture (`fill`/`fit`/`stretch`/`center`/`span`), pastes the composite
+5. `effects.rs` — optionally applies `normal`/`bw`/`vintage`/`hdr`
+6. `apply.rs` — writes the BMP and calls `SystemParametersInfoW`
 
-**The preview is editable.** `plan_collage()` in `wallpaper.py` is the single source of truth for which image lands in which rectangle; `compose_collage` draws from it and the `preview` RPC returns it as `cells` (composite pixel coords + `image_index`) so the UI can lay a hit target over every picture. Never reimplement the grid rules in TypeScript — a drag would then swap the wrong images the moment `_GRID_COLS` changes. Dragging one cell onto another swaps those entries in the pinned selection and re-renders; clicking one opens a picker fed by `get_thumbnails` (the webview cannot read local files, so pictures only reach it as base64). Because the user can edit the list, it can end up shorter than the grid — `compose_collage` wraps with a modulo rather than raising.
+**The preview is editable.** `plan_collage()` in `collage.rs` is the single source of truth for which image lands in which rectangle; `compose_collage` draws from it and the `preview` RPC returns it as `cells` (composite pixel coords + `image_index`) so the UI can lay a hit target over every picture. Never reimplement the grid rules in TypeScript — a drag would then swap the wrong images the moment `columns_for` changes. Dragging one cell onto another swaps those entries in the pinned selection and re-renders; clicking one opens a picker fed by `get_thumbnails` (the webview cannot read local files, so pictures only reach it as base64). Because the user can edit the list, it can end up shorter than the grid — `compose_collage` wraps with a modulo rather than raising.
 
-**A collage can be kept.** "Save as image" in the preview exports it to a file — one monitor's share (`crop_to_monitor`) or the whole virtual desktop — composed afresh at full resolution rather than reusing the preview's window-sized PNG. Saved files are indexed by `gallery.py` (`gallery.json` beside the settings, images in `paths.saved_folder` — resolved by `resolve_saved_dir`, defaulting to `%LOCALAPPDATA%\WallpaperChanger\saved` — which the Gallery screen lets the user point anywhere), and the Gallery screen lists them. Moving that folder only moves *new* saves: index entries hold absolute paths, so the gallery keeps listing pictures wherever they were written. `suggest_collage_path` and `list_saved_collages` both take a config overlay, so an unsaved folder change is still where the save dialog opens. That index is derived data: it is reconciled against the disk on every read, so a file deleted from Explorer just disappears from the list, and "Remove" drops the entry while **leaving the image alone** — the app never deletes the user's pictures. Applying one back (`apply_saved_collage`) neither recomposes it nor re-applies an effect the file already baked in, and picks its placement from what the index says the file is: a desktop-wide export spans every screen (`apply_desktop_image`), a single-screen crop is placed on each screen (`apply_single_wallpaper`). It is deliberately kept out of the wallpaper history, which replays image *selections* through the collage composer — a flattened picture put through that would come back as a collage of itself.
+**A collage can be kept.** "Save as image" in the preview exports it to a file — one monitor's share (`crop_to_monitor`) or the whole virtual desktop — composed afresh at full resolution rather than reusing the preview's window-sized PNG. Saved files are indexed by `gallery.rs` (`gallery.json` beside the settings, images in `paths.saved_folder` — resolved by `resolve_saved_dir`, defaulting to `%LOCALAPPDATA%\WallpaperChanger\saved` — which the Gallery screen lets the user point anywhere), and the Gallery screen lists them. Moving that folder only moves *new* saves: index entries hold absolute paths, so the gallery keeps listing pictures wherever they were written. `suggest_collage_path` and `list_saved_collages` both take a config overlay, so an unsaved folder change is still where the save dialog opens. That index is derived data: it is reconciled against the disk on every read, so a file deleted from Explorer just disappears from the list, and "Remove" drops the entry while **leaving the image alone** — the app never deletes the user's pictures. Applying one back (`apply_saved_collage`) neither recomposes it nor re-applies an effect the file already baked in, and picks its placement from what the index says the file is: a desktop-wide export spans every screen (`apply_desktop_image`), a single-screen crop is placed on each screen (`apply_single_wallpaper`). It is deliberately kept out of the wallpaper history, which replays image *selections* through the collage composer — a flattened picture put through that would come back as a collage of itself.
 
 **shadcn primitives are Base UI parts, and some of them throw.** `DropdownMenuLabel` is a `Menu.GroupLabel` and raises "MenuGroupContext is missing" unless it sits inside `DropdownMenuGroup` / `DropdownMenuRadioGroup`. A throw during render unmounts the whole tree, and because the window is native the result is not a white page with a console — it is a **black window** over an app whose tray, hotkeys and engine all still work, which reads as a wallpaper bug rather than a UI crash. `ErrorBoundary` in `main.tsx` now catches that, shows the message and writes it to the app log; it is the difference between a bug report and a mystery.
 
 **Two CSS traps this UI has already hit.** Tailwind's preflight caps every image at `max-width: 100%`, which silently clamps an inline width over 100% while honouring the inline height — any image deliberately oversized inside a frame (the focused-monitor zoom) needs `max-w-none`. And `[data-slot="card"]:hover` in `index.css` applies a transform, so while the pointer is over a card that card becomes the containing block for its `position: fixed` descendants *and* clips them: a full-window overlay or a cursor-following ghost inside a Card must be portalled to `document.body`.
 
 **Key files:**
-- `src/wallpaper_changer/wallpaper.py` — core composition + Windows API call; `_set_wallpaper_fast()` skips `WM_SETTINGCHANGE` broadcast for fade animation frames
-- `src/wallpaper_changer/gui.py` — large ttkbootstrap GUI (~56 KB); includes hotkey recorder, transparency slider, system tray wiring
-- `src/wallpaper_changer/image_utils.py` — `fit_mode` logic and JSON state for image selection history
-- `src/wallpaper_changer/hotkeys.py` — global hotkey registration via `keyboard` lib; hotkeys defined in `settings.toml`
-- `src/wallpaper_changer/i18n.py` — `t()` decorator used throughout; supported languages: `en`, `pt_BR`, `ja`
-- `src/wallpaper_changer/notifications.py` — Windows toast notifications via `win10toast`
-- `src/wallpaper_changer/gallery.py` — index of collages the user exported to image files
+- `collage.rs` — `plan_collage`, `fit_image`, `compose_collage`. Every number is integer arithmetic copied literally from the Python; an off-by-one shifts a crop.
+- `apply.rs` — the BMP write and `SystemParametersInfoW`. `SPIF_SENDWININICHANGE` is omitted on purpose, to suppress Explorer's crossfade.
+- `images.rs` — folder listing, thumbnails, and the crate's only image loader (`open_image`, content-sniffing) and resampler (`resize_lanczos3`, SIMD).
+- `session.rs` — the apply lock (never queues: a second concurrent apply is told `busy`), the history, the rotation timer, and the live-but-unsaved settings.
+- `video.rs` / `workerw.rs` — libmpv loaded at runtime, and the WORKERW desktop layer. One dedicated thread owns every host window, because `DestroyWindow` may only be called by the thread that created it and fails *silently* otherwise.
+- `scroll.rs` — modifier+wheel window fading. Windows silently unhooks a `WH_MOUSE_LL` callback slower than `LowLevelHooksTimeout` (300 ms), so the callback only sends a wheel count down a channel and a worker thread does the process lookup, the `SetLayeredWindowAttributes` call and the 0.6 s debounced save. That save is a read-modify-write of `transparency.json`, so a fade saved from the window is not clobbered by the next scroll.
+- `i18n.rs` — the translation tables; supported languages `en`, `pt_BR`, `ja`.
+- `parallel.rs` — `map_bounded`, the four-worker pool composition and thumbnails share. Four rather than the core count because each worker holds a decoded full-size image.
 
 **Output format:** Always BMP (required by `SystemParametersInfoW`). Written to `paths.output_folder`; a relative value resolves under `%LOCALAPPDATA%\WallpaperChanger`, never the install directory.
 
@@ -76,21 +115,37 @@ The legacy ttkbootstrap GUI (`gui.py`, `uv run wallpaper-changer-gui`) and the C
 - `%APPDATA%\WallpaperChanger\` — `settings.toml`, `state.json`, `transparency.json`, `gallery.json`
 - `%LOCALAPPDATA%\WallpaperChanger\` — composed wallpaper output, and `saved/` for exported collages
 
-`config.py` migrates these out of the old in-install `config/` directory on first run (copy, never move; never overwrites). Override both locations with `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` — `tests/conftest.py` does this for every test so the suite cannot touch real user files.
+`config.rs` migrates these out of the old in-install `config/` directory on first run (copy, never move; never overwrites). Override both locations with `WALLPAPER_CHANGER_CONFIG_DIR` / `WALLPAPER_CHANGER_DATA_DIR` — the `Sandbox` helper in `lib.rs` does this for every test that touches them, behind a process-wide lock, so the suite cannot reach real user files.
 
 ## Testing conventions
 
-Tests mock `ctypes.windll` calls — never invoke `set_wallpaper_win()` or `SystemParametersInfoW` in tests or analysis. Use `unittest.mock.patch` on `wallpaper_changer.wallpaper.ctypes` for any code path that touches the Windows API.
+**Never let `cargo test` touch the real desktop.** Applying a wallpaper, fading a
+window, or embedding anything in the desktop layer belongs in an `#[ignore]`d test —
+see `tests/desktop_layer.rs`. Win32 behaviour is otherwise expressed through traits
+with fakes: `WallpaperSetter`, `Notifier`, `scroll::Desktop`.
 
-Collage grid supports 1–8 images per monitor (validated in CLI and GUI). Effect and fit-mode choices are string literals; adding a new one requires updating both `image_utils.py`/`wallpaper.py` **and** the CLI `click.Choice` in `cli.py`.
+**The golden images are Pillow's output**, frozen while the Python engine still
+existed, and there is no way to make more of them. When composition changes
+deliberately, re-derive the *bound* from `fit_drift_against_the_goldens`; never
+regenerate the goldens from Rust, which would leave them comparing the port to itself.
+
+**The conformance corpus** (`tests/conformance/*.json`) pins the protocol envelope and
+is language-neutral. A method answering `unknown_method` is a failure, not a skip.
+
+Collage grid supports 1–8 images per monitor, validated in `cli.rs` and in the engine.
+Effect and fit-mode choices are string literals; adding one means updating
+`effects.rs`/`collage.rs` **and** the `EFFECTS` list in `cli.rs`.
 
 ## Build notes
 
-`wallpaper_changer_rpc.spec` freezes the engine sidecar; `scripts/build_engine.ps1` builds it, probes the frozen binary (`ping`/`get_config`/`get_monitors` — a missing hidden import only shows up at runtime), and stages it into `desktop/src-tauri/engine/`, which `tauri.conf.json` ships as a bundle resource. PyInstaller 6 puts bundled data under `_internal/`, but `config.py` derives `PROJECT_ROOT` from `sys.executable` when frozen, so the script also copies a default `settings.toml` next to the exe as the migration seed.
+The engine compiles into the app, so there is no sidecar to stage and
+`scripts/build_app.ps1` builds the frontend and runs Tauri's bundler. **`libmpv-2.dll`
+ships as a Tauri resource** (`tauri.conf.json`), and `Engine::spawn` hands the resolved
+resource directory to `video::set_search_dir` because the core cannot resolve a Tauri
+path itself. At 112 MB it is most of the download.
 
-When adding a dependency that uses dynamic imports, update `hiddenimports` in the spec. `wallpaper_changer.spec` (legacy ttkbootstrap GUI) is kept for building the old GUI by hand.
 
-Installers come from Tauri's bundler (NSIS only) — there is no Inno Setup step. The MSI target was dropped when the in-app updater landed: an NSIS update applied over an MSI install adds a second program entry instead of upgrading in place. "Start with Windows" is a runtime toggle via `tauri-plugin-autostart`, **not** `startup.py`: that module registers `sys.executable`, which inside the frozen sidecar is the headless engine. The autostart entry carries a `--minimized` argument, so a boot-time launch stays in the tray while a manual one opens the window; `general.start_minimized` asks for the same thing unconditionally. `sync_autostart` enables it once on first run (marked by an `autostart-initialized` file in the app config dir, so turning it off sticks) and rewrites the entry on later launches so an older registration picks up the argument. It is a no-op in debug builds: the entry would point at `target/debug`, and the marker is shared with the installed build. The window is hidden in `tauri.conf.json` and shown once *both* the webview has loaded and that decision has been read from the engine (`Startup` in `lib.rs`) — either half can finish last.
+Installers come from Tauri's bundler (NSIS only) — there is no Inno Setup step. The MSI target was dropped when the in-app updater landed: an NSIS update applied over an MSI install adds a second program entry instead of upgrading in place. "Start with Windows" is a runtime toggle via `tauri-plugin-autostart`, **not** the engine's `startup.rs`, which reads and writes a different `Run` value and is kept only for `get_startup_enabled`. The autostart entry carries a `--minimized` argument, so a boot-time launch stays in the tray while a manual one opens the window; `general.start_minimized` asks for the same thing unconditionally. `sync_autostart` enables it once on first run (marked by an `autostart-initialized` file in the app config dir, so turning it off sticks) and rewrites the entry on later launches so an older registration picks up the argument. It is a no-op in debug builds: the entry would point at `target/debug`, and the marker is shared with the installed build. The window is hidden in `tauri.conf.json` and shown once *both* the webview has loaded and that decision has been read from the engine (`Startup` in `lib.rs`) — either half can finish last.
 
 Rotation and video playback are session state, not preferences: `Session::remember()` writes `general.rotation_active` / `video.enabled` to `settings.toml` the moment they are toggled (from anywhere — window, tray, hotkey), `Session::restore_session()` brings them back at startup, and `save_config` overwrites those two keys with the live values so a stale draft from the window cannot undo a hotkey. The restore runs from `Engine::spawn`, **not** through an RPC method: the sidecar used to do it on a daemon thread, which meant it bypassed the port's strangler seam entirely and had to move across the moment each half was ported, or there would have been two rotation timers and two video players.
 

@@ -33,6 +33,7 @@ pub mod gallery;
 pub mod i18n;
 pub mod images;
 pub mod monitor;
+pub mod notify;
 pub(crate) mod parallel;
 pub mod scroll;
 pub mod selection;
@@ -43,9 +44,10 @@ pub mod video;
 pub mod workerw;
 
 pub use apply::{WallpaperSetter, WindowsSetter};
+pub use notify::{LoggingNotifier, Notifier};
 pub use error::{CoreError, ErrorKind};
 pub use monitor::{get_monitors, virtual_desktop, Monitor};
-pub use session::{Bridge, BridgeFuture, Session};
+pub use session::Session;
 
 /// Every method the engine answers, in the order `Engine._METHODS` lists them.
 ///
@@ -286,29 +288,27 @@ pub struct Core {
 
 impl Core {
     /// The real engine: applies wallpapers through Windows.
-    pub fn new(events: Arc<dyn EventSink>) -> Self {
-        Self::with_setter(events, Arc::new(WindowsSetter))
+    ///
+    /// The notifier is supplied rather than constructed because showing a toast needs
+    /// the Tauri application handle, which this crate deliberately cannot reach.
+    pub fn new(events: Arc<dyn EventSink>, notifier: Arc<dyn Notifier>) -> Self {
+        Self::with_parts(events, Arc::new(WindowsSetter), notifier)
     }
 
     /// The engine with the desktop swapped out, for tests.
-    pub fn with_setter(events: Arc<dyn EventSink>, setter: Arc<dyn WallpaperSetter>) -> Self {
+    pub fn with_parts(
+        events: Arc<dyn EventSink>,
+        setter: Arc<dyn WallpaperSetter>,
+        notifier: Arc<dyn Notifier>,
+    ) -> Self {
         Self {
-            session: Arc::new(Session::new(events, setter)),
+            session: Arc::new(Session::new(events, setter, notifier)),
         }
     }
 
     /// The state behind the dispatcher, for the shell's startup and teardown paths.
     pub fn session(&self) -> &Arc<Session> {
         &self.session
-    }
-
-    /// Give the core a way to reach the methods the sidecar still owns.
-    ///
-    /// Only `save_config` needs it today, to ask whether the video player is running
-    /// and to tell Python to re-read the file we just wrote. It disappears with the
-    /// sidecar.
-    pub fn set_bridge(&self, bridge: Arc<dyn Bridge>) {
-        self.session.set_bridge(bridge);
     }
 
     /// Raise an unsolicited engine event.
@@ -695,7 +695,16 @@ impl Core {
                 Ok(json!({ "bye": true }))
             }),
 
-            // Each phase moves names out of this catch-all and into arms above it.
+            "notify" => handled(|| {
+                reject_unexpected(params, &["title", "message"], "notify")?;
+                let title = required_str(params, "title")?.to_string();
+                let message = required_str(params, "message")?.to_string();
+                self.session.notify(&title, &message)
+            }),
+
+            // Nothing is left behind this arm: every name in `METHODS` is answered
+            // above. It is now the allowlist gate — an unknown method reaches the
+            // shell as `NotPorted` and comes back as `unknown_method`.
             _ => Dispatch::NotPorted,
         }
     }
@@ -858,9 +867,10 @@ mod tests {
     /// Never `Core::new` in a test: that one applies wallpapers through Windows, and
     /// `cargo test` runs on a machine with a desktop the developer is looking at.
     fn core() -> Core {
-        Core::with_setter(
+        Core::with_parts(
             Arc::new(NullSink),
             Arc::new(apply::testing::FakeSetter::default()),
+            Arc::new(LoggingNotifier),
         )
     }
 
@@ -922,6 +932,7 @@ mod tests {
         "video_set_sound",
         "video_toggle_sound",
         "shutdown",
+        "notify",
     ];
 
     /// Which side answers each method, probed without letting any of them run.
@@ -1013,7 +1024,7 @@ mod tests {
         }
 
         let recorder = Arc::new(Recorder(Mutex::new(Vec::new())));
-        let core = Core::new(recorder.clone());
+        let core = Core::new(recorder.clone(), Arc::new(LoggingNotifier));
         core.emit(
             "wallpaper_applied",
             serde_json::json!({ "output": "a.bmp" }),

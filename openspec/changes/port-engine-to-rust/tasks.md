@@ -421,16 +421,35 @@ Python's `start()` refuses an empty playlist *before* touching the desktop. The 
 
 ## 9. Delete the sidecar and ship (3-5 days)
 
-- [ ] 9.0 **Port `notify`, the last method the sidecar answers.** Missing from this list until phase 8 noticed it: 9.1 removes the plumbing and 9.3 deletes the package, and between them `notify` had nowhere to go. It needs the `WallpaperSetter` treatment — a trait in the core, implemented in the shell over `tauri-plugin-notification`, which is already a dependency. **Do this first**, or the steps below take the toast with them. Doing it also empties `Bridge`, whose one remaining caller (`notify_sidecar_of_config_change`) exists to keep a config cache fresh for a process that no longer reads the config.
-- [ ] 9.1 Remove the sidecar plumbing from `engine.rs`: all three branches of `engine_command`, `parse_engine_override`, the reader threads, `CALL_TIMEOUT`, and `SHUTDOWN_GRACE`. Also `Bridge`, `BridgeFuture`, `SidecarBridge`, `Core::set_bridge` and `Session::notify_sidecar_of_config_change`.
-- [ ] 9.2 Remove `"resources": { "engine": "engine" }` from `tauri.conf.json`.
-- [ ] 9.3 Delete `src/wallpaper_changer/`, `tests/` (Python), `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, and `scripts/build_engine.ps1`. This is where **`pywin32`** finally goes (deferred from 6.5 and again from 7.5): its last caller is `transparency.py`, which still backs the Python side of the four transparency conformance cases until the whole package is removed.
-- [ ] 9.4 Remove the `-SkipEngine` switch and the engine-staging assert from `scripts/build_app.ps1`. Keep signing-key validation, `bun install`, `tauri build`, artifact collection, and `latest.json` generation.
-- [ ] 9.5 Port `cli.py` to a `clap`-based mode of the Tauri binary (`apply`, `watch`, `video`), preserving the `IntRange(1, 8)` collage-count and effect-choice validation.
-- [ ] 9.6 Update `CLAUDE.md` and `AGENTS.md` — the two-process architecture description is the first thing both documents explain.
-- [ ] 9.7 Verify: `cargo test --workspace`; a full signed installer build with `latest.json`; install over an existing 5.4.0 install and confirm the updater upgrades in place rather than adding a second program entry. **Expect roughly 120 MB, not the ~15 MB this plan originally claimed** — see phase 8: `libmpv-2.dll` is 112 MB of the old 145 MB bundle and it survives the port. Confirm the DLL resolves from the Tauri resource directory in a packaged build, which is the one path phase 8 could not exercise.
+**45 of 45 methods native. The Python is gone.**
+
+- [x] 9.0 **Ported `notify`**, the last method the sidecar answered. A `Notifier` trait in the core with a `TauriNotifier` in the shell, the same shape as `WallpaperSetter` — showing a toast needs the Tauri handle and the core deliberately cannot reach it. This drops `notifications.py`, which built a PowerShell script and spawned `powershell.exe -EncodedCommand` **once per toast**. One deliberate difference: Python could not report a failure, because the send happened on a detached thread after the method had already returned `{"sent": true}`. Nothing in the interface calls `notify`, so there was no behaviour to break.
+- [x] 9.1 Sidecar plumbing removed from `engine.rs`: the child process and its discovery, `parse_engine_override`, the newline-JSON framing, the id/`oneshot` correlation table, both reader threads, `CALL_TIMEOUT`, `SHUTDOWN_GRACE`, and `CREATE_NO_WINDOW`. Also `Bridge`, `BridgeFuture`, `SidecarBridge`, `Core::set_bridge` and `Session::notify_sidecar_of_config_change`. **`engine.rs` went from 465 lines to 146.**
+- [x] 9.2 `"engine": "engine"` removed from `tauri.conf.json`. The `libmpv` resource stays.
+- [x] 9.3 Deleted `src/wallpaper_changer/`, the Python tests, `wallpaper_changer_rpc.spec`, `main_rpc.py`, `pyproject.toml`, `uv.lock`, `scripts/build_engine.ps1` — and with them `pywin32`, deferred from 6.5 and again from 7.5. Also `tests/differential/compare.py`, which imported the deleted package and so could no longer run; its 37 golden images and their sources stay, and are now the only record of what the composition used to produce. `scripts/make_icon.py` survives as a standalone utility, with a note that the project no longer carries a Python environment.
+- [x] 9.4 `-SkipEngine` and the engine-staging step removed from `scripts/build_app.ps1`. Signing-key validation, `bun install`, `tauri build`, artifact collection and `latest.json` generation all unchanged.
+- [x] 9.5 **`cli.py` ported to clap, inside the app binary.** `apply`, `watch` and `video`, keeping the 1-8 collage-count range and the effect choices. Two things this needed that the plan did not mention:
+  - **The console has to be borrowed.** A release build is `windows_subsystem = "windows"`, so it has no stdout and every `println!` would vanish. `AttachConsole(ATTACH_PARENT_PROCESS)` runs before anything is printed.
+  - **Only a subcommand diverts away from the GUI.** The autostart entry passes `--minimized`; reading "any argument" as a command would stop the app starting for exactly the people least able to work out why. There is a test for it.
+
+  The CLI drives `Core::dispatch` rather than reaching into the engine, so it is held to the same allowlist and the same argument validation as the webview.
+- [x] 9.6 `CLAUDE.md` and `AGENTS.md` rewritten: one process rather than two, Rust file names throughout, and the two image rules that are not style preferences (never `image::open`, never `image::imageops::resize`).
+- [ ] 9.7 Verify: `cargo test --workspace` **is green (184 core + 11 shell + 3 golden + 35/35 conformance)**. The signed installer build, the updater check and the over-the-top install are **not done** — see below.
 - [ ] 9.8 Verify the scaled-display case end-to-end: a monitor at 150% must produce the same composite resolution as before the port.
-- [ ] 9.9 **Decide what to do about libmpv's 112 MB**, now that it is the entire download. Options: ship a smaller mpv build, make it an optional download with the feature degrading as it already does when absent, or accept the size. A product decision, not a porting one, and the first honest opportunity to make it.
+- [ ] 9.9 **Decide what to do about libmpv's 112 MB**, now that it is the entire download.
+
+**The conformance corpus tightened as it lost its second implementation.** `unknown_method` used to count as a *skip*, so the corpus could go green progressively while the port ran, and `CONFORMANCE_STRICT` / `CONFORMANCE_MOVED` existed to hold Python to the whole thing meanwhile. All three are gone: with one implementation left, a method answering `unknown_method` has regressed, and calling that a skip would hide the exact failure the suite exists to catch. **35 passed, 0 skipped, 0 failed.**
+
+### Not done, and needing you
+
+**The installer has not been built.** `build_app.ps1` refuses to start without the minisign key in the environment, and that command is yours to run — the password should not pass through here. So the whole of 9.7 beyond `cargo test` is open: no signed NSIS installer, no `latest.json`, no over-the-top install over 5.4.0, and no confirmation that the updater still upgrades in place rather than adding a second program entry.
+
+Two things in this phase are **only exercised by a packaged build** and have never run:
+
+- **`libmpv` as a Tauri resource.** In a dev build the DLL is found through `project_root()/libmpv` instead, so `set_search_dir` and the resource path have not been proven. If this is wrong, video silently reports itself unavailable.
+- **The CLI's console attach.** Debug builds have a console already, so `AttachConsole` is a no-op there; whether a release build actually prints to the terminal is untested.
+
+Expect the installer to be **roughly 120 MB, not the ~15 MB this plan originally claimed** — see phase 8. Deleting Python saved about 33 MB; `libmpv-2.dll` is 112 MB and survives the port.
 
 ## 10. Performance (2-3 days)
 

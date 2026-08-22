@@ -28,10 +28,11 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Request/response correlation for the Python engine sidecar.
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "signal"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 wallpaper-core = { path = "crates/wallpaper-core" }
+clap = { version = "4.6.6", features = ["derive"] }
 
 
 [profile.dev]
@@ -66,3 +67,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 # Only pulled in for relaunch() after an update installs.
 tauri-plugin-process = "2"
+
+[target."cfg(windows)".dependencies]
+# Pinned to what the core and Tauri already resolve. Two versions of `windows` in
+# one graph means two incompatible sets of Win32 newtypes.
+windows = { version = "0.61.3", features = ["Win32_System_Console"] }

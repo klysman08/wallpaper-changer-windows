@@ -30,15 +30,14 @@
 //! memory is [`Session::overrides`] — the sparse set of values a session has changed
 //! but not saved. It survives until `save_config` adopts or replaces it.
 
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Map, Value};
 
 use crate::apply::{self, WallpaperSetter};
+use crate::notify::Notifier;
 use crate::scroll::{self, ScrollHook};
 use crate::video::{self, VideoPlayer};
 use crate::{blocking, config, effects, gallery, monitor, CoreError, EventSink};
@@ -46,23 +45,6 @@ use crate::{blocking, config, effects, gallery, monitor, CoreError, EventSink};
 /// How many applied image sets the "previous wallpaper" hotkey can step back
 /// through. `_HISTORY_LIMIT` in `rpc.py`.
 const HISTORY_LIMIT: usize = 50;
-
-/// A call back into the half of the engine that is still Python.
-///
-/// Built when the port advanced one unit at a time and a few of them straddled:
-/// `save_config` had to know whether the video player was running while the player was
-/// still Python's. Now that video has moved, **one caller is left** —
-/// [`Session::notify_sidecar_of_config_change`], keeping a cache fresh for a sidecar
-/// whose only remaining method is `notify`, which does not read the configuration.
-///
-/// So this is already dead weight in practice. It survives to phase 9 rather than
-/// being unpicked here because removing it means removing the sidecar plumbing it
-/// rides on, which is that phase's whole job.
-pub trait Bridge: Send + Sync {
-    fn call(&self, method: &str, params: Value) -> BridgeFuture;
-}
-
-pub type BridgeFuture = Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>;
 
 /// Applied selections, oldest first, with a cursor for stepping back.
 #[derive(Default)]
@@ -124,8 +106,8 @@ struct Watch {
 
 pub struct Session {
     events: Arc<dyn EventSink>,
-    bridge: Mutex<Option<Arc<dyn Bridge>>>,
     setter: Arc<dyn WallpaperSetter>,
+    notifier: Arc<dyn Notifier>,
     /// Settings changed for this session but not written — today only
     /// `display.effect`, set by `set_effect`. Section -> key -> value.
     overrides: Mutex<Map<String, Value>>,
@@ -140,12 +122,16 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(events: Arc<dyn EventSink>, setter: Arc<dyn WallpaperSetter>) -> Self {
+    pub fn new(
+        events: Arc<dyn EventSink>,
+        setter: Arc<dyn WallpaperSetter>,
+        notifier: Arc<dyn Notifier>,
+    ) -> Self {
         let events_for_scroll = Arc::clone(&events);
         Self {
             events,
-            bridge: Mutex::new(None),
             setter,
+            notifier,
             overrides: Mutex::new(Map::new()),
             apply_lock: tokio::sync::Mutex::new(()),
             history: Mutex::new(History::new()),
@@ -153,10 +139,6 @@ impl Session {
             video: VideoPlayer::new(Arc::clone(&events_for_scroll)),
             scroll: ScrollHook::new(events_for_scroll),
         }
-    }
-
-    pub fn set_bridge(&self, bridge: Arc<dyn Bridge>) {
-        *self.bridge.lock().unwrap_or_else(|e| e.into_inner()) = Some(bridge);
     }
 
     pub fn emit(&self, event: &str, data: Value) {
@@ -236,26 +218,7 @@ impl Session {
                 .as_object_mut()
                 .map(|table| table.insert(key.to_string(), value));
         }
-        if config::save_config(&cfg, None).is_ok() {
-            self.notify_sidecar_of_config_change().await;
-        }
-    }
-
-    /// Tell the sidecar to drop its cached configuration.
-    ///
-    /// Transitional. `Engine._config()` in `rpc.py` caches, and Python no longer sees
-    /// its own writes now that the core owns them — without this, the next
-    /// `_remember` over there would write a stale copy back over what we just saved,
-    /// silently undoing a rotation toggle.
-    async fn notify_sidecar_of_config_change(&self) {
-        let bridge = self
-            .bridge
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        if let Some(bridge) = bridge {
-            let _ = bridge.call("_reload_config", json!({})).await;
-        }
+        let _ = config::save_config(&cfg, None);
     }
 
     // ── applying ─────────────────────────────────────────────────────────────
@@ -600,6 +563,12 @@ impl Session {
         self.scroll.stop();
     }
 
+    /// `notify` — show the user a toast.
+    pub fn notify(&self, title: &str, message: &str) -> Result<Value, CoreError> {
+        self.notifier.notify(title, message)?;
+        Ok(json!({ "sent": true }))
+    }
+
     // ── video wallpaper ──────────────────────────────────────────────────────
 
     /// `video_status` — what the player is doing, and whether it could play at all.
@@ -752,7 +721,6 @@ impl Session {
         // only shadow them.
         self.clear_overrides();
 
-        self.notify_sidecar_of_config_change().await;
         // The scroll hook holds a system-wide hook, so it has to follow the saved
         // settings immediately rather than waiting for a restart.
         let _ = self.sync_scroll_transparency();
@@ -857,7 +825,11 @@ mod tests {
     }
 
     fn headless(events: Arc<Recorder>) -> Arc<Session> {
-        Arc::new(Session::new(events, Arc::new(FakeSetter::default())))
+        Arc::new(Session::new(
+            events,
+            Arc::new(FakeSetter::default()),
+            Arc::new(crate::LoggingNotifier),
+        ))
     }
 
     // ── the apply lock, which must refuse rather than queue ──────────────────
@@ -883,7 +855,11 @@ mod tests {
     #[tokio::test]
     async fn stepping_back_with_no_history_is_refused_before_any_work() {
         let setter = Arc::new(FakeSetter::default());
-        let session = Arc::new(Session::new(Arc::new(Recorder::default()), setter.clone()));
+        let session = Arc::new(Session::new(
+            Arc::new(Recorder::default()),
+            setter.clone(),
+            Arc::new(crate::LoggingNotifier),
+        ));
 
         let err = session.apply_previous_wallpaper(None).await.unwrap_err();
         assert_eq!(err.kind(), ErrorKind::NoHistory);

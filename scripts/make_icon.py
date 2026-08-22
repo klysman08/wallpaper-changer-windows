@@ -1,5 +1,9 @@
 """Prepare the application icon from the project logo.
 
+Stands alone. The project carries no Python environment since the engine was ported
+to Rust, so run this with an interpreter that has Pillow — ``uv run --no-project
+--with pillow python scripts/make_icon.py`` needs nothing installed.
+
 Reads ``assets/icon/wpaper-logo.png`` and writes ``desktop/app-icon.png``
 (1024x1024 RGBA), which is what Tauri's icon generator wants as its source.
 Regenerate the platform icon set afterwards with::
