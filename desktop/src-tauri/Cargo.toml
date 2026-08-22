@@ -37,6 +37,14 @@ wallpaper-core = { path = "crates/wallpaper-core" }
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
 
+# Optimise dependencies even in a dev build. Our own code stays unoptimised and
+# debuggable, but `image`'s decoders are pathological without optimisation - a
+# 120-image thumbnail batch takes 90s at opt-level 0 and 3.5s at 3. Pillow never had
+# this problem because its work happens in C that is compiled optimised either way,
+# so `tauri dev` made the port look far slower than it is.
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1 # Allows LLVM to perform better optimization.
 lto = true        # Enables link-time-optimizations.
