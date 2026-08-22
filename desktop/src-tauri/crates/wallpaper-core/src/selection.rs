@@ -119,7 +119,10 @@ fn pick_sequential(
         .map(|i| available[(cursor + i) % available.len()].clone())
         .collect();
 
-    state.insert(key, Value::from(((cursor + count) % available.len()) as u64));
+    state.insert(
+        key,
+        Value::from(((cursor + count) % available.len()) as u64),
+    );
     save_state(state_path, &state)?;
     Ok(picked)
 }
@@ -182,10 +185,7 @@ fn pick_random(folder: &Path, count: usize, state_path: &Path) -> Result<Vec<Pat
         }
         picked
     } else {
-        unseen
-            .choose_multiple(&mut rng, count)
-            .cloned()
-            .collect()
+        unseen.choose_multiple(&mut rng, count).cloned().collect()
     };
 
     shown.extend(picked.iter().map(name_of));
@@ -296,7 +296,11 @@ mod tests {
 
         for _ in 0..3 {
             let picked = pick_images(&dir, 2, "random", Some(&state)).unwrap();
-            assert_eq!(picked.len(), 2, "the cycle must restart rather than run dry");
+            assert_eq!(
+                picked.len(),
+                2,
+                "the cycle must restart rather than run dry"
+            );
         }
     }
 
@@ -311,11 +315,16 @@ mod tests {
         pick_images(&dir, 2, "random", Some(&state_path)).unwrap();
 
         let state = load_state(&state_path);
-        let history = state[&history_key(&dir)].as_array().expect("a history array");
+        let history = state[&history_key(&dir)]
+            .as_array()
+            .expect("a history array");
         assert_eq!(history.len(), 2);
         for entry in history {
             let name = entry.as_str().unwrap();
-            assert!(!name.contains('\\') && !name.contains('/'), "expected a bare name, got {name}");
+            assert!(
+                !name.contains('\\') && !name.contains('/'),
+                "expected a bare name, got {name}"
+            );
             assert!(name.ends_with(".png"));
         }
     }
@@ -342,6 +351,9 @@ mod tests {
         let dir = folder_with(&sandbox, &["a.png", "b.png"]);
         let state = sandbox.dir.join("state.json");
         std::fs::write(&state, "not json").unwrap();
-        assert_eq!(pick_images(&dir, 2, "random", Some(&state)).unwrap().len(), 2);
+        assert_eq!(
+            pick_images(&dir, 2, "random", Some(&state)).unwrap().len(),
+            2
+        );
     }
 }

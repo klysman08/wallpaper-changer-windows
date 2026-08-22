@@ -222,7 +222,7 @@ fn external_navigation_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin
             let is_external_link = matches!(url.scheme(), "http" | "https" | "mailto" | "tel");
 
             if is_external_link {
-                log::info!("opening external link in system browser: {}", url);
+                log::info!("opening external link in system browser: {url}");
                 let _ = webview.opener().open_url(url.as_str(), None::<&str>);
                 return false;
             }
@@ -261,8 +261,7 @@ pub fn run() {
                     // console with the same error until the process is killed. Cutting
                     // its own target out of this one destination breaks the cycle
                     // without hiding anything: stdout and the log file still get it.
-                    Target::new(TargetKind::Webview)
-                        .filter(|m| m.target() != "tauri_runtime_wry"),
+                    Target::new(TargetKind::Webview).filter(|m| m.target() != "tauri_runtime_wry"),
                 ])
                 .build(),
         )

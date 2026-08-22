@@ -89,7 +89,10 @@ pub fn plan_collage(monitors: &[Monitor], count: usize, same_for_all: bool) -> V
     let mut cells = Vec::new();
     let mut image_index = 0usize;
     for monitor in monitors {
-        for (j, cell) in grid_layout(count, monitor.width, monitor.height).into_iter().enumerate() {
+        for (j, cell) in grid_layout(count, monitor.width, monitor.height)
+            .into_iter()
+            .enumerate()
+        {
             cells.push(json!({
                 "monitor": monitor.index,
                 // Which entry of the image list fills this cell. With same_for_all
@@ -296,7 +299,11 @@ pub fn compose_collage(
     let chosen: Vec<PathBuf> = match preset_images {
         Some(preset) if !preset.is_empty() => preset.iter().map(PathBuf::from).collect(),
         _ => {
-            let wanted = if same_for_all { count } else { count * monitors.len() };
+            let wanted = if same_for_all {
+                count
+            } else {
+                count * monitors.len()
+            };
             crate::selection::pick_images(&folder, wanted, &selection, state_file)?
         }
     };
@@ -391,7 +398,11 @@ pub fn images_on(
     if used.is_empty() {
         return Vec::new();
     }
-    let cells = plan_collage(cfg_count_cells(cfg, monitors), collage_count(cfg), same_for_all(cfg));
+    let cells = plan_collage(
+        cfg_count_cells(cfg, monitors),
+        collage_count(cfg),
+        same_for_all(cfg),
+    );
     let mut seen = Vec::new();
     for cell in cells {
         if cell["monitor"].as_u64() != Some(monitor as u64) {
@@ -402,7 +413,9 @@ pub fn images_on(
             seen.push(index);
         }
     }
-    seen.into_iter().map(|i| used[i % used.len()].clone()).collect()
+    seen.into_iter()
+        .map(|i| used[i % used.len()].clone())
+        .collect()
 }
 
 /// Kept as a named helper so `images_on` reads as one expression.
@@ -415,7 +428,14 @@ mod tests {
     use super::*;
 
     fn mon(index: usize, x: i32, y: i32, w: i32, h: i32) -> Monitor {
-        Monitor { index, x, y, width: w, height: h, name: format!("D{index}") }
+        Monitor {
+            index,
+            x,
+            y,
+            width: w,
+            height: h,
+            name: format!("D{index}"),
+        }
     }
 
     fn cells_of(n: usize, w: i32, h: i32) -> Vec<(i32, i32, i32, i32)> {
@@ -427,7 +447,17 @@ mod tests {
 
     #[test]
     fn the_column_table_is_the_one_from_python() {
-        for (n, cols) in [(1, 1), (2, 2), (3, 2), (4, 2), (5, 3), (6, 3), (7, 4), (8, 4), (9, 3)] {
+        for (n, cols) in [
+            (1, 1),
+            (2, 2),
+            (3, 2),
+            (4, 2),
+            (5, 3),
+            (6, 3),
+            (7, 4),
+            (8, 4),
+            (9, 3),
+        ] {
             assert_eq!(columns_for(n), cols, "n={n}");
         }
         // Beyond the table it is ceil(sqrt(n)).
@@ -445,7 +475,12 @@ mod tests {
     fn four_images_make_a_two_by_two() {
         assert_eq!(
             cells_of(4, 1920, 1080),
-            [(0, 0, 960, 540), (960, 0, 960, 540), (0, 540, 960, 540), (960, 540, 960, 540)]
+            [
+                (0, 0, 960, 540),
+                (960, 0, 960, 540),
+                (0, 540, 960, 540),
+                (960, 540, 960, 540)
+            ]
         );
     }
 
@@ -460,19 +495,28 @@ mod tests {
         assert_eq!(cells.last().unwrap().1 + cells.last().unwrap().3, 100);
     }
 
-    /// Three images are two columns over two rows, and the lone last cell is centred.
+    /// A last row with fewer cells than the others widens them, then centres the
+    /// remainder that the widening could not spend.
     #[test]
     fn a_short_last_row_is_centred() {
         let cells = cells_of(3, 1000, 1000);
         assert_eq!(cells[0], (0, 0, 500, 500));
         assert_eq!(cells[1], (500, 0, 500, 500));
-        // Last row has one cell of the full width, so the offset is zero.
+        // Last row has one cell of the full width, so there is nothing left to centre.
         assert_eq!(cells[2], (0, 500, 1000, 500));
 
-        // Five images: 3 columns, so the last row of two is offset.
+        // Five images: 3 columns, so the last row holds two — widened to 450 each,
+        // which spends the full 900 and again leaves no offset.
         let cells = cells_of(5, 900, 900);
-        assert_eq!(cells[3].0, (900 - 2 * 450) / 2);
-        assert_eq!(cells[3].2, 450);
+        assert_eq!((cells[3].0, cells[3].2), (0, 450));
+
+        // The offset is only ever the division remainder, so it takes a last row of
+        // three and a width that does not divide by three to see one. Seven images
+        // are four columns over two rows; 1001 / 3 truncates to 333, leaving 2 to
+        // split either side.
+        let cells = cells_of(7, 1001, 1000);
+        assert_eq!((cells[4].0, cells[4].2), (1, 333));
+        assert_eq!(cells[6].0, 1 + 2 * 333);
     }
 
     #[test]
@@ -511,7 +555,9 @@ mod tests {
     }
 
     fn gradient(w: u32, h: u32) -> RgbImage {
-        RgbImage::from_fn(w, h, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, 90]))
+        RgbImage::from_fn(w, h, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, 90])
+        })
     }
 
     #[test]
@@ -533,9 +579,21 @@ mod tests {
     fn fit_letterboxes_with_black() {
         let out = fit_image(&gradient(200, 100), 100, 100, "fit");
         assert_eq!(out.dimensions(), (100, 100));
-        assert_eq!(out.get_pixel(50, 0).0, [0, 0, 0], "top should be letterboxed");
-        assert_eq!(out.get_pixel(50, 99).0, [0, 0, 0], "bottom should be letterboxed");
-        assert_ne!(out.get_pixel(50, 50).0, [0, 0, 0], "middle should be the picture");
+        assert_eq!(
+            out.get_pixel(50, 0).0,
+            [0, 0, 0],
+            "top should be letterboxed"
+        );
+        assert_eq!(
+            out.get_pixel(50, 99).0,
+            [0, 0, 0],
+            "bottom should be letterboxed"
+        );
+        assert_ne!(
+            out.get_pixel(50, 50).0,
+            [0, 0, 0],
+            "middle should be the picture"
+        );
     }
 
     #[test]
@@ -564,7 +622,11 @@ mod tests {
 
         let right = crop_to_monitor(&canvas, &monitors, 1).unwrap();
         assert_eq!(right.dimensions(), (6, 4));
-        assert_eq!(right.get_pixel(0, 0).0[0], 4, "should start at the monitor origin");
+        assert_eq!(
+            right.get_pixel(0, 0).0[0],
+            4,
+            "should start at the monitor origin"
+        );
     }
 
     #[test]
@@ -601,7 +663,10 @@ mod tests {
 
         // Two pictures across four cells alternate rather than collapsing.
         let used = vec!["a.png".to_string(), "b.png".to_string()];
-        assert_eq!(images_on(&cfg, &monitors, 0, &used), ["a.png", "b.png", "a.png", "b.png"]);
+        assert_eq!(
+            images_on(&cfg, &monitors, 0, &used),
+            ["a.png", "b.png", "a.png", "b.png"]
+        );
     }
 
     #[test]

@@ -139,7 +139,11 @@ fn fitting_matches_the_golden_images() {
                 }
                 _ => {
                     let (rw, rh) = (tw as f64 / sw, th as f64 / sh);
-                    let ratio = if mode == "fit" { rw.min(rh) } else { rw.max(rh) };
+                    let ratio = if mode == "fit" {
+                        rw.min(rh)
+                    } else {
+                        rw.max(rh)
+                    };
                     if ratio > 1.0 {
                         24
                     } else if ratio == 1.0 {
@@ -171,7 +175,10 @@ fn fitting_matches_the_golden_images() {
 #[ignore = "reports numbers rather than asserting them"]
 fn fit_drift_against_the_goldens() {
     let src = source("fit-source.png");
-    println!("{:<14} {:<8} {:>9} {:>12}", "case", "mode", "max delta", "differing");
+    println!(
+        "{:<14} {:<8} {:>9} {:>12}",
+        "case", "mode", "max delta", "differing"
+    );
     for (kind, tw, th) in [
         ("shrink-both", 200, 150),
         ("narrow-tall", 120, 400),

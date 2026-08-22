@@ -214,7 +214,9 @@ mod platform {
     }
 
     pub fn visible_windows() -> Vec<VisibleWindow> {
-        let mut collector = Collector { windows: Vec::new() };
+        let mut collector = Collector {
+            windows: Vec::new(),
+        };
         let _ = unsafe {
             EnumWindows(
                 Some(enumerate),
@@ -389,11 +391,16 @@ pub fn toggle_foreground_opacity_result() -> Result<Value, CoreError> {
     }
     let process = process_name(hwnd);
     if process.is_empty() {
-        return Err(CoreError::not_found("Could not identify the focused window."));
+        return Err(CoreError::not_found(
+            "Could not identify the focused window.",
+        ));
     }
 
     let mut settings = load_settings();
-    let current = settings.get(&process).and_then(as_alpha).unwrap_or(FULLY_OPAQUE);
+    let current = settings
+        .get(&process)
+        .and_then(as_alpha)
+        .unwrap_or(FULLY_OPAQUE);
     let alpha = toggled_alpha(current);
 
     set_opacity(hwnd, alpha);
@@ -435,7 +442,10 @@ mod tests {
     fn the_shell_surfaces_that_are_never_offered() {
         assert!(is_listable("Visual Studio Code"));
         assert!(!is_listable(""), "an untitled window is not offerable");
-        assert!(!is_listable("Program Manager"), "that is the desktop itself");
+        assert!(
+            !is_listable("Program Manager"),
+            "that is the desktop itself"
+        );
         assert!(!is_listable("Windows Input Experience"));
         assert!(!is_listable("Settings"));
         assert!(!is_listable("MSCTFIME UI"));

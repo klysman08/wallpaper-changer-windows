@@ -107,7 +107,10 @@ pub fn run() -> i32 {
 
     // A current-thread runtime: the CLI is one command at a time, and the core's
     // blocking work goes to `spawn_blocking` regardless.
-    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
         Ok(runtime) => runtime,
         Err(e) => {
             eprintln!("[ERRO] could not start the runtime: {e}");
@@ -131,7 +134,12 @@ async fn execute(command: Command) -> i32 {
                 Ok(draft) => draft,
                 Err(code) => return code,
             };
-            set_in(&mut draft, "general", "selection", selection.map(Value::from));
+            set_in(
+                &mut draft,
+                "general",
+                "selection",
+                selection.map(Value::from),
+            );
             set_in(
                 &mut draft,
                 "general",
@@ -142,7 +150,10 @@ async fn execute(command: Command) -> i32 {
 
             match call(&core, "apply_wallpaper", json!({ "config": draft })).await {
                 Ok(result) => {
-                    println!("[OK] wallpaper applied -> {}", result["output"].as_str().unwrap_or("?"));
+                    println!(
+                        "[OK] wallpaper applied -> {}",
+                        result["output"].as_str().unwrap_or("?")
+                    );
                     0
                 }
                 Err(e) => {
@@ -235,7 +246,9 @@ fn base_config(path: Option<&std::path::Path>) -> Result<Value, i32> {
 
 fn set_in(draft: &mut Value, section: &str, key: &str, value: Option<Value>) {
     let Some(value) = value else { return };
-    let Some(root) = draft.as_object_mut() else { return };
+    let Some(root) = draft.as_object_mut() else {
+        return;
+    };
     root.entry(section)
         .or_insert_with(|| Value::Object(Map::new()))
         .as_object_mut()
@@ -292,7 +305,9 @@ mod tests {
             assert!(
                 !matches!(
                     Some(argument),
-                    Some("apply" | "watch" | "video" | "help" | "--help" | "-h" | "--version" | "-V")
+                    Some(
+                        "apply" | "watch" | "video" | "help" | "--help" | "-h" | "--version" | "-V"
+                    )
                 ),
                 "{argument} would have been taken for a command"
             );
@@ -302,9 +317,15 @@ mod tests {
     #[test]
     fn collage_count_is_held_to_the_grid_the_composer_supports() {
         // The Python CLI used IntRange(1, 8); the grid table has no shape beyond 8.
-        assert!(Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "8"]).is_ok());
-        assert!(Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "9"]).is_err());
-        assert!(Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "0"]).is_err());
+        assert!(
+            Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "8"]).is_ok()
+        );
+        assert!(
+            Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "9"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["wallpaper-changer", "apply", "--collage-count", "0"]).is_err()
+        );
     }
 
     #[test]
@@ -317,9 +338,18 @@ mod tests {
     fn a_draft_only_carries_the_options_that_were_given() {
         let mut draft = Value::Object(Map::new());
         set_in(&mut draft, "general", "selection", None);
-        assert_eq!(draft, json!({}), "an absent option must not appear in the draft");
+        assert_eq!(
+            draft,
+            json!({}),
+            "an absent option must not appear in the draft"
+        );
 
-        set_in(&mut draft, "general", "selection", Some(Value::from("sequential")));
+        set_in(
+            &mut draft,
+            "general",
+            "selection",
+            Some(Value::from("sequential")),
+        );
         set_in(&mut draft, "display", "effect", Some(Value::from("bw")));
         assert_eq!(
             draft,

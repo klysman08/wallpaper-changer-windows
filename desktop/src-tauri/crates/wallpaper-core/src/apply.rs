@@ -256,8 +256,22 @@ mod tests {
 
     fn monitors() -> Vec<Monitor> {
         vec![
-            Monitor { index: 0, x: 0, y: 0, width: 80, height: 60, name: "A".into() },
-            Monitor { index: 1, x: 80, y: -10, width: 60, height: 40, name: "B".into() },
+            Monitor {
+                index: 0,
+                x: 0,
+                y: 0,
+                width: 80,
+                height: 60,
+                name: "A".into(),
+            },
+            Monitor {
+                index: 1,
+                x: 80,
+                y: -10,
+                width: 60,
+                height: 40,
+                name: "B".into(),
+            },
         ]
     }
 

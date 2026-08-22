@@ -48,11 +48,16 @@ impl EventSink for StdoutSink {
 async fn main() {
     let out = Arc::new(Mutex::new(std::io::stdout()));
     let core = Core::new(
-        Arc::new(StdoutSink { out: Arc::clone(&out) }),
+        Arc::new(StdoutSink {
+            out: Arc::clone(&out),
+        }),
         Arc::new(wallpaper_core::LoggingNotifier),
     );
 
-    emit(&out, &json!({ "event": "ready", "data": { "protocol": PROTOCOL_VERSION } }));
+    emit(
+        &out,
+        &json!({ "event": "ready", "data": { "protocol": PROTOCOL_VERSION } }),
+    );
 
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
@@ -66,10 +71,13 @@ async fn main() {
 
         let response = match serde_json::from_str::<Value>(line) {
             Ok(request) => handle(&core, &request).await,
-            Err(e) => failure(Value::Null, &CoreError::new(
-                wallpaper_core::ErrorKind::Parse,
-                format!("Invalid JSON: {e}"),
-            )),
+            Err(e) => failure(
+                Value::Null,
+                &CoreError::new(
+                    wallpaper_core::ErrorKind::Parse,
+                    format!("Invalid JSON: {e}"),
+                ),
+            ),
         };
 
         emit(&out, &response);

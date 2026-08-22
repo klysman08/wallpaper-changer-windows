@@ -73,7 +73,10 @@ pub struct CoreError {
 
 impl CoreError {
     pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into() }
+        Self {
+            kind,
+            message: message.into(),
+        }
     }
 
     pub fn kind(&self) -> ErrorKind {
@@ -113,20 +116,39 @@ macro_rules! ctor {
 ctor!(error, ErrorKind::Error, "A generic failure.");
 ctor!(busy, ErrorKind::Busy, "Another apply is in flight.");
 ctor!(invalid, ErrorKind::Invalid, "A parameter was out of range.");
-ctor!(no_history, ErrorKind::NoHistory, "Nothing behind the history cursor.");
-ctor!(not_configured, ErrorKind::NotConfigured, "A required setting is empty.");
+ctor!(
+    no_history,
+    ErrorKind::NoHistory,
+    "Nothing behind the history cursor."
+);
+ctor!(
+    not_configured,
+    ErrorKind::NotConfigured,
+    "A required setting is empty."
+);
 ctor!(not_found, ErrorKind::NotFound, "A path does not exist.");
-ctor!(no_monitors, ErrorKind::NoMonitors, "No displays were enumerated.");
+ctor!(
+    no_monitors,
+    ErrorKind::NoMonitors,
+    "No displays were enumerated."
+);
 ctor!(no_mpv, ErrorKind::NoMpv, "libmpv is unavailable.");
 ctor!(io, ErrorKind::Io, "A filesystem operation failed.");
-ctor!(bad_params, ErrorKind::BadParams, "Parameters did not fit the signature.");
+ctor!(
+    bad_params,
+    ErrorKind::BadParams,
+    "Parameters did not fit the signature."
+);
 ctor!(internal, ErrorKind::Internal, "An unexpected panic or bug.");
 
 impl CoreError {
     /// The method name is not in the allowlist. Worded exactly as `rpc.py` words it,
     /// because the string reaches the webview.
     pub fn unknown_method(method: &str) -> Self {
-        Self::new(ErrorKind::UnknownMethod, format!("Unknown method: {method}"))
+        Self::new(
+            ErrorKind::UnknownMethod,
+            format!("Unknown method: {method}"),
+        )
     }
 }
 
@@ -138,15 +160,34 @@ mod tests {
     #[test]
     fn kind_strings_match_the_python_vocabulary() {
         let expected = [
-            "error", "busy", "invalid", "no_history", "not_configured", "not_found",
-            "no_monitors", "no_mpv", "io", "unknown_method", "bad_params", "parse",
+            "error",
+            "busy",
+            "invalid",
+            "no_history",
+            "not_configured",
+            "not_found",
+            "no_monitors",
+            "no_mpv",
+            "io",
+            "unknown_method",
+            "bad_params",
+            "parse",
             "internal",
         ];
         let actual = [
-            ErrorKind::Error, ErrorKind::Busy, ErrorKind::Invalid, ErrorKind::NoHistory,
-            ErrorKind::NotConfigured, ErrorKind::NotFound, ErrorKind::NoMonitors,
-            ErrorKind::NoMpv, ErrorKind::Io, ErrorKind::UnknownMethod,
-            ErrorKind::BadParams, ErrorKind::Parse, ErrorKind::Internal,
+            ErrorKind::Error,
+            ErrorKind::Busy,
+            ErrorKind::Invalid,
+            ErrorKind::NoHistory,
+            ErrorKind::NotConfigured,
+            ErrorKind::NotFound,
+            ErrorKind::NoMonitors,
+            ErrorKind::NoMpv,
+            ErrorKind::Io,
+            ErrorKind::UnknownMethod,
+            ErrorKind::BadParams,
+            ErrorKind::Parse,
+            ErrorKind::Internal,
         ]
         .map(ErrorKind::as_str);
         assert_eq!(actual, expected);
@@ -158,7 +199,10 @@ mod tests {
     fn display_is_the_message_alone() {
         let err = CoreError::busy("An apply is already running.");
         assert_eq!(err.to_string(), "An apply is already running.");
-        assert_eq!(format!("{}: {}", err.kind(), err), "busy: An apply is already running.");
+        assert_eq!(
+            format!("{}: {}", err.kind(), err),
+            "busy: An apply is already running."
+        );
     }
 
     #[test]

@@ -220,7 +220,11 @@ mod tests {
         let b = solid(1, 1, [255, 0, 200]);
 
         let out = blend(&a, &b, 0.9);
-        assert_eq!(out.get_pixel(0, 0).0, [229, 25, 190], "229.5 must truncate to 229");
+        assert_eq!(
+            out.get_pixel(0, 0).0,
+            [229, 25, 190],
+            "229.5 must truncate to 229"
+        );
 
         // alpha > 1 extrapolates past both endpoints; the clamp holds it in range.
         let out = blend(&a, &b, 1.35);
@@ -247,7 +251,11 @@ mod tests {
         for y in 0..5 {
             for x in 0..5 {
                 if x == 0 || y == 0 || x == 4 || y == 4 {
-                    assert_eq!(out.get_pixel(x, y), image.get_pixel(x, y), "border at {x},{y}");
+                    assert_eq!(
+                        out.get_pixel(x, y),
+                        image.get_pixel(x, y),
+                        "border at {x},{y}"
+                    );
                 }
             }
         }
@@ -267,11 +275,17 @@ mod tests {
         let mut image = solid(3, 3, [0, 0, 0]);
         *image.get_pixel_mut(1, 1) = image::Rgb([255, 255, 255]);
         // 255*10/6 = 425 -> clamped, not wrapped to 169.
-        assert_eq!(filter_3x3(&image, DETAIL.0, DETAIL.1).get_pixel(1, 1).0, [255, 255, 255]);
+        assert_eq!(
+            filter_3x3(&image, DETAIL.0, DETAIL.1).get_pixel(1, 1).0,
+            [255, 255, 255]
+        );
 
         let mut image = solid(3, 3, [255, 255, 255]);
         *image.get_pixel_mut(1, 1) = image::Rgb([0, 0, 0]);
-        assert_eq!(filter_3x3(&image, DETAIL.0, DETAIL.1).get_pixel(1, 1).0, [0, 0, 0]);
+        assert_eq!(
+            filter_3x3(&image, DETAIL.0, DETAIL.1).get_pixel(1, 1).0,
+            [0, 0, 0]
+        );
     }
 
     #[test]
@@ -335,7 +349,10 @@ mod tests {
     fn every_named_effect_is_accepted() {
         let image = solid(4, 4, [90, 90, 90]);
         for effect in EFFECTS {
-            assert!(apply_effect(&image, effect).is_ok(), "{effect} was rejected");
+            assert!(
+                apply_effect(&image, effect).is_ok(),
+                "{effect} was rejected"
+            );
         }
     }
 

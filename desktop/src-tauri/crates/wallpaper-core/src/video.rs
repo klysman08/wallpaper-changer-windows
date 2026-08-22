@@ -1002,17 +1002,11 @@ mod tests {
         // With no instances it reports the first file rather than failing.
         assert_eq!(playing.step(1), "a.mp4");
 
+        // The wrap `step` applies, spelled out: index plus delta, modulo the playlist.
         let count = playing.videos.len() as i64;
-        assert_eq!(
-            (0 + -1i64).rem_euclid(count),
-            2,
-            "stepping back from 0 wraps to the end"
-        );
-        assert_eq!(
-            (2 + 1i64).rem_euclid(count),
-            0,
-            "stepping past the end wraps to 0"
-        );
+        let wrap = |index: i64, delta: i64| (index + delta).rem_euclid(count);
+        assert_eq!(wrap(0, -1), 2, "stepping back from 0 wraps to the end");
+        assert_eq!(wrap(2, 1), 0, "stepping past the end wraps to 0");
     }
 
     #[test]

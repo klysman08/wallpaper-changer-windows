@@ -44,9 +44,9 @@ pub mod video;
 pub mod workerw;
 
 pub use apply::{WallpaperSetter, WindowsSetter};
-pub use notify::{LoggingNotifier, Notifier};
 pub use error::{CoreError, ErrorKind};
 pub use monitor::{get_monitors, virtual_desktop, Monitor};
+pub use notify::{LoggingNotifier, Notifier};
 pub use session::Session;
 
 /// Every method the engine answers, in the order `Engine._METHODS` lists them.
@@ -182,7 +182,9 @@ where
 {
     match tokio::task::spawn_blocking(f).await {
         Ok(result) => result,
-        Err(e) if e.is_panic() => Err(CoreError::internal("internal error: the image task panicked")),
+        Err(e) if e.is_panic() => Err(CoreError::internal(
+            "internal error: the image task panicked",
+        )),
         Err(e) => Err(CoreError::internal(format!("image task failed: {e}"))),
     }
 }

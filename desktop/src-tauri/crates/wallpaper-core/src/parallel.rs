@@ -33,7 +33,10 @@ pub(crate) const MAX_WORKERS: usize = 4;
 /// failure in its own terms rather than whichever thread happened to lose first. That
 /// matters more than it sounds: without it, the same broken folder produces a
 /// different error message on different runs.
-pub(crate) fn map_bounded<T, R>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Result<Vec<R>, CoreError>
+pub(crate) fn map_bounded<T, R>(
+    items: &[T],
+    f: impl Fn(&T) -> R + Sync,
+) -> Result<Vec<R>, CoreError>
 where
     T: Sync,
     R: Send,
@@ -63,7 +66,9 @@ where
                     let mut mine = Vec::new();
                     loop {
                         let at = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(item) = items.get(at) else { return mine };
+                        let Some(item) = items.get(at) else {
+                            return mine;
+                        };
                         mine.push((at, f(item)));
                     }
                 })
@@ -80,7 +85,9 @@ where
     });
 
     if lost {
-        return Err(CoreError::internal("A worker panicked while processing images."));
+        return Err(CoreError::internal(
+            "A worker panicked while processing images.",
+        ));
     }
     gathered.sort_by_key(|(at, _)| *at);
     Ok(gathered.into_iter().map(|(_, value)| value).collect())

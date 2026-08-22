@@ -654,7 +654,10 @@ mod tests {
         // The floor matches the slider's minimum, so anything reached by scrolling
         // can still be dragged back by hand.
         assert_eq!(next_alpha(0, -100), MIN_ALPHA);
-        assert!(MIN_ALPHA > 0);
+        assert!(
+            next_alpha(0, -100) > 0,
+            "MIN_ALPHA must leave the window visible"
+        );
     }
 
     #[test]

@@ -64,7 +64,10 @@ fn corpus_dir() -> PathBuf {
     // crates/wallpaper-core-cli -> crates -> src-tauri -> desktop -> repo root
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for _ in 0..4 {
-        dir = dir.parent().expect("walked above the repo root").to_path_buf();
+        dir = dir
+            .parent()
+            .expect("walked above the repo root")
+            .to_path_buf();
     }
     dir.join("tests").join("conformance")
 }
@@ -99,7 +102,10 @@ fn load_corpus() -> Vec<Case> {
                 .collect();
             cases.push(Case {
                 area: area.clone(),
-                name: case["name"].as_str().expect("case needs a name").to_string(),
+                name: case["name"]
+                    .as_str()
+                    .expect("case needs a name")
+                    .to_string(),
                 steps,
             });
         }
@@ -156,7 +162,13 @@ impl Engine {
             }
         });
 
-        Self { child, stdin, lines: rx, _config_dir: config_dir, _data_dir: data_dir }
+        Self {
+            child,
+            stdin,
+            lines: rx,
+            _config_dir: config_dir,
+            _data_dir: data_dir,
+        }
     }
 
     fn next_line(&self, timeout: Duration) -> Result<Value, String> {
@@ -216,7 +228,10 @@ fn target_command() -> (String, Vec<String>) {
             let program = it.next().expect("CONFORMANCE_ENGINE_CMD is empty");
             (program, it.collect())
         }
-        Err(_) => (env!("CARGO_BIN_EXE_wallpaper-core-cli").to_string(), Vec::new()),
+        Err(_) => (
+            env!("CARGO_BIN_EXE_wallpaper-core-cli").to_string(),
+            Vec::new(),
+        ),
     }
 }
 
@@ -259,9 +274,15 @@ fn check(response: &Value, expect: &Value) -> Option<String> {
     if let Some(want_ok) = expect.get("ok").and_then(Value::as_bool) {
         if ok != want_ok {
             let detail = if ok {
-                format!("succeeded with {}", response.get("result").unwrap_or(&Value::Null))
+                format!(
+                    "succeeded with {}",
+                    response.get("result").unwrap_or(&Value::Null)
+                )
             } else {
-                format!("failed with {}", response.get("error").unwrap_or(&Value::Null))
+                format!(
+                    "failed with {}",
+                    response.get("error").unwrap_or(&Value::Null)
+                )
             };
             problems.push(format!("expected ok={want_ok}, but it {detail}"));
         }
@@ -314,7 +335,9 @@ fn corpus_holds_against_the_target_engine() {
 
     // `rpc.py` emits `ready` before it answers anything, so the shell can tell a slow
     // start from a dead one. It must be the first line on the channel.
-    let first = engine.next_line(READY_TIMEOUT).expect("engine never became ready");
+    let first = engine
+        .next_line(READY_TIMEOUT)
+        .expect("engine never became ready");
     assert_eq!(
         first.get("event").and_then(Value::as_str),
         Some("ready"),
@@ -368,7 +391,6 @@ fn corpus_holds_against_the_target_engine() {
         println!("    {area}: {count}");
     }
     assert!(failed.is_empty(), "\n{}", failed.join("\n"));
-
 }
 
 // ── a tiny temp-dir helper ───────────────────────────────────────────────────

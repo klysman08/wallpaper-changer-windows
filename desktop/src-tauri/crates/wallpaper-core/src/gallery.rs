@@ -257,9 +257,15 @@ mod tests {
         assert_eq!(entry["width"], 3840);
         assert_eq!(entry["height"], 2160);
         let saved_at = entry["saved_at"].as_str().unwrap();
-        assert!(saved_at.len() >= 19, "expected an ISO timestamp, got {saved_at}");
+        assert!(
+            saved_at.len() >= 19,
+            "expected an ISO timestamp, got {saved_at}"
+        );
         // Local time with an offset, and seconds precision — no fractional part.
-        assert!(!saved_at.contains('.'), "seconds precision only: {saved_at}");
+        assert!(
+            !saved_at.contains('.'),
+            "seconds precision only: {saved_at}"
+        );
     }
 
     /// A desktop-wide export records `monitor: null`, which is what decides whether
@@ -294,7 +300,10 @@ mod tests {
         if cfg!(windows) {
             assert!(find(&path.to_uppercase()).is_some(), "case must not matter");
         }
-        assert!(find(&path.replace('\\', "/")).is_some(), "separator must not matter");
+        assert!(
+            find(&path.replace('\\', "/")).is_some(),
+            "separator must not matter"
+        );
     }
 
     #[test]
@@ -322,7 +331,10 @@ mod tests {
         record(&path, None, &[], 10, 10).unwrap();
 
         assert!(forget(&path).unwrap());
-        assert!(Path::new(&path).is_file(), "the app must never delete the user's picture");
+        assert!(
+            Path::new(&path).is_file(),
+            "the app must never delete the user's picture"
+        );
         assert!(entries().is_empty());
     }
 
@@ -341,7 +353,7 @@ mod tests {
             record(&path, None, &[], 10, 10).unwrap();
         }
         assert_eq!(entries().len(), 5);
-        assert!(MAX_ENTRIES == 500);
+        assert_eq!(MAX_ENTRIES, 500);
     }
 
     #[test]
@@ -359,7 +371,10 @@ mod tests {
         let cfg = json!({});
         let result = suggest_collage_path_result(&cfg, Some(0)).unwrap();
         let path = PathBuf::from(result["path"].as_str().unwrap());
-        assert!(path.parent().unwrap().is_dir(), "the dialog must open somewhere real");
+        assert!(
+            path.parent().unwrap().is_dir(),
+            "the dialog must open somewhere real"
+        );
         assert_eq!(path.parent().unwrap(), library_dir(&cfg));
     }
 

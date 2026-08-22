@@ -38,11 +38,7 @@ fn format_for(extension: &str) -> Option<image::ImageFormat> {
 }
 
 /// `preview` — render the collage to a base64 PNG, leaving the desktop alone.
-pub fn preview(
-    cfg: &Value,
-    max_width: i64,
-    images: Option<&[String]>,
-) -> Result<Value, CoreError> {
+pub fn preview(cfg: &Value, max_width: i64, images: Option<&[String]>) -> Result<Value, CoreError> {
     let monitors = monitor::get_monitors()?;
     if monitors.is_empty() {
         return Err(CoreError::no_monitors("No monitors detected."));
@@ -129,7 +125,10 @@ pub fn save_collage(
         .unwrap_or_default();
     let format = format_for(&extension).ok_or_else(|| {
         let shown = if extension.is_empty() {
-            target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+            target
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
         } else {
             format!(".{extension}")
         };
@@ -236,7 +235,10 @@ mod tests {
         if preview(&cfg, 200, None).is_err() {
             return;
         }
-        assert!(!real_state.exists(), "the preview consumed the real selection state");
+        assert!(
+            !real_state.exists(),
+            "the preview consumed the real selection state"
+        );
     }
 
     #[test]
@@ -278,7 +280,10 @@ mod tests {
         assert!(target.is_file(), "the image was not written");
         let entry = &result["collage"];
         assert_eq!(entry["path"], target.to_string_lossy().as_ref());
-        assert!(entry["monitor"].is_null(), "a desktop-wide save records a null monitor");
+        assert!(
+            entry["monitor"].is_null(),
+            "a desktop-wide save records a null monitor"
+        );
         assert!(entry["width"].as_u64().unwrap() > 0);
         assert_eq!(gallery::entries().len(), 1);
     }

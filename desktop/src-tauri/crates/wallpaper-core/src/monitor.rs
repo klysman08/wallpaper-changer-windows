@@ -189,7 +189,14 @@ mod tests {
     use super::*;
 
     fn mon(index: usize, x: i32, y: i32, width: i32, height: i32) -> Monitor {
-        Monitor { index, x, y, width, height, name: format!("\\\\.\\DISPLAY{index}") }
+        Monitor {
+            index,
+            x,
+            y,
+            width,
+            height,
+            name: format!("\\\\.\\DISPLAY{index}"),
+        }
     }
 
     #[test]
@@ -216,7 +223,10 @@ mod tests {
 
     #[test]
     fn virtual_desktop_without_monitors_is_an_error() {
-        assert_eq!(virtual_desktop(&[]).unwrap_err().kind(), ErrorKind::NoMonitors);
+        assert_eq!(
+            virtual_desktop(&[]).unwrap_err().kind(),
+            ErrorKind::NoMonitors
+        );
     }
 
     #[test]
@@ -238,7 +248,11 @@ mod tests {
         assert!(!monitors.is_empty(), "no displays enumerated");
         for (i, m) in monitors.iter().enumerate() {
             assert_eq!(m.index, i, "indices must be dense and in enumeration order");
-            assert!(m.width > 0 && m.height > 0, "empty rectangle for {}", m.name);
+            assert!(
+                m.width > 0 && m.height > 0,
+                "empty rectangle for {}",
+                m.name
+            );
         }
         let (_, _, w, h) = virtual_desktop(&monitors).unwrap();
         assert!(w > 0 && h > 0);
