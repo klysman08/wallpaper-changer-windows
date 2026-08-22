@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::path::{Path, PathBuf};
 
-use image::{imageops::FilterType, RgbImage};
+use image::RgbImage;
 use serde_json::{json, Value};
 
 use crate::monitor::{virtual_desktop, Monitor};
@@ -127,7 +127,7 @@ pub fn fit_image(source: &RgbImage, target_w: i32, target_h: i32, mode: &str) ->
     let (sw, sh) = source.dimensions();
 
     if mode == "stretch" {
-        return image::imageops::resize(source, tw, th, FilterType::Lanczos3);
+        return crate::images::resize_lanczos3(source, tw, th);
     }
 
     if mode == "center" {
@@ -148,7 +148,7 @@ pub fn fit_image(source: &RgbImage, target_w: i32, target_h: i32, mode: &str) ->
     // Python: int(src * ratio) — truncation, not rounding.
     let new_w = ((sw as f64 * ratio) as u32).max(1);
     let new_h = ((sh as f64 * ratio) as u32).max(1);
-    let scaled = image::imageops::resize(source, new_w, new_h, FilterType::Lanczos3);
+    let scaled = crate::images::resize_lanczos3(source, new_w, new_h);
 
     if mode == "fill" {
         let left = (new_w as i32 - tw as i32) / 2;

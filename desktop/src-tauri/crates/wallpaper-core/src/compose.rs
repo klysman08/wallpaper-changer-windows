@@ -59,12 +59,7 @@ pub fn preview(
     let shown = if max_width > 0 && canvas.width() > max_width as u32 {
         let ratio = max_width as f64 / canvas.width() as f64;
         let height = ((canvas.height() as f64 * ratio) as u32).max(1);
-        image::imageops::resize(
-            &canvas,
-            max_width as u32,
-            height,
-            image::imageops::FilterType::Lanczos3,
-        )
+        crate::images::resize_lanczos3(&canvas, max_width as u32, height)
     } else {
         canvas
     };

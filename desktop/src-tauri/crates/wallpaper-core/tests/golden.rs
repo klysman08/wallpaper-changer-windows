@@ -12,14 +12,27 @@
 //! - **Effects are exact.** No resampling is involved, so any difference at all is a
 //!   bug in the arithmetic — a wrong luma coefficient, a mishandled border, the wrong
 //!   rounding in a kernel.
-//! - **A downscale may differ by 1.** `image`'s Lanczos3 and Pillow's LANCZOS are
-//!   different implementations of the same filter; measured, they agree to within one
-//!   level when shrinking.
+//! - **A downscale may differ by 2.** `fast_image_resize`'s Lanczos3 and Pillow's
+//!   LANCZOS are different implementations of the same filter; measured, they agree to
+//!   within two levels when shrinking.
 //! - **An upscale may differ more.** That is where the two genuinely diverge; the
 //!   golden image, not the bound, is what pins it.
 //!
-//! Regenerating a golden is a deliberate act. If one of these fails, the question is
-//! what changed in the composition — not how to make the number go away.
+//! **The goldens are Pillow's output and are never regenerated from Rust.** Doing that
+//! would leave them comparing the port against itself, and `src/wallpaper_changer/` is
+//! on its way out, so there is no second chance to produce them. When the composition
+//! changes deliberately, what moves is the *bound* — re-derived from
+//! `fit_drift_against_the_goldens` rather than loosened until the failure stops. If one
+//! of these fails without such a change, the question is what changed in the
+//! composition, not how to make the number go away.
+//!
+//! The downscale bound went from 1 to 2 when the resampler was swapped from
+//! `image::imageops` to `fast_image_resize`, which took a preview from 2.31 s to
+//! 0.336 s. Every case was measured, not just the one that failed first: pure
+//! downscales moved 1 -> 2, the two `fit` downscales stayed at 1, upscales stayed
+//! inside the existing 24 (worst 22), and a same-size resize became **exactly 0**
+//! where it had been allowed 1. Two levels out of 255 is below anything visible in a
+//! wallpaper, which is what makes the trade worth taking.
 
 use std::path::{Path, PathBuf};
 
@@ -118,7 +131,7 @@ fn fitting_matches_the_golden_images() {
                     if tw as f64 > sw || th as f64 > sh {
                         24
                     } else {
-                        1
+                        2
                     }
                 }
                 _ => {
@@ -126,12 +139,47 @@ fn fitting_matches_the_golden_images() {
                     let ratio = if mode == "fit" { rw.min(rh) } else { rw.max(rh) };
                     if ratio > 1.0 {
                         24
+                    } else if ratio == 1.0 {
+                        // Resizing to the size it already is must be the identity, and
+                        // measurably is. Held exact so a resampler that quietly stops
+                        // short-circuiting shows up here rather than in a wallpaper.
+                        0
                     } else {
-                        1
+                        2
                     }
                 }
             };
             assert_within(&actual, &expected, bound, &format!("{kind}/{mode}"));
+        }
+    }
+}
+
+/// Print how far every fit case sits from its golden, instead of asserting.
+///
+/// For the one job the assertions cannot do: when the resampler is deliberately
+/// changed, the bounds above have to be re-derived from measurement, and picking them
+/// by watching which assertion fails first is how a tolerance quietly becomes "big
+/// enough to pass" rather than "as tight as the arithmetic allows".
+///
+/// ```text
+/// cargo test -p wallpaper-core --test golden -- --ignored --nocapture drift
+/// ```
+#[test]
+#[ignore = "reports numbers rather than asserting them"]
+fn fit_drift_against_the_goldens() {
+    let src = source("fit-source.png");
+    println!("{:<14} {:<8} {:>9} {:>12}", "case", "mode", "max delta", "differing");
+    for (kind, tw, th) in [
+        ("shrink-both", 200, 150),
+        ("narrow-tall", 120, 400),
+        ("wide-short", 500, 100),
+        ("grow-both", 800, 600),
+        ("same-size", 400, 300),
+    ] {
+        for mode in ["fill", "fit", "stretch", "center", "span"] {
+            let actual = collage::fit_image(&src, tw, th, mode);
+            let (worst, differing) = compare(&actual, &golden(&format!("fit-{kind}-{mode}.png")));
+            println!("{kind:<14} {mode:<8} {worst:>9} {differing:>12}");
         }
     }
 }

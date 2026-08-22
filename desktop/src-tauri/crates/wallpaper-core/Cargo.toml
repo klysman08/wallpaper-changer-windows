@@ -28,6 +28,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # rotation loop, and must be asked for *here*: the CLI enables it too, which is enough
 # to make `cargo check --workspace` pass while a build of the app alone would not.
 tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+fast_image_resize = { version = "6.1.0", features = ["image"] }
 
 # `SUPPORTED` in image_utils.py is jpg/jpeg/png/bmp/webp, so those are the decoders
 # that must exist. Encoding is only ever JPEG (thumbnails, previews) and BMP (the

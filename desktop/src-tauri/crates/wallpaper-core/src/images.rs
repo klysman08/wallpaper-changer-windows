@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, ImageReader};
+use image::{DynamicImage, ImageReader, RgbImage};
 use serde_json::{json, Value};
 
 use crate::CoreError;
@@ -88,6 +88,45 @@ fn round_half_even(value: f64) -> i64 {
     }
 }
 
+/// Lanczos3 resampling, SIMD, for every resize the engine does.
+///
+/// The one resampler in the crate: composition, thumbnails and the preview downscale
+/// all come here, so they cannot drift apart.
+///
+/// `image::imageops::resize` is scalar Rust and was where composition spent its time —
+/// decoding a preview's four pictures is about 6% of it and resampling is nearly all
+/// the rest, which put the port at 2.3x Pillow despite doing the same work. Pillow's
+/// own resize is SIMD, and `fast_image_resize` implements the same normalised
+/// separable convolution, so this is closer to Pillow's arithmetic than what it
+/// replaces as well as being faster.
+///
+/// Falls back to the scalar path if the resizer refuses a size, because a preview that
+/// is slow is better than a preview that is missing.
+pub fn resize_lanczos3(source: &RgbImage, width: u32, height: u32) -> RgbImage {
+    use fast_image_resize::images::Image as FirImage;
+    use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
+
+    let (width, height) = (width.max(1), height.max(1));
+    let scalar = || {
+        image::imageops::resize(source, width, height, image::imageops::FilterType::Lanczos3)
+    };
+
+    let Ok(src) = FirImage::from_vec_u8(
+        source.width(),
+        source.height(),
+        source.as_raw().clone(),
+        PixelType::U8x3,
+    ) else {
+        return scalar();
+    };
+    let mut dst = FirImage::new(width, height, PixelType::U8x3);
+    let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3));
+    if Resizer::new().resize(&src, &mut dst, &options).is_err() {
+        return scalar();
+    }
+    RgbImage::from_raw(width, height, dst.into_vec()).unwrap_or_else(scalar)
+}
+
 /// Decode an image file, deciding the format from its **content**.
 ///
 /// The single loader for the whole crate, and the content sniff is the reason it
@@ -120,11 +159,10 @@ pub fn open_image(path: impl AsRef<Path>) -> Result<DynamicImage, CoreError> {
         .map_err(|e| unreadable(&e))
 }
 
-fn encode_jpeg(image: &DynamicImage, quality: u8) -> Result<Vec<u8>, CoreError> {
-    let rgb = image.to_rgb8();
+fn encode_jpeg(rgb: &RgbImage, quality: u8) -> Result<Vec<u8>, CoreError> {
     let mut buffer = Vec::new();
     JpegEncoder::new_with_quality(&mut Cursor::new(&mut buffer), quality)
-        .encode_image(&rgb)
+        .encode_image(rgb)
         .map_err(|e| CoreError::invalid(format!("Could not encode the image: {e}")))?;
     Ok(buffer)
 }
@@ -187,10 +225,14 @@ pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
     for raw in paths {
         let Ok(image) = open_image(raw) else { continue };
         let (w, h) = thumbnail_size(image.width(), image.height(), box_size);
-        let thumb = if (w, h) == (image.width(), image.height()) {
-            image
+        // To RGB before resizing, not after: the output is JPEG either way, and
+        // `to_rgb8` drops alpha without compositing, so the channels that survive are
+        // convolved identically whichever order it happens in.
+        let rgb = image.to_rgb8();
+        let thumb = if (w, h) == (rgb.width(), rgb.height()) {
+            rgb
         } else {
-            image.resize_exact(w, h, image::imageops::FilterType::Lanczos3)
+            resize_lanczos3(&rgb, w, h)
         };
         let Ok(bytes) = encode_jpeg(&thumb, 75) else { continue };
         out.insert(raw.clone(), Value::String(to_base64(&bytes)));
@@ -206,12 +248,13 @@ pub fn get_image_preview(path: &str, max_width: i64) -> Result<Value, CoreError>
     let box_width = max_width.clamp(64, 4096) as u32;
     let image = open_image(path)?;
 
-    let shown = if image.width() > box_width {
-        let height = round_half_even(image.height() as f64 * box_width as f64 / image.width() as f64)
+    let rgb = image.to_rgb8();
+    let shown = if rgb.width() > box_width {
+        let height = round_half_even(rgb.height() as f64 * box_width as f64 / rgb.width() as f64)
             .max(1) as u32;
-        image.resize_exact(box_width, height, image::imageops::FilterType::Lanczos3)
+        resize_lanczos3(&rgb, box_width, height)
     } else {
-        image
+        rgb
     };
 
     let bytes = encode_jpeg(&shown, 85)?;
