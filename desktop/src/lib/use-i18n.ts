@@ -1,5 +1,5 @@
 /**
- * Translations, sourced from the Python engine.
+ * Translations, sourced from the engine.
  *
  * `i18n.py` stays the single source of truth for all three languages — the front end
  * fetches the tables at startup rather than keeping a parallel copy that would drift.

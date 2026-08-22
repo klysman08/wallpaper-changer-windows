@@ -21,6 +21,9 @@ import { usePreview } from "@/lib/use-preview"
 
 const COUNTS = [1, 2, 3, 4, 5, 6, 7, 8]
 
+/** What the folder line reports: what was found, and what could not be. */
+type FolderSummary = { count: number; skipped: number; formats: string[] }
+
 const FIT_MODES: { value: FitMode; labelKey: string }[] = [
   { value: "fill", labelKey: "fit_fill" },
   { value: "fit", labelKey: "fit_fit" },
@@ -51,14 +54,21 @@ interface Props {
 export function WallpaperTab({ config, monitors, i18n, actions, onChange }: Props) {
   const { t } = i18n
   const preview = usePreview(config)
-  const [imageCount, setImageCount] = React.useState<number | null>(null)
+  const [folder, setFolder] = React.useState<FolderSummary | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
     void engine
       .listFolderImages(config.paths.wallpapers_folder)
-      .then((r) => !cancelled && setImageCount(r.count))
-      .catch(() => !cancelled && setImageCount(null))
+      .then((r) => {
+        if (cancelled) return
+        setFolder({
+          count: r.count,
+          skipped: r.skipped ?? 0,
+          formats: Object.keys(r.skipped_formats ?? {}),
+        })
+      })
+      .catch(() => !cancelled && setFolder(null))
     return () => {
       cancelled = true
     }
@@ -96,8 +106,19 @@ export function WallpaperTab({ config, monitors, i18n, actions, onChange }: Prop
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {imageCount === null ? "—" : `${imageCount} ${t("images_found")}`}
+            {folder === null ? "—" : `${folder.count} ${t("images_found")}`}
           </p>
+          {/* Pictures in a format with no decoder. Naming the formats is the whole
+              point — "302 skipped" on its own reads as a bug rather than a limit,
+              and it was the silence about these that got reported as the app not
+              supporting different formats. */}
+          {folder !== null && folder.skipped > 0 && (
+            <p className="text-xs text-destructive">
+              {`${folder.skipped} ${t("images_skipped")} (${folder.formats
+                .map((f) => `.${f}`)
+                .join(", ")})`}
+            </p>
+          )}
         </CardContent>
       </Card>
 

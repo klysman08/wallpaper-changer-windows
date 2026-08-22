@@ -1,7 +1,7 @@
 /**
- * Typed client for the Python wallpaper engine.
+ * Typed client for the wallpaper engine.
  *
- * Every call goes through the Rust `engine_call` command, which owns the sidecar
+ * Every call goes through the Rust `engine_call` command, which owns the engine
  * process and correlates requests to responses. The webview never spawns anything.
  *
  * Method names and shapes mirror `src/wallpaper_changer/rpc.py` — that module's
@@ -194,15 +194,36 @@ export const engine = {
 
   getMonitors: () => call<MonitorsResult>("get_monitors"),
   getTranslations: () => call<Translations>("get_translations"),
+  /**
+   * Every picture in a folder the engine can open, and a tally of the ones it
+   * cannot.
+   *
+   * `skipped` counts files in formats with no decoder — HEIC, AVIF, camera raw —
+   * and `skipped_formats` names them. Omitting those silently is what "it does
+   * not support different formats" meant from the outside: 302 of one folder's
+   * 4948 files simply never appeared, with nothing said about why.
+   */
   listFolderImages: (folder: string) =>
-    call<{ count: number; images: string[] }>("list_folder_images", { folder }),
+    call<{
+      count: number
+      images: string[]
+      skipped: number
+      skipped_formats: Record<string, number>
+    }>("list_folder_images", { folder }),
   /**
    * Base64 JPEG thumbnails, keyed by path. The webview cannot read local files,
-   * so a picture can only reach it as bytes. Paths that fail to open are absent
-   * from the result rather than failing the batch.
+   * so a picture can only reach it as bytes.
+   *
+   * A path that fails to open is absent from `thumbnails` rather than failing
+   * the batch — one bad picture costs its own tile and nothing else — and
+   * appears in `failed` with the reason, so it can be named rather than merely
+   * missing.
    */
   getThumbnails: (paths: string[], size = 160) =>
-    call<{ thumbnails: Record<string, string> }>("get_thumbnails", { paths, size }),
+    call<{
+      thumbnails: Record<string, string>
+      failed: { path: string; reason: string }[]
+    }>("get_thumbnails", { paths, size }),
   /** One image, sized to look at rather than to fit a grid. */
   getImagePreview: (path: string, maxWidth = 1400) =>
     call<{ jpeg_base64: string; width: number; height: number }>("get_image_preview", {
@@ -299,7 +320,7 @@ export const engine = {
   notify: (title: string, message: string) => call<{ sent: boolean }>("notify", { title, message }),
 }
 
-// ── Native shell (Rust-side, not the Python engine) ───────────────────────────
+// ── Native shell (Tauri-side, not the engine) ─────────────────────────────────
 
 /**
  * Re-register the global hotkeys from the saved config.

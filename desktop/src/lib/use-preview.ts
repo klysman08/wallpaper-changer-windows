@@ -1,7 +1,7 @@
 /**
  * Live wallpaper preview.
  *
- * Every render is a full composite in Python plus a base64 PNG across the IPC
+ * Every render is a full composite in the engine plus a base64 PNG across the IPC
  * boundary, so this must not fire on each keystroke or slider tick. Two safeguards:
  *
  *  - requests are debounced, and a newer one supersedes an in-flight response

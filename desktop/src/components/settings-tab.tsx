@@ -42,9 +42,10 @@ export function SettingsTab({ config, configPath, i18n, update, onChange }: Prop
   /**
    * Autostart is handled by Tauri, not the engine.
    *
-   * `startup.py` registers `sys.executable`, which inside the frozen sidecar is the
-   * headless engine — enabling it there would launch a background process with no
-   * window. The plugin registers the actual application instead.
+   * The engine still carries a `startup.rs`, but it writes a *different* `Run`
+   * value and is only read from now. The plugin owns the real entry, and passes
+   * `--minimized` so a boot-time launch stays in the tray while a manual one
+   * opens the window.
    */
   async function toggleStartup(next: boolean) {
     try {

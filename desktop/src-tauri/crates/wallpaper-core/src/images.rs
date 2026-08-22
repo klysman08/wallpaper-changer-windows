@@ -8,6 +8,7 @@
 //! The webview cannot read local files, so a picture only ever reaches it as base64.
 //! That is why these live in the engine at all.
 
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,22 @@ use crate::CoreError;
 
 /// Image extensions the engine will open. Mirrors `image_utils.SUPPORTED`.
 pub const SUPPORTED: &[&str] = &["jpg", "jpeg", "png", "bmp", "webp"];
+
+/// Image formats the engine deliberately cannot open, tallied so it can say so.
+///
+/// Not decoding these is a choice: HEIC needs libheif and AVIF needs dav1d, both C
+/// libraries, and neither is worth carrying next to a 112 MB libmpv. But *silently*
+/// omitting them is not the same choice. 302 of 4948 files in one real folder were
+/// invisible to the app with nothing said about it, which is what "it does not
+/// support different formats" turns out to mean from the outside.
+///
+/// Only formats a picture is plausibly stored in belong here. A folder also holds
+/// `.txt` and `.ini`, and reporting those as skipped pictures would be noise.
+pub const UNSUPPORTED: &[&str] = &[
+    "heic", "heif", "avif", "jxl", "tif", "tiff", "gif", "ico", "svg", "psd", "tga",
+    // Camera raw. Each vendor has its own, and none of them is a normal image file.
+    "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf", "srw", "pef",
+];
 
 /// Video extensions. Mirrors `video_wallpaper.VIDEO_EXTENSIONS`.
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "mkv", "avi", "mov", "wmv", "webm", "m4v"];
@@ -69,22 +86,26 @@ pub fn list_videos(folder: impl AsRef<Path>) -> Vec<PathBuf> {
     found
 }
 
-/// Round half away from zero, then clamp to at least one pixel.
+/// Round to the nearest integer, breaking an exact tie towards the even neighbour.
 ///
 /// `round()` in Python 3 is half-to-even, so 2.5 becomes 2 rather than 3. The
-/// difference only shows on an exact .5, but it is free to match.
+/// difference only shows on an exact .5, but it is free to match. Callers clamp the
+/// result themselves — a rounded-to-zero dimension is their problem, not this one.
 fn round_half_even(value: f64) -> i64 {
     let floor = value.floor();
     let diff = value - floor;
     let floor = floor as i64;
-    if diff > 0.5 {
+    if diff == 0.5 {
+        // The half-to-even case, and the only one that differs from round-half-up.
+        if floor % 2 == 0 {
+            floor
+        } else {
+            floor + 1
+        }
+    } else if diff > 0.5 {
         floor + 1
-    } else if diff < 0.5 {
-        floor
-    } else if floor % 2 == 0 {
-        floor
     } else {
-        floor + 1
+        floor
     }
 }
 
@@ -107,9 +128,8 @@ pub fn resize_lanczos3(source: &RgbImage, width: u32, height: u32) -> RgbImage {
     use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 
     let (width, height) = (width.max(1), height.max(1));
-    let scalar = || {
-        image::imageops::resize(source, width, height, image::imageops::FilterType::Lanczos3)
-    };
+    let scalar =
+        || image::imageops::resize(source, width, height, image::imageops::FilterType::Lanczos3);
 
     let Ok(src) = FirImage::from_vec_u8(
         source.width(),
@@ -149,8 +169,9 @@ pub fn open_image(path: impl AsRef<Path>) -> Result<DynamicImage, CoreError> {
             path.display()
         )));
     }
-    let unreadable =
-        |e: &dyn std::fmt::Display| CoreError::invalid(format!("Could not read {}: {e}", path.display()));
+    let unreadable = |e: &dyn std::fmt::Display| {
+        CoreError::invalid(format!("Could not read {}: {e}", path.display()))
+    };
     ImageReader::open(path)
         .map_err(|e| unreadable(&e))?
         .with_guessed_format()
@@ -191,18 +212,50 @@ fn thumbnail_size(width: u32, height: u32, box_size: u32) -> (u32, u32) {
         x = round_aspect(y * aspect, &|n: f64| (aspect - n / y).abs()) as f64;
     } else {
         y = round_aspect(x / aspect, &|n: f64| {
-            if n == 0.0 { 0.0 } else { (aspect - x / n).abs() }
+            if n == 0.0 {
+                0.0
+            } else {
+                (aspect - x / n).abs()
+            }
         }) as f64;
     }
     (x as u32, y as u32)
 }
 
-/// `list_folder_images` — every supported image in a folder.
+/// How many files in `folder` are pictures the engine cannot open, keyed by extension.
+///
+/// Sorted, because it is rendered as a list and `read_dir` order would reshuffle the
+/// same folder between two looks at it.
+pub fn unsupported_images(folder: impl AsRef<Path>) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    let Ok(entries) = std::fs::read_dir(folder.as_ref()) else {
+        return counts;
+    };
+    for path in entries.filter_map(Result::ok).map(|e| e.path()) {
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        let ext = ext.to_ascii_lowercase();
+        if UNSUPPORTED.contains(&ext.as_str()) {
+            *counts.entry(ext).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+/// `list_folder_images` — every supported image in a folder, and what was skipped.
+///
+/// `skipped` counts the pictures in formats the engine cannot decode and
+/// `skipped_formats` names them. Both are present for a folder that has none, so the
+/// interface renders the same shape either way.
 pub fn list_folder_images(folder: &str) -> Value {
     let images = list_images(folder);
+    let skipped = unsupported_images(folder);
     json!({
         "count": images.len(),
         "images": images.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>(),
+        "skipped": skipped.values().sum::<usize>(),
+        "skipped_formats": skipped,
     })
 }
 
@@ -219,6 +272,11 @@ pub fn scan_videos(folder: &str) -> Value {
 ///
 /// A file that will not open is left out rather than failing the batch: one
 /// unreadable picture in a folder should still let the user see the rest.
+///
+/// **But not silently.** Dropping the failures without a word is what left a user
+/// unable to find out *which* of five thousand pictures was bad, or why — the tile
+/// simply never appeared. Each failure is logged and returned in `failed`, so the
+/// answer is both in the app log and available to the interface.
 pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
     let box_size = size.clamp(32, 512) as u32;
 
@@ -226,8 +284,8 @@ pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
     // and each picture is independent, so the whole job goes across threads. The
     // picker asks in batches of 24, and this is what stands between a folder appearing
     // and a folder appearing eventually.
-    let done = crate::parallel::map_bounded(paths, |raw| {
-        let image = open_image(raw).ok()?;
+    let done = crate::parallel::map_bounded(paths, |raw| -> Result<String, CoreError> {
+        let image = open_image(raw)?;
         let (w, h) = thumbnail_size(image.width(), image.height(), box_size);
         // To RGB before resizing, not after: the output is JPEG either way, and
         // `to_rgb8` drops alpha without compositing, so the channels that survive are
@@ -238,7 +296,7 @@ pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
         } else {
             resize_lanczos3(&rgb, w, h)
         };
-        Some(to_base64(&encode_jpeg(&thumb, 75).ok()?))
+        Ok(to_base64(&encode_jpeg(&thumb, 75)?))
     });
 
     // A batch that panicked outright still answers with what it has rather than
@@ -246,12 +304,21 @@ pub fn get_thumbnails(paths: &[String], size: i64) -> Value {
     // tile and nothing else.
     let done = done.unwrap_or_default();
     let mut out = serde_json::Map::new();
+    let mut failed = Vec::new();
     for (raw, thumb) in paths.iter().zip(done) {
-        if let Some(thumb) = thumb {
-            out.insert(raw.clone(), Value::String(thumb));
+        match thumb {
+            Ok(thumb) => {
+                out.insert(raw.clone(), Value::String(thumb));
+            }
+            Err(e) => {
+                // `warn`, not `debug`: this is the only trace a picture that never
+                // appears leaves behind, and the log is where a bug report starts.
+                log::warn!("thumbnail failed for {raw}: {}", e.message());
+                failed.push(json!({ "path": raw, "reason": e.message() }));
+            }
         }
     }
-    json!({ "thumbnails": out })
+    json!({ "thumbnails": out, "failed": failed })
 }
 
 /// `get_image_preview` — one picture, large enough to actually look at.
@@ -381,7 +448,9 @@ mod tests {
         let path = dir.write_png("wide.png", 800, 400);
         let result = get_thumbnails(&[path.clone()], 160);
         let encoded = result["thumbnails"][&path].as_str().expect("a thumbnail");
-        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap();
         let decoded = image::load_from_memory(&bytes).expect("decodable JPEG");
         assert!(decoded.width() <= 160 && decoded.height() <= 160);
         assert_eq!((decoded.width(), decoded.height()), (160, 80));
@@ -440,7 +509,10 @@ mod tests {
         let dir = Dir::new("garbage");
         dir.touch("fake.png");
         let path = dir.0.join("fake.png").to_string_lossy().into_owned();
-        assert_eq!(get_image_preview(&path, 1400).unwrap_err().kind(), ErrorKind::Invalid);
+        assert_eq!(
+            get_image_preview(&path, 1400).unwrap_err().kind(),
+            ErrorKind::Invalid
+        );
     }
 
     /// A picture whose extension lies must still open, because a great many do.
@@ -483,5 +555,200 @@ mod tests {
         assert_eq!(round_half_even(3.5), 4);
         assert_eq!(round_half_even(2.4), 2);
         assert_eq!(round_half_even(2.6), 3);
+    }
+
+    // ── the awkward-image corpus ─────────────────────────────────────────────
+    //
+    // Every format test above this line covers a format that *works*. That is the
+    // gap a real folder walked straight through: the failures got in, and the suite
+    // had nothing to say about them. These cover the shapes that are odd but valid,
+    // and the shapes that are broken — the second group asserting an *error* rather
+    // than a panic, because `get_thumbnails` and `compose_collage` both have to
+    // survive them.
+    //
+    // Two forms are missing on purpose. A CMYK JPEG and a progressive JPEG cannot be
+    // written by the `image` crate, so pinning them needs committed fixtures rather
+    // than a generated file, and a fixture nobody can regenerate is what the goldens
+    // already are. Noted rather than faked.
+
+    /// Encode an image to `format` in memory, the way an awkward file arrives.
+    fn encoded(source: &DynamicImage, format: image::ImageFormat) -> Vec<u8> {
+        let mut out = Vec::new();
+        source.write_to(&mut Cursor::new(&mut out), format).unwrap();
+        out
+    }
+
+    #[test]
+    fn odd_but_valid_colour_types_all_open() {
+        let dir = Dir::new("colour-types");
+
+        // Greyscale with alpha, 16-bit, and RGBA — none of which the rest of the
+        // suite produces, and all of which `to_rgb8` has to flatten.
+        let luma_a = DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_fn(6, 4, |x, y| {
+            image::LumaA([(x * 40) as u8, (y * 60) as u8])
+        }));
+        let deep = DynamicImage::ImageRgb16(image::ImageBuffer::from_fn(6, 4, |x, y| {
+            image::Rgb([(x * 9000) as u16, (y * 9000) as u16, 65535])
+        }));
+        let rgba = DynamicImage::ImageRgba8(image::RgbaImage::from_fn(6, 4, |x, y| {
+            image::Rgba([(x * 40) as u8, (y * 60) as u8, 10, 128])
+        }));
+        let grey = DynamicImage::ImageLuma8(image::GrayImage::from_fn(6, 4, |x, _| {
+            image::Luma([(x * 40) as u8])
+        }));
+
+        for (name, bytes) in [
+            ("grey-alpha.png", encoded(&luma_a, image::ImageFormat::Png)),
+            ("sixteen-bit.png", encoded(&deep, image::ImageFormat::Png)),
+            ("with-alpha.png", encoded(&rgba, image::ImageFormat::Png)),
+            ("greyscale.jpg", encoded(&grey, image::ImageFormat::Jpeg)),
+            ("lossless.webp", encoded(&rgba, image::ImageFormat::WebP)),
+        ] {
+            let path = dir.0.join(name);
+            std::fs::write(&path, &bytes).unwrap();
+            let opened = open_image(&path).unwrap_or_else(|e| panic!("{name}: {}", e.message()));
+            assert_eq!((opened.width(), opened.height()), (6, 4), "{name}");
+            // The whole pipeline flattens to RGB before it resizes, so that is the
+            // conversion that has to survive, not merely the decode.
+            assert_eq!(opened.to_rgb8().dimensions(), (6, 4), "{name}");
+        }
+    }
+
+    #[test]
+    fn broken_files_are_reported_rather_than_panicking() {
+        let dir = Dir::new("broken");
+        let whole = encoded(
+            &DynamicImage::ImageRgb8(image::RgbImage::from_fn(32, 32, |x, y| {
+                image::Rgb([x as u8, y as u8, 90])
+            })),
+            image::ImageFormat::Png,
+        );
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            // Cut off mid-stream: the header sniffs as a PNG, the pixels are missing.
+            ("truncated.png", whole[..whole.len() / 3].to_vec()),
+            ("empty.png", Vec::new()),
+            (
+                "text-pretending.jpg",
+                b"this is not an image at all".to_vec(),
+            ),
+            // A real format we carry no decoder for. It must fail as an image rather
+            // than as a crash: `UNSUPPORTED` keeps it out of the listing, but a
+            // pinned selection can still name one.
+            (
+                "photo.heic",
+                b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00".to_vec(),
+            ),
+        ];
+
+        for (name, bytes) in cases {
+            let path = dir.0.join(name);
+            std::fs::write(&path, &bytes).unwrap();
+            let error = open_image(&path)
+                .err()
+                .unwrap_or_else(|| panic!("{name} should not have decoded"));
+            assert_eq!(error.kind(), ErrorKind::Invalid, "{name}");
+            assert!(
+                error.message().contains(name),
+                "{name}: the message must name the file, got {:?}",
+                error.message()
+            );
+        }
+    }
+
+    #[test]
+    fn a_broken_picture_costs_its_own_tile_and_says_which() {
+        let dir = Dir::new("thumb-failures");
+        let good = dir.write_png("fine.png", 40, 30);
+        let bad = dir.0.join("torn.png").to_string_lossy().into_owned();
+        std::fs::write(&bad, b"\x89PNG\r\n\x1a\n and then nothing").unwrap();
+
+        let result = get_thumbnails(&[good.clone(), bad.clone()], 16);
+        let thumbs = result["thumbnails"].as_object().unwrap();
+        assert!(
+            thumbs.contains_key(&good),
+            "the readable picture still arrives"
+        );
+        assert!(!thumbs.contains_key(&bad));
+
+        // The whole point: the failure is named, not merely absent.
+        let failed = result["failed"].as_array().unwrap();
+        assert_eq!(failed.len(), 1, "got {failed:?}");
+        assert_eq!(failed[0]["path"].as_str(), Some(bad.as_str()));
+        assert!(
+            failed[0]["reason"].as_str().is_some_and(|r| !r.is_empty()),
+            "a failure without a reason is the silence this replaced"
+        );
+    }
+
+    #[test]
+    fn a_batch_that_is_entirely_fine_reports_nothing_failed() {
+        let dir = Dir::new("thumb-clean");
+        let one = dir.write_png("a.png", 20, 20);
+        let result = get_thumbnails(&[one], 16);
+        assert_eq!(result["failed"].as_array().map(Vec::len), Some(0));
+    }
+
+    #[test]
+    fn a_listing_says_how_many_pictures_it_could_not_open() {
+        let dir = Dir::new("skipped");
+        dir.touch("keep.png");
+        dir.touch("keep2.jpg");
+        for name in [
+            "shot.heic",
+            "other.HEIC",
+            "raw.avif",
+            "scan.tiff",
+            "camera.cr2",
+        ] {
+            dir.touch(name);
+        }
+        // Not pictures, so not the user's missing wallpapers either.
+        for name in ["notes.txt", "desktop.ini", "clip.mp4"] {
+            dir.touch(name);
+        }
+
+        let listed = list_folder_images(&dir.0.to_string_lossy());
+        assert_eq!(listed["count"].as_u64(), Some(2));
+        assert_eq!(listed["skipped"].as_u64(), Some(5));
+
+        let formats = listed["skipped_formats"].as_object().unwrap();
+        // Case folds, so `.HEIC` and `.heic` are one entry of two rather than two.
+        assert_eq!(formats["heic"].as_u64(), Some(2));
+        assert_eq!(formats["avif"].as_u64(), Some(1));
+        assert_eq!(formats.len(), 4, "got {formats:?}");
+        assert!(
+            !formats.contains_key("mp4"),
+            "a video is not a skipped picture"
+        );
+    }
+
+    #[test]
+    fn a_folder_with_nothing_skipped_still_answers_the_question() {
+        let dir = Dir::new("skipped-none");
+        dir.touch("a.png");
+        let listed = list_folder_images(&dir.0.to_string_lossy());
+        // Present rather than absent: the interface renders one shape either way.
+        assert_eq!(listed["skipped"].as_u64(), Some(0));
+        assert!(listed["skipped_formats"].is_object());
+    }
+
+    #[test]
+    fn no_extension_is_claimed_by_both_tables() {
+        for ext in UNSUPPORTED {
+            assert!(
+                !SUPPORTED.contains(ext),
+                "{ext} cannot be both openable and skipped"
+            );
+            assert!(
+                !VIDEO_EXTENSIONS.contains(ext),
+                "{ext} is a video, and videos are not skipped pictures"
+            );
+            assert_eq!(
+                ext.to_ascii_lowercase(),
+                **ext,
+                "{ext} must be lowercase to match"
+            );
+        }
     }
 }

@@ -8,7 +8,26 @@
         {
           "method": "list_folder_images",
           "params": { "folder": "Z:/definitely-not-a-folder" },
-          "expect": { "ok": true, "result": { "count": 0, "images": [] } }
+          "expect": {
+            "ok": true,
+            "result": { "count": 0, "images": [], "skipped": 0 },
+            "result_types": { "skipped_formats": "object" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a listing always says how many pictures it could not open",
+      "note": "Formats with no decoder — HEIC, AVIF, camera raw — used to be omitted with nothing said, so a folder of 4948 files showed 4646 and the user had no way to learn why. `skipped` and `skipped_formats` are present even when both are empty, so the interface renders one shape either way.",
+      "steps": [
+        {
+          "method": "list_folder_images",
+          "params": { "folder": "Z:/definitely-not-a-folder" },
+          "expect": {
+            "ok": true,
+            "result_keys": ["count", "images", "skipped", "skipped_formats"],
+            "result_types": { "skipped": "number", "skipped_formats": "object" }
+          }
         }
       ]
     },
@@ -28,7 +47,11 @@
         {
           "method": "get_thumbnails",
           "params": { "paths": [] },
-          "expect": { "ok": true, "result": { "thumbnails": {} } }
+          "expect": {
+            "ok": true,
+            "result": { "thumbnails": {}, "failed": [] },
+            "result_types": { "failed": "array" }
+          }
         }
       ]
     },
@@ -40,6 +63,31 @@
           "method": "get_thumbnails",
           "params": { "paths": ["Z:/no-such-image.png", "Z:/also-missing.jpg"] },
           "expect": { "ok": true, "result": { "thumbnails": {} } }
+        }
+      ]
+    },
+    {
+      "name": "a dropped thumbnail is named and given a reason",
+      "note": "Dropping the failures silently is what left a user unable to find out which of five thousand pictures was bad. The reason is pinned exactly, and in input order, so a later refactor cannot quietly stop naming the file that failed.",
+      "steps": [
+        {
+          "method": "get_thumbnails",
+          "params": { "paths": ["Z:/no-such-image.png", "Z:/also-missing.jpg"] },
+          "expect": {
+            "ok": true,
+            "result": {
+              "failed": [
+                {
+                  "path": "Z:/no-such-image.png",
+                  "reason": "Image not found: Z:/no-such-image.png"
+                },
+                {
+                  "path": "Z:/also-missing.jpg",
+                  "reason": "Image not found: Z:/also-missing.jpg"
+                }
+              ]
+            }
+          }
         }
       ]
     },

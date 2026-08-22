@@ -88,7 +88,9 @@ mod tests {
         let translations = tables()["translations"].as_object().unwrap();
         let english: std::collections::BTreeSet<&String> =
             translations["en"].as_object().unwrap().keys().collect();
-        assert_eq!(english.len(), 267);
+        // A tripwire, not a fact about the UI: bump it deliberately when adding a
+        // string, so a key that appears in one table by accident cannot pass.
+        assert_eq!(english.len(), 268);
         for (code, table) in translations {
             let keys: std::collections::BTreeSet<&String> =
                 table.as_object().unwrap().keys().collect();
@@ -106,15 +108,24 @@ mod tests {
 
     #[test]
     fn current_follows_the_configured_language() {
-        assert_eq!(current_language(&json!({ "general": { "language": "ja" } })), "ja");
-        assert_eq!(current_language(&json!({ "general": { "language": "pt_BR" } })), "pt_BR");
+        assert_eq!(
+            current_language(&json!({ "general": { "language": "ja" } })),
+            "ja"
+        );
+        assert_eq!(
+            current_language(&json!({ "general": { "language": "pt_BR" } })),
+            "pt_BR"
+        );
     }
 
     /// A hand-edited config naming a language we do not ship must not leave the UI
     /// with an empty table.
     #[test]
     fn an_unknown_language_falls_back_to_the_default() {
-        assert_eq!(current_language(&json!({ "general": { "language": "xx" } })), "en");
+        assert_eq!(
+            current_language(&json!({ "general": { "language": "xx" } })),
+            "en"
+        );
         assert_eq!(current_language(&json!({})), "en");
     }
 
