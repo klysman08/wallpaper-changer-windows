@@ -41,7 +41,7 @@ use serde_json::{json, Map, Value};
 use crate::apply::{self, WallpaperSetter};
 use crate::scroll::{self, ScrollHook};
 use crate::video::{self, VideoPlayer};
-use crate::{config, effects, gallery, monitor, CoreError, EventSink};
+use crate::{blocking, config, effects, gallery, monitor, CoreError, EventSink};
 
 /// How many applied image sets the "previous wallpaper" hotkey can step back
 /// through. `_HISTORY_LIMIT` in `rpc.py`.
@@ -794,25 +794,6 @@ fn spawn_ticker(session: Arc<Session>, secs: i64, mut stop: tokio::sync::watch::
             }
         }
     });
-}
-
-/// Run CPU-bound work off the async workers, mapping a panic to `internal`.
-///
-/// `spawn_blocking` catches panics and reports them through `JoinError`, which gives
-/// the same protection [`crate::guard`] provides for synchronous handlers: a corrupt
-/// image fails one call instead of taking down the tray and the hotkeys with it.
-async fn blocking<T, F>(f: F) -> Result<T, CoreError>
-where
-    F: FnOnce() -> Result<T, CoreError> + Send + 'static,
-    T: Send + 'static,
-{
-    match tokio::task::spawn_blocking(f).await {
-        Ok(result) => result,
-        Err(e) if e.is_panic() => Err(CoreError::internal(
-            "internal error: the wallpaper composition panicked",
-        )),
-        Err(e) => Err(CoreError::internal(format!("apply task failed: {e}"))),
-    }
 }
 
 /// Merge `incoming` onto `base`, one section deep — the shape `_merged` uses.

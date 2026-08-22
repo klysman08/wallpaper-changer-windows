@@ -69,12 +69,31 @@ pub fn scan_video_folder(folder: &str) -> Vec<PathBuf> {
     crate::images::list_videos(folder)
 }
 
-/// Whether libmpv could be loaded.
+/// Whether the video wallpaper can be offered.
 ///
-/// The answer is cached for the life of the process: the DLL is over 100 MB, and
-/// `video_status` asks this on every call. Python cached it too, by way of the module
-/// system remembering `import mpv`.
+/// **Deliberately does not load the library.** `get_capabilities` is called by the UI
+/// on every launch, and `video_status` on every poll; resolving the DLL to answer them
+/// mapped **112 MB** into the process at start-up whether or not the user ever played
+/// a video. Under Python that cost at least landed in the sidecar — in-process it is
+/// the app's own footprint.
+///
+/// So this asks the question the callers actually mean: is there a libmpv to load? If
+/// one has already been loaded, that answer is authoritative; otherwise the file's
+/// presence stands in for it. The gap between the two is a DLL that exists but will not
+/// load — corrupt, or the wrong architecture — where the UI offers video and
+/// `video_start` then reports `no_mpv`. That is a worse error message in a rare case,
+/// traded against a large allocation in every ordinary one.
 pub fn has_mpv() -> bool {
+    if let Some(loaded) = LIBRARY.get() {
+        return loaded.is_some();
+    }
+    library_candidates()
+        .iter()
+        .any(|dir| LIBRARY_NAMES.iter().any(|name| dir.join(name).is_file()))
+}
+
+/// Load libmpv for real, which only playback needs.
+pub fn library_is_loadable() -> bool {
     library().is_some()
 }
 
@@ -143,6 +162,9 @@ struct MpvLib {
 unsafe impl Send for MpvLib {}
 unsafe impl Sync for MpvLib {}
 
+/// Filenames a vendored libmpv might use, newest first.
+const LIBRARY_NAMES: &[&str] = &["libmpv-2.dll", "mpv-2.dll", "mpv-1.dll"];
+
 static LIBRARY: OnceLock<Option<Arc<MpvLib>>> = OnceLock::new();
 
 /// An extra directory to look in first, set by the shell.
@@ -150,7 +172,7 @@ static LIBRARY: OnceLock<Option<Arc<MpvLib>>> = OnceLock::new();
 /// The core cannot depend on `tauri`, so it cannot ask where a bundled resource
 /// landed. In a packaged build that is the only place `libmpv-2.dll` exists, so the
 /// shell resolves the resource directory and passes it down before anything can play.
-/// Must be set before the first [`has_mpv`] — the library is resolved once.
+/// Must be set before anything loads the library, which is resolved once and cached.
 static SEARCH_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Point the loader at a directory before anything asks whether libmpv exists.
@@ -191,7 +213,7 @@ fn library_candidates() -> Vec<PathBuf> {
 
 fn load_library() -> Option<Arc<MpvLib>> {
     for dir in library_candidates() {
-        for name in ["libmpv-2.dll", "mpv-2.dll", "mpv-1.dll"] {
+        for name in LIBRARY_NAMES {
             let path = dir.join(name);
             if !path.is_file() {
                 continue;
@@ -900,7 +922,10 @@ pub fn status_result(player: &VideoPlayer) -> Value {
 /// The order is the contract: no mpv before no videos before no monitors, because that
 /// is which error the user sees when more than one is true.
 pub fn start_inputs(config: &Value) -> Result<(Vec<PathBuf>, bool, bool, Vec<Monitor>), CoreError> {
-    if !has_mpv() {
+    // The real load, not the cheap [`has_mpv`] probe — this is the moment playback is
+    // actually being asked for, so it is the right place to pay for it, and a DLL that
+    // is present but unloadable should still report `no_mpv` rather than a bare error.
+    if !library_is_loadable() {
         return Err(CoreError::no_mpv("libmpv is not available."));
     }
     let videos = videos_for(config)?;
@@ -999,6 +1024,23 @@ mod tests {
         assert_eq!(player.status(), (false, String::new()));
         player.stop();
         assert!(player.commands.lock().unwrap().is_none());
+    }
+
+    /// Asking whether video is available must not map 112 MB into the process.
+    ///
+    /// `get_capabilities` runs on every launch and `video_status` on every poll, so a
+    /// `has_mpv` that resolves the library makes an app that never plays a video pay
+    /// for one anyway. Written to tolerate another test having loaded it first: what is
+    /// asserted is that this call does not *cause* the load.
+    #[test]
+    fn asking_whether_video_is_available_does_not_load_it() {
+        let loaded_before = LIBRARY.get().is_some();
+        let _ = has_mpv();
+        assert_eq!(
+            LIBRARY.get().is_some(),
+            loaded_before,
+            "has_mpv resolved the library; it is supposed to only look for the file"
+        );
     }
 
     #[test]

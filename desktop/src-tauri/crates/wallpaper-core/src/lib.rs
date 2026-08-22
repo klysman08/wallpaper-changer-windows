@@ -161,6 +161,30 @@ pub fn guard<T>(f: impl FnOnce() -> Result<T, CoreError> + UnwindSafe) -> Result
     }
 }
 
+/// Run CPU-bound work off the async workers, mapping a panic to `internal`.
+///
+/// Every method that decodes or resamples an image goes through here. Decoding a
+/// batch of thumbnails is hundreds of milliseconds of pure CPU, and running that
+/// straight from `dispatch` parks a tokio worker for the duration — so a folder
+/// loading in the picker makes every *other* call queue behind it, which is what "the
+/// app feels heavy" turns out to mean.
+///
+/// It also supplies the panic guard that the synchronous arms get from [`guard`]:
+/// `spawn_blocking` turns a panic into a `JoinError` rather than letting it unwind
+/// through the shell, so a corrupt image fails one call instead of taking the tray and
+/// the hotkeys with it.
+pub(crate) async fn blocking<T, F>(f: F) -> Result<T, CoreError>
+where
+    F: FnOnce() -> Result<T, CoreError> + Send + 'static,
+    T: Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(result) => result,
+        Err(e) if e.is_panic() => Err(CoreError::internal("internal error: the image task panicked")),
+        Err(e) => Err(CoreError::internal(format!("image task failed: {e}"))),
+    }
+}
+
 /// Best-effort text from a panic payload. `panic!` produces `&str` or `String`;
 /// anything else is opaque and only its existence can be reported.
 fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
@@ -327,19 +351,32 @@ impl Core {
                 Ok(images::scan_videos(required_str(params, "folder")?))
             }),
 
-            "get_thumbnails" => handled(|| {
-                reject_unexpected(params, &["paths", "size"], "get_thumbnails")?;
-                let paths = required_str_list(params, "paths")?;
-                let size = optional_i64(params, "size", 160)?;
-                Ok(images::get_thumbnails(&paths, size))
-            }),
+            // ── the image methods ────────────────────────────────────────────
+            //
+            // Async so the decoding happens on a blocking thread rather than parking
+            // an async worker. See [`blocking`]: these are the calls that made the
+            // rest of the app wait while a folder loaded.
+            "get_thumbnails" => {
+                let outcome = async {
+                    reject_unexpected(params, &["paths", "size"], "get_thumbnails")?;
+                    let paths = required_str_list(params, "paths")?;
+                    let size = optional_i64(params, "size", 160)?;
+                    blocking(move || Ok(images::get_thumbnails(&paths, size))).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
 
-            "get_image_preview" => handled(|| {
-                reject_unexpected(params, &["path", "max_width"], "get_image_preview")?;
-                let path = required_str(params, "path")?.to_string();
-                let max_width = optional_i64(params, "max_width", 1400)?;
-                images::get_image_preview(&path, max_width)
-            }),
+            "get_image_preview" => {
+                let outcome = async {
+                    reject_unexpected(params, &["path", "max_width"], "get_image_preview")?;
+                    let path = required_str(params, "path")?.to_string();
+                    let max_width = optional_i64(params, "max_width", 1400)?;
+                    blocking(move || images::get_image_preview(&path, max_width)).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
 
             "get_config" => handled(|| {
                 reject_unexpected(params, &[], "get_config")?;
@@ -380,30 +417,42 @@ impl Core {
                 gallery::forget_saved_collage_result(required_str(params, "path")?)
             }),
 
-            "preview" => handled(|| {
-                reject_unexpected(params, &["config", "max_width", "images"], "preview")?;
-                let cfg = self.merged(params.get("config"))?;
-                compose::preview(
-                    &cfg,
-                    optional_i64(params, "max_width", 960)?,
-                    optional_str_list(params, "images")?.as_deref(),
-                )
-            }),
+            // Composing is the heaviest thing the engine does; it belongs on a
+            // blocking thread for the same reason the thumbnails do.
+            "preview" => {
+                let outcome = async {
+                    reject_unexpected(params, &["config", "max_width", "images"], "preview")?;
+                    let cfg = self.merged(params.get("config"))?;
+                    let max_width = optional_i64(params, "max_width", 960)?;
+                    let images = optional_str_list(params, "images")?;
+                    blocking(move || compose::preview(&cfg, max_width, images.as_deref())).await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
 
-            "save_collage" => handled(|| {
-                reject_unexpected(
-                    params,
-                    &["config", "images", "monitor", "path"],
-                    "save_collage",
-                )?;
-                let cfg = self.merged(params.get("config"))?;
-                compose::save_collage(
-                    &cfg,
-                    optional_str_list(params, "images")?.as_deref(),
-                    optional_i64_opt(params, "monitor")?,
-                    params.get("path").and_then(Value::as_str),
-                )
-            }),
+            "save_collage" => {
+                let outcome = async {
+                    reject_unexpected(
+                        params,
+                        &["config", "images", "monitor", "path"],
+                        "save_collage",
+                    )?;
+                    let cfg = self.merged(params.get("config"))?;
+                    let images = optional_str_list(params, "images")?;
+                    let monitor = optional_i64_opt(params, "monitor")?;
+                    let path = params
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    blocking(move || {
+                        compose::save_collage(&cfg, images.as_deref(), monitor, path.as_deref())
+                    })
+                    .await
+                }
+                .await;
+                Dispatch::Handled(outcome)
+            }
 
             // ── apply, rotation and history ──────────────────────────────────
             //
