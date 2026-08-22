@@ -1,25 +1,27 @@
-﻿.venv/
-__pycache__/
-*.pyc
+# No BOM in this file. Git reads a leading U+FEFF as part of the first pattern,
+# so a byte-order mark silently stops line 1 from ever matching.
+
+# Build output. `dist/release/` is where build_app.ps1 stages the signed installer
+# and latest.json for a release; both are meant to be uploaded, not committed.
 dist/
-build/
-*.egg-info/
-assets/output/*.bmp
-assets/output/*.jpg
-# Vendored libmpv (large, platform-specific) — keep only the README
+desktop/dist/
+node_modules/
+
+# Vendored libmpv — 112 MB, platform-specific. libmpv/README.md says where to get it.
 libmpv/*
 !libmpv/README.md
-.python-version
-/CLAUDE.md
-/.claude
-# PyInstaller sidecar staged for the Tauri bundler (built by scripts/build_engine.ps1)
-desktop/src-tauri/engine/
+
 # Legibility strip emitted by scripts/make_icon.py alongside the real icon
 desktop/app-icon-preview.png
+
 # Updater signing keys. The private half must never be committed — a leak lets
 # anyone sign an update that every installed copy will trust and run.
 *.key
 .tauri/
-$USERPROFILE/
+
 # Differential harness scratch: regenerated on every run; only golden/ is committed.
 tests/differential/work/
+
+# Agent scratch
+/.claude
+$USERPROFILE/

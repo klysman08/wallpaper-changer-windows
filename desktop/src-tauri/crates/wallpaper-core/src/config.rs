@@ -30,18 +30,38 @@ pub const APP_NAME: &str = "WallpaperChanger";
 /// old in-install `config/` directory on first run.
 const USER_FILES: &[&str] = &["settings.toml", "state.json", "transparency.json"];
 
+/// The settings file a first run starts from, compiled in.
+///
+/// Embedded rather than shipped as a resource because it has to exist before
+/// anything can be read: every config-reading method answers `not_found` without
+/// it, which is the whole app. It used to arrive only by being *migrated* from an
+/// in-install `config/` folder, so a genuinely fresh install — nothing in
+/// `%APPDATA%`, and no legacy folder to copy from, which is every install the NSIS
+/// bundler produces — had no settings at all. A developer checkout hid that,
+/// because the repo carried a `config/` at its root for the migration to find.
+///
+/// The comments in it are the point. Eleven of them explain keys the UI never
+/// surfaces, and `toml_edit` keeps them across every later save.
+pub const DEFAULT_SETTINGS: &str = include_str!("../assets/settings.default.toml");
+
 /// Serialises writes, as `config.py`'s `_SAVE_LOCK` does. An interrupted process must
 /// never leave `settings.toml` half-written, and two threads must not interleave.
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 // ── locations ────────────────────────────────────────────────────────────────
 
-/// The installation root, used only to find the legacy `config/` migration seed.
+/// The installation root: where a legacy `config/` and the vendored `libmpv/` live.
 ///
 /// Installed, that is the directory holding the executable. In a checkout the
 /// executable is somewhere under `target/`, so fall back to the compile-time crate
-/// location — the same trick `engine.rs` uses to find the repo for `uv run`, and
-/// guarded the same way by checking the directory actually exists.
+/// location, guarded by checking the checkout is actually still there — an installed
+/// build carries a `CARGO_MANIFEST_DIR` that only existed on the build machine.
+///
+/// **The checkout guard is the workspace manifest, not `config/`.** It used to be
+/// the latter, and that quietly stopped working the day the repo-root `config/`
+/// folder was removed: the fallback became `target/debug`, and the only symptom was
+/// `video.rs` no longer finding the vendored `libmpv/` — which reports itself as the
+/// video wallpaper being unavailable rather than as a broken path.
 pub fn project_root() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -56,7 +76,7 @@ pub fn project_root() -> PathBuf {
         .nth(4)
         .map(Path::to_path_buf);
     match checkout {
-        Some(root) if root.join("config").is_dir() => root,
+        Some(root) if root.join("desktop/src-tauri/Cargo.toml").is_file() => root,
         _ => std::env::current_exe()
             .ok()
             .and_then(|e| e.parent().map(Path::to_path_buf))
@@ -138,12 +158,18 @@ fn resolve_under_data(raw: Option<&str>, fallback: &str) -> PathBuf {
 
 /// `paths.output_folder`, where the composed BMP is written.
 pub fn resolve_output_dir(cfg: &Value) -> PathBuf {
-    resolve_under_data(cfg.pointer("/paths/output_folder").and_then(Value::as_str), "output")
+    resolve_under_data(
+        cfg.pointer("/paths/output_folder").and_then(Value::as_str),
+        "output",
+    )
 }
 
 /// `paths.saved_folder`, where "Save as image" puts collages the user keeps.
 pub fn resolve_saved_dir(cfg: &Value) -> PathBuf {
-    resolve_under_data(cfg.pointer("/paths/saved_folder").and_then(Value::as_str), "saved")
+    resolve_under_data(
+        cfg.pointer("/paths/saved_folder").and_then(Value::as_str),
+        "saved",
+    )
 }
 
 /// Resolve a possibly-relative path against `root` (default: the project root).
@@ -284,17 +310,40 @@ fn json_to_toml_value(value: &Value) -> Option<toml_edit::Value> {
 
 // ── load / save ──────────────────────────────────────────────────────────────
 
+/// Write [`DEFAULT_SETTINGS`] to `target` if nothing is there yet.
+///
+/// Best-effort: a failure here leaves the caller reporting `not_found`, which is
+/// what it would have done anyway.
+fn seed_default_settings(target: &Path) {
+    if target.exists() {
+        return;
+    }
+    if let Some(parent) = target.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    match std::fs::write(target, DEFAULT_SETTINGS) {
+        Ok(()) => log::info!("wrote default settings to {}", target.display()),
+        Err(e) => log::warn!("could not seed {}: {e}", target.display()),
+    }
+}
+
 /// Read `settings.toml`, injecting `_config_path` the way `load_config` does.
 ///
-/// Passing `None` migrates the legacy files first, so a first run after upgrading
-/// finds the settings that were in the install directory before deciding the file is
-/// missing.
+/// Passing `None` is the app asking for *its* settings, and it will always get
+/// some: the legacy files are migrated first, so a first run after upgrading finds
+/// what was in the install directory, and failing that the compiled-in defaults are
+/// written out. Passing an explicit path stays strict — a file the caller named and
+/// that is not there is `not_found`, not something to invent.
 pub fn load_config(path: Option<&Path>) -> Result<Value, CoreError> {
     let target = match path {
         Some(p) => p.to_path_buf(),
         None => {
             migrate_legacy_files();
-            default_config_path()
+            let target = default_config_path();
+            seed_default_settings(&target);
+            target
         }
     };
     if !target.exists() {
@@ -477,7 +526,10 @@ output_folder = "output"
         assert_ne!(user_config_dir(), user_data_dir());
         assert_eq!(default_config_path().file_name().unwrap(), "settings.toml");
         assert_eq!(state_file().parent(), Some(user_config_dir()).as_deref());
-        assert_eq!(transparency_file().file_name().unwrap(), "transparency.json");
+        assert_eq!(
+            transparency_file().file_name().unwrap(),
+            "transparency.json"
+        );
     }
 
     /// A relative folder resolves under the *data* directory, never the install
@@ -512,9 +564,18 @@ output_folder = "output"
     #[test]
     fn resolve_path_normalises_without_touching_the_disk() {
         let base = Path::new("C:\\base");
-        assert_eq!(resolve_path("sub\\..\\other", Some(base)), PathBuf::from("C:\\base\\other"));
-        assert_eq!(resolve_path(".\\here", Some(base)), PathBuf::from("C:\\base\\here"));
-        assert_eq!(resolve_path("D:\\abs", Some(base)), PathBuf::from("D:\\abs"));
+        assert_eq!(
+            resolve_path("sub\\..\\other", Some(base)),
+            PathBuf::from("C:\\base\\other")
+        );
+        assert_eq!(
+            resolve_path(".\\here", Some(base)),
+            PathBuf::from("C:\\base\\here")
+        );
+        assert_eq!(
+            resolve_path("D:\\abs", Some(base)),
+            PathBuf::from("D:\\abs")
+        );
     }
 
     #[test]
@@ -627,17 +688,27 @@ output_folder = "output"
         save_config(&cfg, None).unwrap();
 
         let reloaded = load_config(Some(&file)).unwrap();
-        assert_eq!(reloaded["paths"]["wallpapers_folder"], "C:\\Users\\me\\My Pictures\\Wall");
+        assert_eq!(
+            reloaded["paths"]["wallpapers_folder"],
+            "C:\\Users\\me\\My Pictures\\Wall"
+        );
     }
 
     #[test]
     fn saving_into_a_directory_that_does_not_exist_yet_creates_it() {
         let sandbox = Sandbox::new("mkdir");
-        let file = sandbox.dir.join("deep").join("nested").join("settings.toml");
+        let file = sandbox
+            .dir
+            .join("deep")
+            .join("nested")
+            .join("settings.toml");
         let cfg = json!({ "general": { "mode": "collage" } });
         save_config(&cfg, Some(&file)).unwrap();
         assert!(file.is_file());
-        assert_eq!(load_config(Some(&file)).unwrap()["general"]["mode"], "collage");
+        assert_eq!(
+            load_config(Some(&file)).unwrap()["general"]["mode"],
+            "collage"
+        );
     }
 
     #[test]
@@ -656,8 +727,13 @@ output_folder = "output"
         assert!(leftovers.is_empty(), "left behind {leftovers:?}");
     }
 
-    /// The real shipped file, embedded so this holds wherever the tests run.
-    const SHIPPED: &str = include_str!("../../../../../config/settings.toml");
+    /// The defaults a first run is seeded with.
+    ///
+    /// They live beside `translations.json` in the crate assets rather than in a
+    /// repo-root `config/`, which is where the file used to sit next to a
+    /// `state.json` and a `transparency.json` holding one developer machine's
+    /// actual history.
+    const SHIPPED: &str = DEFAULT_SETTINGS;
 
     /// The file the installer seeds is the one that matters: it carries eleven
     /// explanatory comments the UI never surfaces, and the Python writer destroys
@@ -675,9 +751,18 @@ output_folder = "output"
         assert_eq!(before, after, "a value changed across a save");
 
         let written = std::fs::read_to_string(&file).unwrap();
-        let comments_before = SHIPPED.lines().filter(|l| l.trim_start().starts_with('#')).count();
-        let comments_after = written.lines().filter(|l| l.trim_start().starts_with('#')).count();
-        assert!(comments_before >= 10, "fixture should have comments to lose");
+        let comments_before = SHIPPED
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .count();
+        let comments_after = written
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .count();
+        assert!(
+            comments_before >= 10,
+            "fixture should have comments to lose"
+        );
         assert_eq!(
             comments_before, comments_after,
             "comments were dropped; that is the whole reason for toml_edit"
@@ -702,13 +787,80 @@ output_folder = "output"
         assert!(result["config"].get("_config_path").is_none());
     }
 
+    /// `project_root` finds the vendored `libmpv/` as well as the migration seed, and
+    /// its checkout guard used to be the existence of a repo-root `config/`. Removing
+    /// that folder sent it to `target/debug`, where the only visible symptom was video
+    /// reporting itself unavailable. Anchor it to something a checkout cannot lose.
+    #[test]
+    fn the_checkout_root_is_found_without_a_config_folder() {
+        let root = project_root();
+        assert!(
+            root.join("desktop/src-tauri/Cargo.toml").is_file(),
+            "project_root() answered {}, which is not the checkout",
+            root.display()
+        );
+        assert!(
+            !root.ends_with("debug") && !root.ends_with("release"),
+            "project_root() fell through to the build directory: {}",
+            root.display()
+        );
+    }
+
+    /// The first run of a fresh install has nothing in `%APPDATA%` and no legacy
+    /// `config/` to migrate from — the NSIS bundler ships neither. Before the defaults
+    /// were compiled in, that meant every config-reading method answered `not_found`,
+    /// and a developer checkout hid it by carrying a `config/` at the repo root for
+    /// the migration to find.
+    #[test]
+    fn a_first_run_with_nothing_to_migrate_still_gets_settings() {
+        let _sandbox = Sandbox::new("first-run");
+        let expected = user_config_dir().join("settings.toml");
+        assert!(!expected.exists(), "the sandbox was not empty");
+
+        let config = load_config(None).expect("a first run must not fail");
+        assert!(
+            expected.is_file(),
+            "nothing was written to {}",
+            expected.display()
+        );
+        assert_eq!(config["general"]["mode"], "collage");
+
+        // Seeded, not summarised: the comments explaining keys the UI never shows
+        // have to survive, or the file is worse than the one the migration used to
+        // leave behind.
+        assert_eq!(
+            std::fs::read_to_string(&expected).unwrap(),
+            DEFAULT_SETTINGS
+        );
+    }
+
+    /// Seeding must never reach past a file that is already there, or a save would be
+    /// undone by the next read.
+    #[test]
+    fn seeding_never_overwrites_settings_that_already_exist() {
+        let _sandbox = Sandbox::new("first-run-existing");
+        let dir = user_config_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("settings.toml"), SAMPLE).unwrap();
+
+        let config = load_config(None).unwrap();
+        assert_eq!(
+            config["paths"]["wallpapers_folder"], "C:\\Pictures",
+            "the seed clobbered a real settings file"
+        );
+    }
+
     /// Migration copies and never overwrites, so an existing user file wins.
     #[test]
     fn migration_never_overwrites_an_existing_file() {
         let sandbox = Sandbox::new("migrate");
         let target_dir = user_config_dir();
         std::fs::create_dir_all(&target_dir).unwrap();
-        std::fs::write(target_dir.join("settings.toml"), "[general]\nmode = \"mine\"\n").unwrap();
+        std::fs::write(
+            target_dir.join("settings.toml"),
+            "[general]\nmode = \"mine\"\n",
+        )
+        .unwrap();
 
         migrate_legacy_files();
 
