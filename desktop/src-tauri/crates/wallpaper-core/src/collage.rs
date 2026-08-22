@@ -11,6 +11,7 @@
 //! column table changes.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::path::{Path, PathBuf};
 
 use image::{imageops::FilterType, RgbImage};
@@ -232,6 +233,94 @@ pub fn crop_to_monitor(
 /// `preset_images` replays an exact selection — what a preview reported — instead of
 /// picking a fresh one. `state_file` lets a caller that must not disturb the rotation
 /// history (the preview, and saving) point the selection state somewhere throwaway.
+/// Decode and fit one piece: the whole of the per-cell work, and all of it pure.
+fn fit_one(
+    key: (usize, i32, i32),
+    chosen: &[PathBuf],
+    fit_mode: &str,
+) -> Result<RgbImage, CoreError> {
+    let (source, width, height) = key;
+    // `crate::images::open_image`, never `image::open`: the latter picks its decoder
+    // from the file extension, and a picture whose extension lies would fail the whole
+    // composition here rather than just itself.
+    let opened = crate::images::open_image(&chosen[source])?.to_rgb8();
+    Ok(fit_image(&opened, width, height, fit_mode))
+}
+
+/// Fit every distinct piece, across threads.
+///
+/// Resampling is what composition actually spends its time on — decoding is about 6%
+/// of a preview — and each piece is independent, so this is where the parallelism
+/// belongs. `paste` stays serial: it is a memory copy, and cells are allowed to
+/// overlap, so order has to be the plan's order.
+///
+/// **The worker count is deliberately small.** Each one holds a decoded source *and*
+/// its fitted output at the same time, which for large pictures is tens of megabytes
+/// each; memory use was half of what made this worth fixing, so the cap trades some
+/// speed on many-celled collages for a bounded peak.
+fn fit_all(
+    wanted: &[(usize, i32, i32)],
+    chosen: &[PathBuf],
+    fit_mode: &str,
+) -> Result<HashMap<(usize, i32, i32), RgbImage>, CoreError> {
+    const MAX_WORKERS: usize = 4;
+
+    let workers = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(MAX_WORKERS)
+        .min(wanted.len())
+        .max(1);
+
+    if workers == 1 {
+        let mut fitted = HashMap::new();
+        for key in wanted {
+            fitted.insert(*key, fit_one(*key, chosen, fit_mode)?);
+        }
+        return Ok(fitted);
+    }
+
+    let next = AtomicUsize::new(0);
+    let mut gathered: Vec<(usize, Result<RgbImage, CoreError>)> = Vec::new();
+    let mut panicked = false;
+
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut mine = Vec::new();
+                    loop {
+                        let at = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(key) = wanted.get(at) else { return mine };
+                        mine.push((at, fit_one(*key, chosen, fit_mode)));
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            match handle.join() {
+                Ok(mine) => gathered.extend(mine),
+                // Losing a worker silently would leave a hole that the paste loop
+                // would index into. Say so instead.
+                Err(_) => panicked = true,
+            }
+        }
+    });
+
+    if panicked {
+        return Err(CoreError::internal("A worker panicked while fitting images."));
+    }
+
+    // Report the *first* failure in plan order, not whichever thread finished first,
+    // so the same broken folder always produces the same message.
+    gathered.sort_by_key(|(at, _)| *at);
+    let mut fitted = HashMap::new();
+    for (at, result) in gathered {
+        fitted.insert(wanted[at], result?);
+    }
+    Ok(fitted)
+}
+
 pub fn compose_collage(
     cfg: &Value,
     monitors: &[Monitor],
@@ -274,33 +363,40 @@ pub fn compose_collage(
     let (_, _, total_w, total_h) = virtual_desktop(monitors)?;
     let mut canvas = RgbImage::new(total_w.max(1) as u32, total_h.max(1) as u32);
 
-    // With same_for_all every monitor repeats the same list, so the same picture is
-    // fitted to the same cell size several times. Cache by (image, size).
-    let mut fitted: HashMap<(usize, i32, i32), RgbImage> = HashMap::new();
+    let plan = plan_collage(monitors, count, same_for_all);
 
-    for cell in plan_collage(monitors, count, same_for_all) {
-        let index = cell["image_index"].as_u64().unwrap_or(0) as usize;
+    // Every distinct (picture, cell size) the layout asks for. With same_for_all each
+    // monitor repeats the same list, so one picture is usually wanted at one size
+    // several times over — deduplicating here is the difference between fitting four
+    // pieces and sixteen.
+    let mut wanted: Vec<(usize, i32, i32)> = Vec::new();
+    for cell in &plan {
         // A caller-supplied list can be shorter than the grid — the preview lets the
         // user edit the selection, and the count can change under it. Wrapping draws
         // a repeated picture instead of failing the whole composition.
-        let source_index = index % chosen.len();
-        let (w, h) = (
+        let source_index = cell["image_index"].as_u64().unwrap_or(0) as usize % chosen.len();
+        let key = (
+            source_index,
             cell["width"].as_i64().unwrap_or(0) as i32,
             cell["height"].as_i64().unwrap_or(0) as i32,
         );
-
-        let key = (source_index, w, h);
-        if !fitted.contains_key(&key) {
-            // `crate::images::open_image`, never `image::open`: the latter trusts the
-            // file extension, and one picture whose extension lies fails the whole
-            // composition here rather than just itself.
-            let opened = crate::images::open_image(&chosen[source_index])?.to_rgb8();
-            fitted.insert(key, fit_image(&opened, w, h, &fit_mode));
+        if !wanted.contains(&key) {
+            wanted.push(key);
         }
-        let piece = &fitted[&key];
+    }
+
+    let fitted = fit_all(&wanted, &chosen, &fit_mode)?;
+
+    for cell in &plan {
+        let source_index = cell["image_index"].as_u64().unwrap_or(0) as usize % chosen.len();
+        let key = (
+            source_index,
+            cell["width"].as_i64().unwrap_or(0) as i32,
+            cell["height"].as_i64().unwrap_or(0) as i32,
+        );
         paste(
             &mut canvas,
-            piece,
+            &fitted[&key],
             cell["x"].as_i64().unwrap_or(0) as i32,
             cell["y"].as_i64().unwrap_or(0) as i32,
         );
