@@ -429,5 +429,49 @@ Python's `start()` refuses an empty playlist *before* touching the desktop. The 
 - [ ] 9.5 Port `cli.py` to a `clap`-based mode of the Tauri binary (`apply`, `watch`, `video`), preserving the `IntRange(1, 8)` collage-count and effect-choice validation.
 - [ ] 9.6 Update `CLAUDE.md` and `AGENTS.md` — the two-process architecture description is the first thing both documents explain.
 - [ ] 9.7 Verify: `cargo test --workspace`; a full signed installer build with `latest.json`; install over an existing 5.4.0 install and confirm the updater upgrades in place rather than adding a second program entry. **Expect roughly 120 MB, not the ~15 MB this plan originally claimed** — see phase 8: `libmpv-2.dll` is 112 MB of the old 145 MB bundle and it survives the port. Confirm the DLL resolves from the Tauri resource directory in a packaged build, which is the one path phase 8 could not exercise.
-- [ ] 9.9 **Decide what to do about libmpv's 112 MB**, now that it is the entire download. Options: ship a smaller mpv build, make it an optional download with the feature degrading as it already does when absent, or accept the size. A product decision, not a porting one, and the first honest opportunity to make it.
 - [ ] 9.8 Verify the scaled-display case end-to-end: a monitor at 150% must produce the same composite resolution as before the port.
+- [ ] 9.9 **Decide what to do about libmpv's 112 MB**, now that it is the entire download. Options: ship a smaller mpv build, make it an optional download with the feature degrading as it already does when absent, or accept the size. A product decision, not a porting one, and the first honest opportunity to make it.
+
+## 10. Performance (2-3 days)
+
+**Raised by testing, not by the plan.** The first real use of the ported app reported high CPU and memory against the Python version. It reproduced, and the causes are four separate things that compound. **This blocks any release build**: shipping something slower than what it replaces is worse than shipping late.
+
+Measured over the reporter's own 4948-image folder, thumbnailed to 160 px:
+
+| | Time |
+|---|---|
+| `bun run tauri dev`, as tested | **~62 min** (extrapolated from 90.3 s per 120 files) |
+| Python / Pillow | 104 s |
+| Rust release, serial | 177 s |
+| Rust release, 12 threads | **22.8 s** |
+
+- [x] 10.1 **Optimise dependencies in dev builds.** The dominant cause and the cheapest fix. `tauri dev` compiles everything at `opt-level 0`, and `image`'s decoders are pathological unoptimised — 90.3 s versus 3.5 s for the same 120 files. Pillow never had this problem because its work happens in C that is compiled optimised either way, so `tauri dev` made the port look far slower than it is. `[profile.dev.package."*"] opt-level = 3` takes that 90.3 s to **5.5 s**, at the cost of one slower first build.
+- [ ] 10.2 **Move the image methods off the async workers.** `get_thumbnails` and `get_image_preview` use `handled(...)`, which runs synchronously on a tokio worker; the compose path already uses `blocking()`. While a folder loads, every other call queues behind it — this is the "the whole app feels heavy" half of the report, distinct from the raw throughput.
+- [ ] 10.3 **Decode a batch across cores**, with a bounded thread count rather than one per image. Python was serial too, so this is not a regression — but it is the difference between 1.7x slower than Pillow and 4.6x faster.
+- [ ] 10.4 **Stop loading libmpv at start-up.** `App.tsx` calls `getCapabilities()` on launch, which calls `has_mpv()`, which maps the **112 MB** DLL on every launch even when video is never used. Under Python that cost landed in the sidecar; it is now in the app process. Answer the capability by probing for the file and defer the load to the first playback.
+- [ ] 10.5 **Scaled JPEG decode**, Pillow's `draft()` equivalent — worth about 1.7x on its own, and the reason Pillow beats a serial Rust decode at all. `image` has no equivalent because `zune-jpeg` is a pure-Rust decoder, so this may need a different one. **Time-boxed**: 10.3 already wins more, and a new native decoder dependency is a real cost.
+- [ ] 10.6 **Measure memory rather than assume it.** Peak working set for serial decode was only 56 MB, so the decoder is not the hog and the RAM half of the report is still unexplained. Measure at rest, after loading a large folder, and during playback, against an installed 5.4.0 for comparison. Leading suspects are 10.4 and the webview holding thousands of base64 thumbnails in its lifetime cache.
+- [ ] 10.7 Verify against the numbers above, on the same folder, and record them.
+
+## 11. Format robustness (1-2 days)
+
+**Raised by testing. Blocked on a reproduction.** The same session reported "Error Parsing images" and a format decoding error. Neither reproduced:
+
+**All 4948 files decoded successfully under both the Rust core and Pillow — zero failures on either side.** The reported string does not appear anywhere in the codebase, and the 301 HEIC and 1 AVIF files in that folder are excluded by extension before anything tries to open them, so they cannot be the cause either.
+
+The leading hypothesis is that a stall was misreported as a parse error: at 90 s per 120 images a picker over a large folder looks broken for minutes, and 10.1 alone may make it disappear. That is a guess, and this phase should not be built on a guess.
+
+- [ ] 11.1 **Reproduce first.** Needs the exact message, the screen it appeared on, the folder selected, and `%LOCALAPPDATA%\com.klysman.wallpaperchanger\logs\Wallpaper Changer.log`. Re-test on top of 10.1 before anything else — if it is gone, this phase is only 11.2 and 11.3.
+- [ ] 11.2 **A corpus of awkward images**, asserted file-for-file against Pillow: CMYK JPEG, progressive JPEG, EXIF-rotated, 16-bit PNG, greyscale with alpha, animated WebP, lossless WebP, a truncated file, and a file whose extension lies about its contents. Everything the suite covers today is a format that works.
+- [ ] 11.3 **Name the file that failed.** Skipping one unreadable picture rather than failing the batch is right, but silently is not — `get_thumbnails` drops failures with no record, so a user cannot find out which picture is bad or why. Log it, and consider returning the list.
+- [ ] 11.4 **Decide about HEIC and AVIF.** 302 of the reporter's 4948 files are invisible to the app because `SUPPORTED` does not list them, which may be the real complaint behind "different formats". Neither is supported by `image` out of the box. A product decision: add a decoder, or say so in the UI rather than silently omitting them.
+
+## Testing gaps these two phases expose
+
+Three kinds of failure got through everything the suite does today, and each wants a permanent guard rather than a one-off fix:
+
+- **A performance regression is invisible to every test we have.** Add a benchmark over a fixture folder with a **committed budget**, failing when thumbnail throughput crosses a threshold. Correctness tests cannot catch "correct but ten times slower", and that is exactly what shipped.
+- **The format tests only cover formats that work.** 11.2 is the fix, and it belongs in the permanent suite rather than in a phase.
+- **Memory has never been measured at all.** Add a ceiling assertion to the soak test so a leak surfaces as a failing test rather than a user report.
+
+One process note worth keeping: **the port was tested with `tauri dev` throughout, and that build is not representative.** Every phase's "verify" step ran `cargo test` and `cargo check`, neither of which says anything about how the app feels. Any future phase that touches a hot path should be checked in a release build before it is called done.
