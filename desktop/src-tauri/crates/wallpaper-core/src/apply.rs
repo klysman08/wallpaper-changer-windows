@@ -211,9 +211,10 @@ pub fn apply_desktop(
 }
 
 fn open_rgb(path: &Path) -> Result<RgbImage, CoreError> {
-    Ok(image::open(path)
-        .map_err(|e| CoreError::invalid(format!("Could not read {}: {e}", path.display())))?
-        .to_rgb8())
+    // Content-sniffed, not extension-trusted — see `crate::images::open_image`. A
+    // saved collage is written by us and so always honest, but the default wallpaper
+    // and anything re-applied from the gallery came from the user.
+    Ok(crate::images::open_image(path)?.to_rgb8())
 }
 
 #[cfg(test)]

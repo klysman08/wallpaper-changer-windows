@@ -291,14 +291,10 @@ pub fn compose_collage(
 
         let key = (source_index, w, h);
         if !fitted.contains_key(&key) {
-            let opened = image::open(&chosen[source_index])
-                .map_err(|e| {
-                    CoreError::invalid(format!(
-                        "Could not read {}: {e}",
-                        chosen[source_index].display()
-                    ))
-                })?
-                .to_rgb8();
+            // `crate::images::open_image`, never `image::open`: the latter trusts the
+            // file extension, and one picture whose extension lies fails the whole
+            // composition here rather than just itself.
+            let opened = crate::images::open_image(&chosen[source_index])?.to_rgb8();
             fitted.insert(key, fit_image(&opened, w, h, &fit_mode));
         }
         let piece = &fitted[&key];

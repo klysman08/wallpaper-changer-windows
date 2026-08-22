@@ -88,16 +88,36 @@ fn round_half_even(value: f64) -> i64 {
     }
 }
 
-fn open_image(path: &str) -> Result<DynamicImage, CoreError> {
-    if !Path::new(path).exists() {
-        return Err(CoreError::not_found(format!("Image not found: {path}")));
+/// Decode an image file, deciding the format from its **content**.
+///
+/// The single loader for the whole crate, and the content sniff is the reason it
+/// exists. `image::open` documents that it picks the format "from the path's file
+/// extension" — so a `.jpeg` that is really a WebP goes to the JPEG decoder and comes
+/// back as `Illegal start bytes: 5249` (`RI`, the front of a RIFF header). That is not
+/// a rare curiosity: 470 of 4948 files in one real wallpaper folder, 9.5%, had an
+/// extension that lied, in every direction — JPEGs named `.webp`, WebPs named `.jpeg`
+/// and `.png`, PNGs named `.jpeg`.
+///
+/// Pillow sniffs content in `Image.open`, so the Python engine never saw this. The
+/// port did, and unevenly: thumbnails used this function and worked, while composing
+/// used `image::open` and failed on the same file — which is exactly what a user sees
+/// as "the picker looks fine but preview and apply are broken".
+pub fn open_image(path: impl AsRef<Path>) -> Result<DynamicImage, CoreError> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Err(CoreError::not_found(format!(
+            "Image not found: {}",
+            path.display()
+        )));
     }
+    let unreadable =
+        |e: &dyn std::fmt::Display| CoreError::invalid(format!("Could not read {}: {e}", path.display()));
     ImageReader::open(path)
-        .map_err(|e| CoreError::invalid(format!("Could not read the image: {e}")))?
+        .map_err(|e| unreadable(&e))?
         .with_guessed_format()
-        .map_err(|e| CoreError::invalid(format!("Could not read the image: {e}")))?
+        .map_err(|e| unreadable(&e))?
         .decode()
-        .map_err(|e| CoreError::invalid(format!("Could not read the image: {e}")))
+        .map_err(|e| unreadable(&e))
 }
 
 fn encode_jpeg(image: &DynamicImage, quality: u8) -> Result<Vec<u8>, CoreError> {
@@ -364,6 +384,40 @@ mod tests {
         dir.touch("fake.png");
         let path = dir.0.join("fake.png").to_string_lossy().into_owned();
         assert_eq!(get_image_preview(&path, 1400).unwrap_err().kind(), ErrorKind::Invalid);
+    }
+
+    /// A picture whose extension lies must still open, because a great many do.
+    ///
+    /// 470 of 4948 files in one real wallpaper folder — 9.5% — were named for a format
+    /// they were not. `image::open` decides from the extension and hands a WebP to the
+    /// JPEG decoder, which reports `Illegal start bytes: 5249`; the `RI` there is the
+    /// front of a RIFF header. Pillow always sniffed the content, so this was a
+    /// regression the port introduced, and it showed up only in composing because
+    /// thumbnails already went through the sniffing path.
+    #[test]
+    fn a_file_whose_extension_lies_still_opens() {
+        let dir = Dir::new("mislabelled");
+        let png_bytes = {
+            let buffer = image::RgbImage::from_fn(8, 8, |x, _| image::Rgb([x as u8 * 8, 40, 200]));
+            let mut out = Vec::new();
+            DynamicImage::ImageRgb8(buffer)
+                .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+                .unwrap();
+            out
+        };
+        // A PNG called .jpg — the same lie shape as a WebP called .jpeg.
+        let liar = dir.0.join("actually-a-png.jpg");
+        std::fs::write(&liar, &png_bytes).unwrap();
+
+        // What the composer used to do, and why it failed on a tenth of the folder.
+        assert!(
+            image::open(&liar).is_err(),
+            "image::open is supposed to trust the extension; if this ever starts \
+             passing, the sniffing wrapper is no longer load-bearing"
+        );
+
+        let opened = open_image(&liar).expect("the sniffing loader must not care");
+        assert_eq!((opened.width(), opened.height()), (8, 8));
     }
 
     #[test]
