@@ -175,7 +175,7 @@
         <!-- Left Column: Content & Actions -->
         <div class="hero-content-col">
           <a href="https://github.com/klysman08/wallpaper-changer-windows/releases" class="hero-badge-link" target="_blank" rel="noopener">
-            <span class="badge badge-primary">v5.1 Release</span>
+            <span class="badge badge-primary">v6.0 Release</span>
             <span>Rebuilt on Tauri v2 &amp; shadcn/ui</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12h14"></path>
@@ -258,7 +258,7 @@
                 <div class="mockup-window-dots">
                   <span></span><span></span><span></span>
                 </div>
-                <span class="mockup-window-title">Wallpaper Changer — Multi-Monitor Desktop App</span>
+                <span class="mockup-window-title">Wallpaper Changer — v6.0.0</span>
               </div>
               <div class="mockup-window-actions">
                 <span>🗕</span>
@@ -276,7 +276,7 @@
                     <img src="icon.png" alt="WallpaperChanger Icon" />
                     <div class="mockup-sidebar-meta">
                       <span class="mockup-sidebar-title">Wallpaper Changer</span>
-                      <span class="mockup-sidebar-subtitle">3 Displays · 6400×1440</span>
+                      <span class="mockup-sidebar-subtitle">3 Monitors · 6400×1440</span>
                     </div>
                   </div>
 
@@ -285,9 +285,9 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                       <span>Wallpaper</span>
                     </button>
-                    <button class="mockup-nav-btn" data-mock-tab="collage">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                      <span>Collage Grid</span>
+                    <button class="mockup-nav-btn" data-mock-tab="gallery">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/></svg>
+                      <span>Gallery</span>
                     </button>
                     <button class="mockup-nav-btn" data-mock-tab="video">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
@@ -309,6 +309,13 @@
                 </div>
 
                 <div class="mockup-sidebar-footer">
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.1); color: var(--success); font-size: 0.6875rem; font-weight: 500; margin-bottom: 0.25rem;">
+                    <span style="display: flex; align-items: center; gap: 0.35rem;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Update
+                    </span>
+                    <span class="badge badge-success" style="font-size: 0.625rem; padding: 0.05rem 0.3rem;">v6.0.0</span>
+                  </div>
                   <a href="https://buy.stripe.com/4gMdRa7XW6dt8Ph9KX9Ve01" target="_blank" class="mockup-footer-btn heart-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                     <span>Support Project</span>
@@ -318,233 +325,557 @@
                     <span>Source Code</span>
                   </a>
                   <div class="mockup-footer-meta">
-                    Made by klysman08 · v5.1
+                    Made by klysman08 · v6.0.0
                   </div>
                 </div>
               </aside>
 
-              <!-- Main View -->
+              <!-- Main View (Mirrors desktop/src/App.tsx SidebarInset) -->
               <div class="mockup-main">
-                <!-- 1. WALLPAPER TAB PANEL -->
-                <div class="mockup-tab-panel active" id="mock-panel-wallpaper">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">Virtual Desktop Composite</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-secondary">Auto-sync</span>
-                      <button class="btn btn-primary btn-sm" id="mockSaveBtn">Save</button>
-                    </div>
+                <!-- Sticky Top Inset Header -->
+                <div class="mockup-header">
+                  <div class="mockup-header-left">
+                    <button class="mockup-sidebar-trigger" title="Toggle sidebar">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+                    </button>
+                    <span class="mockup-header-title" id="mockHeaderTitle">Wallpaper</span>
                   </div>
-
-                  <div class="mockup-content">
-                    <div class="mockup-stage">
-                      <div class="stage-monitor is-focused" data-monitor="1" style="left: 2%; top: 15%; width: 30%; height: 70%;">
-                        <span class="stage-monitor-label">#1 · 1920×1080</span>
-                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
-                      </div>
-                      <div class="stage-monitor is-focused" data-monitor="2" style="left: 34%; top: 5%; width: 38%; height: 90%;">
-                        <span class="stage-monitor-label">#2 (Primary) · 2560×1440</span>
-                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
-                      </div>
-                      <div class="stage-monitor is-focused" data-monitor="3" style="left: 74%; top: 15%; width: 24%; height: 70%;">
-                        <span class="stage-monitor-label">#3 · 1920×1080</span>
-                        <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
-                      </div>
-                    </div>
-
-                    <div class="mockup-chips">
-                      <span class="mockup-chip active" data-monitor="all">All monitors</span>
-                      <span class="mockup-chip" data-monitor="1">#1</span>
-                      <span class="mockup-chip" data-monitor="2">#2</span>
-                      <span class="mockup-chip" data-monitor="3">#3</span>
-                      <button class="mockup-chip ghost" id="mockShuffleBtn">⇄ Shuffle</button>
-                      <button class="mockup-chip solid" id="mockApplyBtn">✓ Set</button>
-                    </div>
-                  </div>
-
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-outline btn-sm" id="mockPrevBtn">‹</button>
-                    <button class="btn btn-primary btn-sm" id="mockApplyNowBtn">⟳ Apply</button>
-                    <button class="btn btn-outline btn-sm" id="mockNextBtn">›</button>
-                    <div class="mockup-action-sep"></div>
-                    <button class="btn btn-secondary btn-sm" id="mockRotateBtn">▶ Rotate</button>
+                  <div class="mockup-header-actions">
+                    <span class="badge badge-secondary" id="mockUnsavedBadge" style="display: none; font-size: 0.6875rem;">Unsaved changes</span>
+                    <button class="btn btn-ghost btn-sm" id="mockHeaderThemeBtn" title="Theme" style="padding: 0.25rem 0.5rem; height: 1.75rem;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="mockSaveBtn" style="height: 1.75rem; font-size: 0.75rem; padding: 0 0.625rem;">Save</button>
                   </div>
                 </div>
 
-                <!-- 2. DEDICATED COLLAGE GRID VIEW -->
-                <div class="mockup-tab-panel" id="mock-panel-collage">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">Collage Grid Generator</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-secondary">Dynamic Grid</span>
-                      <button class="btn btn-primary btn-sm" id="mockCollageSaveBtn">Save</button>
-                    </div>
-                  </div>
-
-                  <div class="mockup-content">
-                    <div id="heroCollageGrid" class="collage-demo-grid grid-4">
-                      <img src="images/example 1 (1).jpg" alt="Wallpaper 1" class="collage-cell-img fit-fill effect-normal" />
-                      <img src="images/example 1 (2).jpg" alt="Wallpaper 2" class="collage-cell-img fit-fill effect-normal" />
-                      <img src="images/example 1 (3).jpg" alt="Wallpaper 3" class="collage-cell-img fit-fill effect-normal" />
-                      <img src="images/example 1 (4).jpg" alt="Wallpaper 4" class="collage-cell-img fit-fill effect-normal" />
-                      <img src="images/example 1 (5).jpg" alt="Wallpaper 5" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
-                      <img src="images/example 1 (1).jpg" alt="Wallpaper 6" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
-                      <img src="images/example 1 (2).jpg" alt="Wallpaper 7" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
-                      <img src="images/example 1 (3).jpg" alt="Wallpaper 8" class="collage-cell-img fit-fill effect-normal" style="display: none;" />
-                    </div>
-
-                    <div class="mockup-collage-toolbar">
-                      <div class="mockup-toolbar-row">
-                        <div class="mockup-toolbar-label">
-                          <span>Images per monitor</span>
-                          <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="heroCollageCountBadge">4 images</span>
+                <!-- Scrollable Tab Panels Container -->
+                <div class="mockup-screen-container">
+                  <!-- 1. WALLPAPER TAB PANEL (desktop/src/components/wallpaper-tab.tsx) -->
+                  <div class="mockup-tab-panel active" id="mock-panel-wallpaper">
+                    <!-- PreviewStage Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                          Preview
+                        </span>
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                          <button class="btn btn-outline btn-xs" id="mockShuffleBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l6.1 8.6c.7 1.1 2 1.7 3.3 1.7H22"/><path d="m18 22 4-4-4-4"/></svg>
+                            Shuffle
+                          </button>
+                          <button class="btn btn-outline btn-xs" title="Maximize">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                          </button>
+                          <button class="btn btn-primary btn-xs" id="mockApplyBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            Apply this
+                          </button>
                         </div>
-                        <div class="mockup-chip-group grid-cols-6">
-                          <button class="mockup-chip-btn hero-collage-count" data-count="1">1</button>
-                          <button class="mockup-chip-btn hero-collage-count" data-count="2">2</button>
-                          <button class="mockup-chip-btn hero-collage-count" data-count="3">3</button>
-                          <button class="mockup-chip-btn hero-collage-count active" data-count="4">4</button>
-                          <button class="mockup-chip-btn hero-collage-count" data-count="6">6</button>
-                          <button class="mockup-chip-btn hero-collage-count" data-count="8">8</button>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-stage" id="mockupStage">
+                          <!-- Monitor 1: 1920x1080 (16:9) -->
+                          <div class="stage-monitor is-focused" data-monitor="1" style="left: 2%; top: 15%; width: 30%; height: 70%;">
+                            <div class="stage-monitor-collage grid-4 effect-normal">
+                              <div class="stage-collage-cell" data-slot="1"><img src="images/example 1 (1).jpg" alt="1" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">1</span></div>
+                              <div class="stage-collage-cell" data-slot="2"><img src="images/example 1 (2).jpg" alt="2" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">2</span></div>
+                              <div class="stage-collage-cell" data-slot="3"><img src="images/example 1 (3).jpg" alt="3" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">3</span></div>
+                              <div class="stage-collage-cell" data-slot="4"><img src="images/example 1 (4).jpg" alt="4" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">4</span></div>
+                            </div>
+                            <span class="stage-monitor-label">#1 · 1920×1080</span>
+                            <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                          </div>
+                          <!-- Monitor 2: 2560x1440 (16:9) Primary -->
+                          <div class="stage-monitor is-focused" data-monitor="2" style="left: 34%; top: 5%; width: 38%; height: 90%;">
+                            <div class="stage-monitor-collage grid-4 effect-normal">
+                              <div class="stage-collage-cell" data-slot="5"><img src="images/example 1 (5).jpg" alt="5" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">5</span></div>
+                              <div class="stage-collage-cell" data-slot="6"><img src="images/example 1 (1).jpeg" alt="6" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">6</span></div>
+                              <div class="stage-collage-cell" data-slot="7"><img src="images/example 1 (2).jpeg" alt="7" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">7</span></div>
+                              <div class="stage-collage-cell" data-slot="8"><img src="images/example 1 (3).jpeg" alt="8" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">8</span></div>
+                            </div>
+                            <span class="stage-monitor-label">#2 (Primary) · 2560×1440</span>
+                            <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                          </div>
+                          <!-- Monitor 3: 1920x1080 (16:9) -->
+                          <div class="stage-monitor is-focused" data-monitor="3" style="left: 74%; top: 15%; width: 24%; height: 70%;">
+                            <div class="stage-monitor-collage grid-4 effect-normal">
+                              <div class="stage-collage-cell" data-slot="9"><img src="images/example 1 (4).jpeg" alt="9" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">9</span></div>
+                              <div class="stage-collage-cell" data-slot="10"><img src="images/example 1 (5).jpeg" alt="10" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">10</span></div>
+                              <div class="stage-collage-cell" data-slot="11"><img src="images/example 1 (1).jpg" alt="11" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">11</span></div>
+                              <div class="stage-collage-cell" data-slot="12"><img src="images/example 1 (2).jpg" alt="12" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">12</span></div>
+                            </div>
+                            <span class="stage-monitor-label">#3 · 1920×1080</span>
+                            <div class="stage-monitor-footer"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="mockup-chips">
+                          <span class="mockup-chip active" data-monitor="all">All monitors</span>
+                          <span class="mockup-chip" data-monitor="1">#1 · 1080p</span>
+                          <span class="mockup-chip" data-monitor="2">#2 · 1440p</span>
+                          <span class="mockup-chip" data-monitor="3">#3 · 1080p</span>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                          <span style="font-size: 0.6875rem; color: var(--muted-foreground);" id="stageImagesUsedLabel">Images used in collage (4)</span>
+                          <div class="mockup-stage-thumbs" id="mockupStageThumbs">
+                            <img src="images/example 1 (1).jpg" alt="Thumb 1" class="mockup-stage-thumb" />
+                            <img src="images/example 1 (2).jpg" alt="Thumb 2" class="mockup-stage-thumb" />
+                            <img src="images/example 1 (3).jpg" alt="Thumb 3" class="mockup-stage-thumb" />
+                            <img src="images/example 1 (4).jpg" alt="Thumb 4" class="mockup-stage-thumb" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Images Folder Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Images Folder</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-input-row">
+                          <input type="text" class="mockup-input" value="C:\Users\klysm\Pictures\Wallpapers" readonly spellcheck="false" />
+                          <button class="btn btn-outline btn-xs" style="height: 2rem; padding: 0 0.625rem;">Browse</button>
+                        </div>
+                        <span style="font-size: 0.6875rem; color: var(--muted-foreground);">1,248 images found · 4 formats (.jpg, .png, .webp, .bmp)</span>
+                      </div>
+                    </div>
+
+                    <!-- Layout & Appearance Grid Cards -->
+                    <div class="mockup-card-grid-2">
+                      <!-- Layout Card -->
+                      <div class="mockup-card">
+                        <div class="mockup-card-header">
+                          <span class="mockup-card-title">Layout</span>
+                        </div>
+                        <div class="mockup-card-content">
+                          <div class="mockup-toolbar-row">
+                            <div class="mockup-toolbar-label">
+                              <span>Images per monitor</span>
+                              <span class="badge badge-secondary" id="heroCollageCountBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">4 images</span>
+                            </div>
+                            <div class="mockup-chip-group grid-cols-6">
+                              <button class="mockup-chip-btn hero-collage-count" data-count="1">1</button>
+                              <button class="mockup-chip-btn hero-collage-count" data-count="2">2</button>
+                              <button class="mockup-chip-btn hero-collage-count" data-count="3">3</button>
+                              <button class="mockup-chip-btn hero-collage-count active" data-count="4">4</button>
+                              <button class="mockup-chip-btn hero-collage-count" data-count="6">6</button>
+                              <button class="mockup-chip-btn hero-collage-count" data-count="8">8</button>
+                            </div>
+                          </div>
+
+                          <div class="mockup-toolbar-row">
+                            <div class="mockup-toolbar-label">
+                              <span>Fit mode</span>
+                              <span class="badge badge-secondary" id="heroFitBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">Fill</span>
+                            </div>
+                            <div class="mockup-chip-group grid-cols-4">
+                              <button class="mockup-chip-btn hero-fit-btn active" data-fit="fill">Fill</button>
+                              <button class="mockup-chip-btn hero-fit-btn" data-fit="fit">Fit</button>
+                              <button class="mockup-chip-btn hero-fit-btn" data-fit="stretch">Stretch</button>
+                              <button class="mockup-chip-btn hero-fit-btn" data-fit="center">Center</button>
+                            </div>
+                          </div>
+
+                          <div class="mockup-switch-row">
+                            <span style="font-size: 0.75rem;">Same images on all monitors</span>
+                            <label class="mockup-switch">
+                              <input type="checkbox" id="mockSameImagesSwitch" />
+                              <span class="mockup-slider"></span>
+                            </label>
+                          </div>
                         </div>
                       </div>
 
-                      <div class="mockup-toolbar-row">
-                        <div class="mockup-toolbar-label">
-                          <span>Fit mode</span>
-                          <span class="badge badge-secondary" style="font-size: 0.6875rem; padding: 0.1rem 0.4rem;" id="heroFitBadge">Fill</span>
+                      <!-- Appearance Card -->
+                      <div class="mockup-card">
+                        <div class="mockup-card-header">
+                          <span class="mockup-card-title">Appearance</span>
                         </div>
-                        <div class="mockup-chip-group grid-cols-4">
-                          <button class="mockup-chip-btn hero-fit-btn active" data-fit="fill">Fill</button>
-                          <button class="mockup-chip-btn hero-fit-btn" data-fit="fit">Fit</button>
-                          <button class="mockup-chip-btn hero-fit-btn" data-fit="stretch">Stretch</button>
-                          <button class="mockup-chip-btn hero-fit-btn" data-fit="center">Center</button>
+                        <div class="mockup-card-content">
+                          <div class="mockup-toolbar-row">
+                            <div class="mockup-toolbar-label">
+                              <span>Color Effect</span>
+                              <span class="badge badge-secondary" id="heroEffectBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">Normal</span>
+                            </div>
+                            <div class="mockup-chip-group grid-cols-4">
+                              <button class="mockup-chip-btn hero-effect-btn active" data-effect="normal">Normal</button>
+                              <button class="mockup-chip-btn hero-effect-btn" data-effect="bw">B&amp;W</button>
+                              <button class="mockup-chip-btn hero-effect-btn" data-effect="vintage">Vintage</button>
+                              <button class="mockup-chip-btn hero-effect-btn" data-effect="hdr">HDR</button>
+                            </div>
+                          </div>
+
+                          <div class="mockup-toolbar-row">
+                            <div class="mockup-toolbar-label">
+                              <span>Selection</span>
+                            </div>
+                            <div class="mockup-chip-group grid-cols-2" style="grid-template-columns: 1fr 1fr;">
+                              <button class="mockup-chip-btn active">Random</button>
+                              <button class="mockup-chip-btn">Sequential</button>
+                            </div>
+                          </div>
+
+                          <div class="mockup-switch-row">
+                            <span style="font-size: 0.75rem;">Interval</span>
+                            <span style="font-size: 0.75rem; font-family: var(--font-mono); font-weight: 500;">300s (5m)</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-outline btn-sm" id="mockCollagePrevBtn">‹</button>
-                    <button class="btn btn-primary btn-sm" id="mockCollageApplyBtn">⟳ Compose &amp; Set</button>
-                    <button class="btn btn-outline btn-sm" id="mockCollageNextBtn">›</button>
-                    <div class="mockup-action-sep"></div>
-                    <button class="btn btn-secondary btn-sm" id="mockCollageShuffleBtn">⇄ Reshuffle</button>
-                  </div>
-                </div>
-
-                <!-- 3. VIDEO TAB PANEL -->
-                <div class="mockup-tab-panel" id="mock-panel-video">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">Live Video Wallpaper</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-success">libmpv GPU</span>
-                    </div>
-                  </div>
-
-                  <div class="mockup-content">
-                    <div class="video-demo-box">
-                      <img src="images/example 1 (5).jpg" alt="Video Wallpaper Preview" />
-                      <div class="video-overlay-play">
-                        <div class="video-play-circle" id="mockVideoPlayBtn">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <!-- 2. GALLERY TAB PANEL (desktop/src/components/gallery-tab.tsx) -->
+                  <div class="mockup-tab-panel" id="mock-panel-gallery">
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/></svg>
+                          Saved Collages Library
+                        </span>
+                        <span class="badge badge-secondary" style="font-size: 0.625rem;">3 collages</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-input-row">
+                          <input type="text" class="mockup-input" value="%APPDATA%\WallpaperChanger\saved" readonly spellcheck="false" />
+                          <button class="btn btn-outline btn-xs" style="height: 2rem; padding: 0 0.625rem;">Browse</button>
                         </div>
-                        <span style="font-size: 0.8125rem; font-weight: 500;">Hardware Accelerated · Direct3D 11</span>
+
+                        <div class="mockup-gallery-grid">
+                          <!-- Gallery Card 1 -->
+                          <div class="mockup-gallery-card">
+                            <img src="images/example 1 (1).jpg" alt="Cyberpunk Skyline" class="mockup-gallery-thumb" />
+                            <div class="mockup-gallery-body">
+                              <span class="mockup-gallery-title">Cyberpunk Skyline</span>
+                              <div class="mockup-gallery-meta">
+                                <span class="badge badge-secondary" style="font-size: 0.5625rem; padding: 0.05rem 0.25rem;">6400×1440</span>
+                                <span>Yesterday</span>
+                              </div>
+                            </div>
+                            <div class="mockup-gallery-actions">
+                              <button class="btn btn-primary btn-xs mock-gallery-apply" style="flex: 1; font-size: 0.6875rem;">✓ Apply</button>
+                              <button class="btn btn-outline btn-xs" title="View" style="padding: 0.2rem 0.4rem;">⛶</button>
+                            </div>
+                          </div>
+
+                          <!-- Gallery Card 2 -->
+                          <div class="mockup-gallery-card">
+                            <img src="images/example 1 (2).jpg" alt="Forest Panorama" class="mockup-gallery-thumb" />
+                            <div class="mockup-gallery-body">
+                              <span class="mockup-gallery-title">Forest Panorama</span>
+                              <div class="mockup-gallery-meta">
+                                <span class="badge badge-secondary" style="font-size: 0.5625rem; padding: 0.05rem 0.25rem;">3840×1080</span>
+                                <span>Aug 28</span>
+                              </div>
+                            </div>
+                            <div class="mockup-gallery-actions">
+                              <button class="btn btn-primary btn-xs mock-gallery-apply" style="flex: 1; font-size: 0.6875rem;">✓ Apply</button>
+                              <button class="btn btn-outline btn-xs" title="View" style="padding: 0.2rem 0.4rem;">⛶</button>
+                            </div>
+                          </div>
+
+                          <!-- Gallery Card 3 -->
+                          <div class="mockup-gallery-card">
+                            <img src="images/example 1 (4).jpg" alt="Cosmic Horizon" class="mockup-gallery-thumb" />
+                            <div class="mockup-gallery-body">
+                              <span class="mockup-gallery-title">Cosmic Horizon</span>
+                              <div class="mockup-gallery-meta">
+                                <span class="badge badge-secondary" style="font-size: 0.5625rem; padding: 0.05rem 0.25rem;">6400×1440</span>
+                                <span>Aug 20</span>
+                              </div>
+                            </div>
+                            <div class="mockup-gallery-actions">
+                              <button class="btn btn-primary btn-xs mock-gallery-apply" style="flex: 1; font-size: 0.6875rem;">✓ Apply</button>
+                              <button class="btn btn-outline btn-xs" title="View" style="padding: 0.2rem 0.4rem;">⛶</button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-primary btn-sm" id="mockVideoActionPlay">▶ Play Video</button>
-                    <button class="btn btn-secondary btn-sm" id="mockVideoActionStop">■ Stop</button>
-                    <div class="mockup-action-sep"></div>
-                    <button class="btn btn-outline btn-sm" id="mockVideoLoopBtn">🔁 Loop</button>
-                  </div>
-                </div>
-
-                <!-- 4. TRANSPARENCY TAB PANEL -->
-                <div class="mockup-tab-panel" id="mock-panel-transparency">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">Window Transparency</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-secondary">Active Hook</span>
-                    </div>
-                  </div>
-
-                  <div class="mockup-content" style="gap: 1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
-                      <span style="font-size: 0.875rem; font-weight: 500;">Scroll Transparency</span>
-                      <span class="badge badge-success">Enabled</span>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
-                      <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
-                        <span>Target Opacity Preview</span>
-                        <strong id="mockOpacityVal">85%</strong>
+                  <!-- 3. VIDEO TAB PANEL (desktop/src/components/video-tab.tsx) -->
+                  <div class="mockup-tab-panel" id="mock-panel-video">
+                    <!-- Video Folder Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Video Folder</span>
                       </div>
-                      <input type="range" min="20" max="100" value="85" id="mockOpacitySlider" style="width: 100%; cursor: pointer;" />
+                      <div class="mockup-card-content">
+                        <div class="mockup-input-row">
+                          <input type="text" class="mockup-input" value="C:\Users\klysm\Videos\Wallpapers" readonly spellcheck="false" />
+                          <button class="btn btn-outline btn-xs" style="height: 2rem; padding: 0 0.625rem;">Browse</button>
+                        </div>
+                        <span style="font-size: 0.6875rem; color: var(--muted-foreground);">14 videos found (MP4, MKV, WebM)</span>
+                      </div>
+                    </div>
+
+                    <!-- Video Playback Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Playback</span>
+                        <span class="badge badge-success" id="mockVideoStatusBadge" style="font-size: 0.625rem;">● Playing</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <span style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--muted-foreground);">cyberpunk_neon_district_loop_4k.mp4</span>
+                        
+                        <div class="video-demo-box" style="height: 180px;">
+                          <img src="images/example 1 (5).jpg" alt="Video Wallpaper Preview" />
+                          <div class="video-overlay-play">
+                            <div class="video-play-circle" id="mockVideoPlayBtn" style="width: 2.75rem; height: 2.75rem;">
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            </div>
+                            <span style="font-size: 0.75rem; font-weight: 500;">Direct3D 11 · WorkerW Desktop Layer</span>
+                          </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                          <div style="display: flex; gap: 0.35rem;">
+                            <button class="btn btn-outline btn-xs" id="mockVideoLocalPrev">⏮ Prev</button>
+                            <button class="btn btn-primary btn-xs" id="mockVideoLocalPlay">■ Stop</button>
+                            <button class="btn btn-outline btn-xs" id="mockVideoLocalNext">⏭ Next</button>
+                          </div>
+                          <span class="badge badge-secondary" style="font-size: 0.625rem;">libmpv active</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-primary btn-sm" id="mockSaveTransparency">Save Hook</button>
+                  <!-- 4. TRANSPARENCY TAB PANEL (desktop/src/components/transparency-tab.tsx) -->
+                  <div class="mockup-tab-panel" id="mock-panel-transparency">
+                    <!-- Scroll Transparency Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Scroll Transparency Hook</span>
+                        <label class="mockup-switch">
+                          <input type="checkbox" checked />
+                          <span class="mockup-slider"></span>
+                        </label>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-switch-row">
+                          <span>Modifier key</span>
+                          <span class="badge badge-outline" style="font-family: var(--font-mono); font-size: 0.6875rem;">Alt</span>
+                        </div>
+                        <p style="font-size: 0.6875rem; color: var(--muted-foreground);">
+                          Hold <kbd style="background: var(--muted); border: 1px solid var(--border); padding: 0.05rem 0.25rem; border-radius: 3px; font-family: var(--font-mono);">Alt</kbd> and scroll mouse wheel over any window to adjust its opacity in real-time.
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Window Opacity Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Window Opacity</span>
+                        <span class="badge badge-secondary" style="font-size: 0.625rem;">4 active windows</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-window-list">
+                          <div class="mockup-window-item active" data-process="code.exe" data-alpha="85">
+                            <div class="mockup-window-meta">
+                              <span>🟦</span>
+                              <span>code.exe (Visual Studio Code)</span>
+                            </div>
+                            <span class="badge badge-secondary" style="font-size: 0.625rem;">85%</span>
+                          </div>
+                          <div class="mockup-window-item" data-process="chrome.exe" data-alpha="100">
+                            <div class="mockup-window-meta">
+                              <span>🔴</span>
+                              <span>chrome.exe (Google Chrome)</span>
+                            </div>
+                            <span class="badge badge-outline" style="font-size: 0.625rem;">100%</span>
+                          </div>
+                          <div class="mockup-window-item" data-process="windowsterminal.exe" data-alpha="80">
+                            <div class="mockup-window-meta">
+                              <span>⬛</span>
+                              <span>windowsterminal.exe (Terminal)</span>
+                            </div>
+                            <span class="badge badge-outline" style="font-size: 0.625rem;">80%</span>
+                          </div>
+                          <div class="mockup-window-item" data-process="discord.exe" data-alpha="90">
+                            <div class="mockup-window-meta">
+                              <span>🟪</span>
+                              <span>discord.exe (Discord)</span>
+                            </div>
+                            <span class="badge badge-outline" style="font-size: 0.625rem;">90%</span>
+                          </div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.25rem;">
+                          <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+                            <span>Focused Window Opacity</span>
+                            <strong id="mockOpacityVal" style="font-family: var(--font-mono);">85%</strong>
+                          </div>
+                          <input type="range" min="20" max="100" value="85" id="mockOpacitySlider" style="width: 100%; cursor: pointer;" />
+                        </div>
+
+                        <div class="mockup-transparency-preview" id="mockTransPreview" style="opacity: 0.85;">
+                          Layered Window Preview (Opacity: 85%)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 5. HOTKEYS TAB PANEL (desktop/src/components/hotkeys-tab.tsx) -->
+                  <div class="mockup-tab-panel" id="mock-panel-hotkeys">
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                          Global Shortcuts
+                        </span>
+                        <span class="badge badge-secondary" style="font-size: 0.625rem;">Rust Owned</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <p style="font-size: 0.6875rem; color: var(--muted-foreground);">
+                          Registered globally with Windows. Shortcuts operate when minimized to tray.
+                        </p>
+
+                        <div class="mockup-hotkey-table">
+                          <div class="mockup-hotkey-row">
+                            <span>Next Wallpaper</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Previous Wallpaper</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Start / Stop Rotation</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Toggle Transparency</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Alt</kbd><kbd>A</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Toggle App Window</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Image Effects (1–4)</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>1–4</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                          <div class="mockup-hotkey-row">
+                            <span>Video Play / Pause</span>
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>V</kbd>
+                              <button class="btn btn-outline btn-xs mock-shortcut-btn">Edit</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 6. SETTINGS TAB PANEL (desktop/src/components/settings-tab.tsx) -->
+                  <div class="mockup-tab-panel" id="mock-panel-settings">
+                    <!-- General Preferences Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">General Preferences</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-switch-row">
+                          <span>Interface Language</span>
+                          <span class="badge badge-outline" style="font-size: 0.6875rem;">English (EN)</span>
+                        </div>
+                        <div class="mockup-switch-row">
+                          <span>Start with Windows (into tray)</span>
+                          <label class="mockup-switch">
+                            <input type="checkbox" checked />
+                            <span class="mockup-slider"></span>
+                          </label>
+                        </div>
+                        <div class="mockup-switch-row">
+                          <span>Start minimized</span>
+                          <label class="mockup-switch">
+                            <input type="checkbox" />
+                            <span class="mockup-slider"></span>
+                          </label>
+                        </div>
+                        <div class="mockup-switch-row">
+                          <span>Automatic update check</span>
+                          <label class="mockup-switch">
+                            <input type="checkbox" checked />
+                            <span class="mockup-slider"></span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Display & Transitions Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Display &amp; Transitions</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-switch-row">
+                          <div>
+                            <div>Crossfade transition</div>
+                            <div style="font-size: 0.6875rem; color: var(--muted-foreground);">30 FPS GDI WorkerW transition</div>
+                          </div>
+                          <label class="mockup-switch">
+                            <input type="checkbox" checked />
+                            <span class="mockup-slider"></span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Configuration Storage Card -->
+                    <div class="mockup-card">
+                      <div class="mockup-card-header">
+                        <span class="mockup-card-title">Configuration Storage</span>
+                      </div>
+                      <div class="mockup-card-content">
+                        <div class="mockup-input-row">
+                          <input type="text" class="mockup-input" value="%APPDATA%\WallpaperChanger\settings.toml" readonly spellcheck="false" />
+                          <button class="btn btn-outline btn-xs" style="height: 2rem; padding: 0 0.625rem;">Open Folder</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <!-- 5. HOTKEYS TAB PANEL -->
-                <div class="mockup-tab-panel" id="mock-panel-hotkeys">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">Global Shortcuts</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-secondary">Rust Owned</span>
-                    </div>
-                  </div>
-
-                  <div class="mockup-content" style="gap: 0.5rem; overflow-y: auto; max-height: 220px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Next Wallpaper</span>
-                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Previous Wallpaper</span>
-                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Start / Stop Rotation</span>
-                      <div style="display: flex; gap: 0.25rem;"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd></div>
-                    </div>
-                  </div>
-
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-primary btn-sm">Save Shortcuts</button>
-                  </div>
-                </div>
-
-                <!-- 6. SETTINGS TAB PANEL -->
-                <div class="mockup-tab-panel" id="mock-panel-settings">
-                  <div class="mockup-header">
-                    <span class="mockup-header-title">General Preferences</span>
-                    <div class="mockup-header-actions">
-                      <span class="badge badge-secondary">v5.1</span>
-                    </div>
-                  </div>
-
-                  <div class="mockup-content" style="gap: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Start with Windows</span>
-                      <span class="badge badge-success">Enabled</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Crossfade Transitions</span>
-                      <span class="badge badge-secondary">30 FPS</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8125rem;">
-                      <span>Interface Language</span>
-                      <span class="badge badge-outline">English</span>
-                    </div>
-                  </div>
-
-                  <div class="mockup-actionbar">
-                    <button class="btn btn-primary btn-sm">Save Preferences</button>
-                  </div>
+                <!-- Persistent Bottom ActionBar (desktop/src/components/action-bar.tsx) -->
+                <div class="mockup-actionbar">
+                  <button class="btn btn-outline btn-sm" id="mockPrevBtn" title="Previous Wallpaper" style="padding: 0.25rem 0.5rem; height: 1.75rem;">‹</button>
+                  <button class="btn btn-primary btn-sm" id="mockApplyNowBtn" style="height: 1.75rem; font-size: 0.75rem; padding: 0 0.625rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <svg id="mockApplySpinIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                    <span>Apply now</span>
+                  </button>
+                  <button class="btn btn-outline btn-sm" id="mockNextBtn" title="Next Wallpaper" style="padding: 0.25rem 0.5rem; height: 1.75rem;">›</button>
+                  <div class="mockup-action-sep"></div>
+                  <button class="btn btn-secondary btn-sm" id="mockRotateBtn" style="height: 1.75rem; font-size: 0.75rem; padding: 0 0.625rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span>Start rotation</span>
+                  </button>
+                  <div class="mockup-action-sep"></div>
+                  <button class="btn btn-outline btn-sm" id="mockVideoPrevBtn" title="Previous Video" style="padding: 0.25rem 0.5rem; height: 1.75rem;">⏮</button>
+                  <button class="btn btn-outline btn-sm" id="mockVideoPlayToggle" title="Play Video" style="padding: 0.25rem 0.5rem; height: 1.75rem;">▶</button>
+                  <button class="btn btn-outline btn-sm" id="mockVideoNextBtn" title="Next Video" style="padding: 0.25rem 0.5rem; height: 1.75rem;">⏭</button>
                 </div>
               </div>
             </div>
@@ -774,8 +1105,8 @@
       <!-- Preview Tabs Nav -->
       <div class="preview-tabs-nav">
         <button class="tab-trigger preview-tab-btn active" data-tab="monitors">Live Preview</button>
-        <button class="tab-trigger preview-tab-btn" data-tab="collage">Collage Mode</button>
-        <button class="tab-trigger preview-tab-btn" data-tab="video">Video Wallpaper</button>
+        <!-- <button class="tab-trigger preview-tab-btn" data-tab="collage">Collage Mode</button> -->
+        <!-- <button class="tab-trigger preview-tab-btn" data-tab="video">Video Wallpaper</button> -->
         <button class="tab-trigger preview-tab-btn" data-tab="settings">Settings</button>
         <button class="tab-trigger preview-tab-btn" data-tab="tray">System Tray</button>
       </div>
@@ -791,66 +1122,153 @@
             <div class="mockup-window-actions"><span>🗕</span><span>🗖</span><span>✕</span></div>
           </div>
           <div class="mockup-shell">
-            <aside class="mockup-sidebar">
-              <div class="mockup-sidebar-header">
-                <img src="icon.png" alt="WallpaperChanger Icon" />
-                <div class="mockup-sidebar-meta">
-                  <span class="mockup-sidebar-title">Wallpaper Changer</span>
-                  <span class="mockup-sidebar-subtitle">3 Monitors · 6400×1440</span>
-                </div>
-              </div>
-              <nav class="mockup-nav">
-                <button class="mockup-nav-btn active" data-mock-tab="monitors"><span>🖼️</span> Wallpaper</button>
-                <button class="mockup-nav-btn" data-mock-tab="video"><span>🎬</span> Video</button>
-                <button class="mockup-nav-btn" data-mock-tab="settings"><span>🪟</span> Transparency</button>
-                <button class="mockup-nav-btn" data-mock-tab="monitors"><span>⌨️</span> Hotkeys</button>
-                <button class="mockup-nav-btn" data-mock-tab="settings"><span>⚙️</span> Settings</button>
-              </nav>
-              <div class="mockup-sidebar-footer">
-                <div class="mockup-footer-meta">v5.1 · Ready</div>
-              </div>
-            </aside>
-            <div class="mockup-main">
+            <div class="mockup-main" style="grid-column: 1 / -1;">
               <div class="mockup-header">
                 <span class="mockup-header-title">Virtual Desktop Composite</span>
-                <button class="btn btn-primary btn-sm">Save</button>
+                <span class="badge badge-secondary">3 Monitors · 6400×1440</span>
               </div>
               <div class="mockup-content">
-                <div class="mockup-stage">
+                <div class="mockup-stage" id="previewTabStage">
+                  <!-- Monitor 1: 1920x1080 (16:9) -->
                   <div class="stage-monitor is-focused" data-monitor="1" style="left: 2%; top: 15%; width: 30%; height: 70%;">
+                    <div class="stage-monitor-collage grid-4 effect-normal">
+                      <div class="stage-collage-cell" data-slot="1"><img src="images/example 1 (1).jpg" alt="1" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">1</span></div>
+                      <div class="stage-collage-cell" data-slot="2"><img src="images/example 1 (2).jpg" alt="2" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">2</span></div>
+                      <div class="stage-collage-cell" data-slot="3"><img src="images/example 1 (3).jpg" alt="3" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">3</span></div>
+                      <div class="stage-collage-cell" data-slot="4"><img src="images/example 1 (4).jpg" alt="4" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">4</span></div>
+                    </div>
                     <span class="stage-monitor-label">#1 · 1920×1080</span>
                     <div class="stage-monitor-footer">
                       <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
                     </div>
                   </div>
+                  <!-- Monitor 2: 2560x1440 (16:9) Primary -->
                   <div class="stage-monitor is-focused" data-monitor="2" style="left: 34%; top: 5%; width: 38%; height: 90%;">
+                    <div class="stage-monitor-collage grid-4 effect-normal">
+                      <div class="stage-collage-cell" data-slot="5"><img src="images/example 1 (5).jpg" alt="5" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">5</span></div>
+                      <div class="stage-collage-cell" data-slot="6"><img src="images/example 1 (1).jpeg" alt="6" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">6</span></div>
+                      <div class="stage-collage-cell" data-slot="7"><img src="images/example 1 (2).jpeg" alt="7" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">7</span></div>
+                      <div class="stage-collage-cell" data-slot="8"><img src="images/example 1 (3).jpeg" alt="8" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">8</span></div>
+                    </div>
                     <span class="stage-monitor-label">#2 (Primary) · 2560×1440</span>
                     <div class="stage-monitor-footer">
                       <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
                     </div>
                   </div>
+                  <!-- Monitor 3: 1920x1080 (16:9) -->
                   <div class="stage-monitor is-focused" data-monitor="3" style="left: 74%; top: 15%; width: 24%; height: 70%;">
+                    <div class="stage-monitor-collage grid-4 effect-normal">
+                      <div class="stage-collage-cell" data-slot="9"><img src="images/example 1 (4).jpeg" alt="9" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">9</span></div>
+                      <div class="stage-collage-cell" data-slot="10"><img src="images/example 1 (5).jpeg" alt="10" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">10</span></div>
+                      <div class="stage-collage-cell" data-slot="11"><img src="images/example 1 (1).jpg" alt="11" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">11</span></div>
+                      <div class="stage-collage-cell" data-slot="12"><img src="images/example 1 (2).jpg" alt="12" class="stage-cell-img fit-fill" /><span class="stage-cell-badge">12</span></div>
+                    </div>
                     <span class="stage-monitor-label">#3 · 1920×1080</span>
                     <div class="stage-monitor-footer">
                       <span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span>
                     </div>
                   </div>
                 </div>
-                <div class="mockup-chips">
+
+                <div class="mockup-chips" id="previewTabChips">
                   <span class="mockup-chip active" data-monitor="all">All monitors</span>
-                  <span class="mockup-chip" data-monitor="1">#1</span>
-                  <span class="mockup-chip" data-monitor="2">#2</span>
-                  <span class="mockup-chip" data-monitor="3">#3</span>
-                  <button class="mockup-chip ghost" id="mockStageShuffle">⇄ Shuffle</button>
-                  <button class="mockup-chip solid">✓ Set as wallpaper</button>
+                  <span class="mockup-chip" data-monitor="1">#1 · 1080p</span>
+                  <span class="mockup-chip" data-monitor="2">#2 · 1440p</span>
+                  <span class="mockup-chip" data-monitor="3">#3 · 1080p</span>
+                  <button class="mockup-chip ghost" id="previewTabShuffle">⇄ Shuffle</button>
+                  <button class="mockup-chip solid" id="previewTabApply">✓ Set as wallpaper</button>
+                </div>
+
+                <!-- Layout & Appearance Grid Cards inside #tab-monitors -->
+                <div class="mockup-card-grid-2" style="margin-top: 0.5rem;">
+                  <!-- Layout Card -->
+                  <div class="mockup-card">
+                    <div class="mockup-card-header">
+                      <span class="mockup-card-title">Layout</span>
+                    </div>
+                    <div class="mockup-card-content">
+                      <div class="mockup-toolbar-row">
+                        <div class="mockup-toolbar-label">
+                          <span>Images per monitor</span>
+                          <span class="badge badge-secondary" id="previewTabCountBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">4 images</span>
+                        </div>
+                        <div class="mockup-chip-group grid-cols-6">
+                          <button class="mockup-chip-btn preview-tab-count" data-count="1">1</button>
+                          <button class="mockup-chip-btn preview-tab-count" data-count="2">2</button>
+                          <button class="mockup-chip-btn preview-tab-count" data-count="3">3</button>
+                          <button class="mockup-chip-btn preview-tab-count active" data-count="4">4</button>
+                          <button class="mockup-chip-btn preview-tab-count" data-count="6">6</button>
+                          <button class="mockup-chip-btn preview-tab-count" data-count="8">8</button>
+                        </div>
+                      </div>
+
+                      <div class="mockup-toolbar-row">
+                        <div class="mockup-toolbar-label">
+                          <span>Fit mode</span>
+                          <span class="badge badge-secondary" id="previewTabFitBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">Fill</span>
+                        </div>
+                        <div class="mockup-chip-group grid-cols-4">
+                          <button class="mockup-chip-btn preview-tab-fit active" data-fit="fill">Fill</button>
+                          <button class="mockup-chip-btn preview-tab-fit" data-fit="fit">Fit</button>
+                          <button class="mockup-chip-btn preview-tab-fit" data-fit="stretch">Stretch</button>
+                          <button class="mockup-chip-btn preview-tab-fit" data-fit="center">Center</button>
+                        </div>
+                      </div>
+
+                      <div class="mockup-switch-row">
+                        <span style="font-size: 0.75rem;">Same images on all monitors</span>
+                        <label class="mockup-switch">
+                          <input type="checkbox" id="previewTabSameSwitch" />
+                          <span class="mockup-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Appearance Card -->
+                  <div class="mockup-card">
+                    <div class="mockup-card-header">
+                      <span class="mockup-card-title">Appearance</span>
+                    </div>
+                    <div class="mockup-card-content">
+                      <div class="mockup-toolbar-row">
+                        <div class="mockup-toolbar-label">
+                          <span>Color Effect</span>
+                          <span class="badge badge-secondary" id="previewTabEffectBadge" style="font-size: 0.625rem; padding: 0.05rem 0.35rem;">Normal</span>
+                        </div>
+                        <div class="mockup-chip-group grid-cols-4">
+                          <button class="mockup-chip-btn preview-tab-effect active" data-effect="normal">Normal</button>
+                          <button class="mockup-chip-btn preview-tab-effect" data-effect="bw">B&amp;W</button>
+                          <button class="mockup-chip-btn preview-tab-effect" data-effect="vintage">Vintage</button>
+                          <button class="mockup-chip-btn preview-tab-effect" data-effect="hdr">HDR</button>
+                        </div>
+                      </div>
+
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.35rem;">
+                        <span style="font-size: 0.6875rem; color: var(--muted-foreground);" id="previewTabImagesUsedLabel">Images used in collage (4)</span>
+                        <div class="mockup-stage-thumbs" id="previewTabThumbs">
+                          <img src="images/example 1 (1).jpg" alt="Thumb 1" class="mockup-stage-thumb" />
+                          <img src="images/example 1 (2).jpg" alt="Thumb 2" class="mockup-stage-thumb" />
+                          <img src="images/example 1 (3).jpg" alt="Thumb 3" class="mockup-stage-thumb" />
+                          <img src="images/example 1 (4).jpg" alt="Thumb 4" class="mockup-stage-thumb" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="mockup-actionbar">
-                <button class="btn btn-outline btn-sm">‹</button>
-                <button class="btn btn-primary btn-sm">⟳ Apply now</button>
-                <button class="btn btn-outline btn-sm">›</button>
+                <button class="btn btn-outline btn-sm" id="previewTabPrev">‹</button>
+                <button class="btn btn-primary btn-sm" id="previewTabApplyNow">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="previewTabSpinIcon"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+                  <span>Apply now</span>
+                </button>
+                <button class="btn btn-outline btn-sm" id="previewTabNext">›</button>
                 <div class="mockup-action-sep"></div>
-                <button class="btn btn-secondary btn-sm">▶ Start rotation</button>
+                <button class="btn btn-secondary btn-sm" id="previewTabRotate">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>Start rotation</span>
+                </button>
               </div>
             </div>
           </div>
@@ -881,7 +1299,9 @@
                   <img src="images/example 1 (3).jpg" alt="Wallpaper Example 3" class="collage-cell-img" />
                   <img src="images/example 1 (4).jpg" alt="Wallpaper Example 4" class="collage-cell-img" />
                   <img src="images/example 1 (5).jpg" alt="Wallpaper Example 5" class="collage-cell-img" style="display: none;" />
-                  <img src="images/example 1 (1).jpg" alt="Wallpaper Example 6" class="collage-cell-img" style="display: none;" />
+                  <img src="images/example 1 (1).jpeg" alt="Wallpaper Example 6" class="collage-cell-img" style="display: none;" />
+                  <img src="images/example 1 (2).jpeg" alt="Wallpaper Example 7" class="collage-cell-img" style="display: none;" />
+                  <img src="images/example 1 (3).jpeg" alt="Wallpaper Example 8" class="collage-cell-img" style="display: none;" />
                 </div>
                 <div class="mockup-collage-toolbar">
                   <div class="mockup-toolbar-row">
