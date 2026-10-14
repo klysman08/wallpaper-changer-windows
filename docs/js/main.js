@@ -126,6 +126,9 @@ const SoundEngine = {
   },
 };
 
+// The hero's Wallpaper Studio is a module, which cannot see this script's consts.
+window.SoundEngine = SoundEngine;
+
 document.addEventListener('DOMContentLoaded', () => {
   // ─── 2. SOUND TOGGLE INITIALIZATION ───
   const soundToggle = document.getElementById('soundToggle');
@@ -228,75 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mobileNavOverlay) mobileNavOverlay.addEventListener('click', closeMobileNav);
   mobileNavLinks.forEach((link) => link.addEventListener('click', closeMobileNav));
 
-  // ─── 6. DESKTOP MOCKUP INTERNAL TAB SWITCHER (Mirrors desktop/src/App.tsx) ───
-  const mockupNavBtns = document.querySelectorAll('.mockup-nav-btn');
-  const mockupPanels = document.querySelectorAll('.mockup-tab-panel');
-  const mockHeaderTitle = document.getElementById('mockHeaderTitle');
-  const mockUnsavedBadge = document.getElementById('mockUnsavedBadge');
-  const mockSaveBtn = document.getElementById('mockSaveBtn');
-
-  const tabTitles = {
-    wallpaper: 'Wallpaper',
-    gallery: 'Gallery',
-    video: 'Video',
-    transparency: 'Transparency',
-    hotkeys: 'Hotkeys',
-    settings: 'Settings',
-  };
-
-  function markUnsaved() {
-    if (mockUnsavedBadge) {
-      mockUnsavedBadge.style.display = 'inline-flex';
-    }
-  }
-
-  function switchMockupPanel(targetTab) {
-    SoundEngine.playClick();
-    mockupNavBtns.forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.mockTab === targetTab);
-    });
-    mockupPanels.forEach((panel) => {
-      const isTarget = panel.id === `mock-panel-${targetTab}`;
-      panel.classList.toggle('active', isTarget);
-      if (isTarget) {
-        panel.style.animation = 'none';
-        void panel.offsetHeight; // trigger CSS reflow for screen-in
-        panel.style.animation = '';
-      }
-    });
-    if (mockHeaderTitle && tabTitles[targetTab]) {
-      mockHeaderTitle.textContent = tabTitles[targetTab];
-    }
-  }
-
-  mockupNavBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.dataset.mockTab;
-      if (tabId) {
-        switchMockupPanel(tabId);
-      }
-    });
-  });
-
-  // Mockup Save Button
-  if (mockSaveBtn) {
-    mockSaveBtn.addEventListener('click', () => {
-      SoundEngine.playSuccess();
-      const originalText = mockSaveBtn.textContent;
-      mockSaveBtn.textContent = 'Saving...';
-      mockSaveBtn.disabled = true;
-      setTimeout(() => {
-        mockSaveBtn.textContent = 'Saved!';
-        if (mockUnsavedBadge) mockUnsavedBadge.style.display = 'none';
-        setTimeout(() => {
-          mockSaveBtn.textContent = originalText;
-          mockSaveBtn.disabled = false;
-        }, 1200);
-      }, 400);
-    });
-  }
-
-  // ─── 7. PREVIEW SECTION TABS SWITCHER ───
+  // ─── 6. PREVIEW SECTION TABS SWITCHER ───
   const previewTabBtns = document.querySelectorAll('.preview-tab-btn');
   const previewPanels = document.querySelectorAll('.preview-panel');
 
@@ -316,8 +251,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ─── 8. REAL WALLPAPERS ROTATION & STAGE INTERACTION ───
-  // ─── 8. REAL WALLPAPERS ROTATION & STAGE COLLAGE ENGINE ───
+  // ─── 7. PREVIEW STAGE COLLAGE ENGINE (#tab-monitors) ───
+  // The hero's Wallpaper Studio (js/studio/) composes real pixels; this stage is the
+  // lighter CSS sketch of the app's window further down the page.
   const sampleImages = [
     'images/example 1 (1).jpg',
     'images/example 1 (2).jpg',
@@ -333,31 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentImageIndex = 0;
 
-  // Hero stage configuration
-  let heroCollageCount = 4;
-  let heroFitMode = 'fill';
-  let heroEffect = 'normal';
-
-  // Section Preview stage configuration
   let previewTabCollageCount = 4;
   let previewTabFitMode = 'fill';
   let previewTabEffect = 'normal';
 
-  // Stage DOM references - Hero
-  const heroStage = document.getElementById('mockupStage');
-  const heroStageThumbs = document.getElementById('mockupStageThumbs');
-  const heroImagesUsedLabel = document.getElementById('stageImagesUsedLabel');
-  const heroShuffleBtn = document.getElementById('mockShuffleBtn');
-  const heroApplyBtn = document.getElementById('mockApplyBtn');
-  const heroApplyNowBtn = document.getElementById('mockApplyNowBtn');
-  const heroApplySpinIcon = document.getElementById('mockApplySpinIcon');
-  const heroPrevBtn = document.getElementById('mockPrevBtn');
-  const heroNextBtn = document.getElementById('mockNextBtn');
-  const heroRotateBtn = document.getElementById('mockRotateBtn');
-  const heroSameImagesSwitch = document.getElementById('mockSameImagesSwitch');
-  let isHeroRotating = false;
-
-  // Stage DOM references - Section Preview (#tab-monitors)
   const previewTabStage = document.getElementById('previewTabStage');
   const previewTabThumbs = document.getElementById('previewTabThumbs');
   const previewTabImagesUsedLabel = document.getElementById('previewTabImagesUsedLabel');
@@ -421,7 +336,6 @@ document.addEventListener('DOMContentLoaded', () => {
             img.src = nextSrc;
             img.style.transform = 'scale(0.92)';
             setTimeout(() => { img.style.transform = ''; }, 160);
-            markUnsaved();
           }
         });
       });
@@ -433,28 +347,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAllStages(offset = 0) {
     currentImageIndex = (currentImageIndex + offset + sampleImages.length) % sampleImages.length;
 
-    // 1. Render Hero Stage
-    const heroSame = heroSameImagesSwitch ? heroSameImagesSwitch.checked : false;
-    const heroUsed = renderStage(heroStage, heroCollageCount, heroFitMode, heroEffect, heroSame, currentImageIndex);
-
-    if (heroStageThumbs) {
-      const thumbs = heroUsed.length > 0 ? heroUsed.slice(0, 6) : sampleImages.slice(0, 4);
-      heroStageThumbs.innerHTML = thumbs.map((url, i) => `
-        <img src="${url}" alt="Used Image ${i + 1}" class="mockup-stage-thumb" title="Click to rotate collage" />
-      `).join('');
-      heroStageThumbs.querySelectorAll('.mockup-stage-thumb').forEach((thumb) => {
-        thumb.addEventListener('click', () => {
-          SoundEngine.playClick();
-          renderAllStages(1);
-        });
-      });
-    }
-    if (heroImagesUsedLabel) {
-      const total = heroCollageCount * (heroSame ? 1 : 3);
-      heroImagesUsedLabel.textContent = `Images used in collage (${total})`;
-    }
-
-    // 2. Render Section Preview Tab Stage (#tab-monitors)
     const previewSame = previewTabSameSwitch ? previewTabSameSwitch.checked : false;
     const previewUsed = renderStage(previewTabStage, previewTabCollageCount, previewTabFitMode, previewTabEffect, previewSame, currentImageIndex);
 
@@ -476,7 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Initial render for all stages
   renderAllStages(0);
 
   // Monitor focus and zoom transition
@@ -518,114 +409,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  setupStageZoom(heroStage, document.querySelector('#mock-panel-wallpaper .mockup-chips'));
   setupStageZoom(previewTabStage, document.getElementById('previewTabChips'));
 
-  // ─── 9. WALLPAPER TAB LAYOUT & APPEARANCE CONTROLS (HERO) ───
-  const heroCollageCounts = document.querySelectorAll('.hero-collage-count');
-  const heroCollageCountBadge = document.getElementById('heroCollageCountBadge');
-  const heroFitBtns = document.querySelectorAll('.hero-fit-btn');
-  const heroFitBadge = document.getElementById('heroFitBadge');
-  const heroEffectBtns = document.querySelectorAll('.hero-effect-btn');
-  const heroEffectBadge = document.getElementById('heroEffectBadge');
-
-  heroCollageCounts.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      SoundEngine.playClick();
-      heroCollageCounts.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      heroCollageCount = parseInt(btn.dataset.count, 10) || 1;
-      if (heroCollageCountBadge) {
-        heroCollageCountBadge.textContent = `${heroCollageCount} ${heroCollageCount === 1 ? 'image' : 'images'}`;
-      }
-      markUnsaved();
-      renderAllStages(0);
-    });
-  });
-
-  heroFitBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      SoundEngine.playClick();
-      heroFitBtns.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      heroFitMode = btn.dataset.fit || 'fill';
-      if (heroFitBadge) {
-        heroFitBadge.textContent = heroFitMode.charAt(0).toUpperCase() + heroFitMode.slice(1);
-      }
-      markUnsaved();
-      renderAllStages(0);
-    });
-  });
-
-  heroEffectBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      SoundEngine.playClick();
-      heroEffectBtns.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      heroEffect = btn.dataset.effect || 'normal';
-      if (heroEffectBadge) {
-        heroEffectBadge.textContent = heroEffect.toUpperCase();
-      }
-      markUnsaved();
-      renderAllStages(0);
-    });
-  });
-
-  if (heroSameImagesSwitch) {
-    heroSameImagesSwitch.addEventListener('change', () => {
-      SoundEngine.playToggle(heroSameImagesSwitch.checked);
-      markUnsaved();
-      renderAllStages(0);
-    });
-  }
-
-  if (heroShuffleBtn) heroShuffleBtn.addEventListener('click', () => { SoundEngine.playClick(); renderAllStages(1); });
-  if (heroNextBtn) heroNextBtn.addEventListener('click', () => { SoundEngine.playClick(); renderAllStages(1); });
-  if (heroPrevBtn) heroPrevBtn.addEventListener('click', () => { SoundEngine.playClick(); renderAllStages(-1); });
-
-  if (heroApplyBtn) {
-    heroApplyBtn.addEventListener('click', () => {
-      SoundEngine.playSuccess();
-      const orig = heroApplyBtn.innerHTML;
-      heroApplyBtn.innerHTML = `✓ Applied!`;
-      setTimeout(() => { heroApplyBtn.innerHTML = orig; }, 1500);
-    });
-  }
-
-  if (heroApplyNowBtn) {
-    heroApplyNowBtn.addEventListener('click', () => {
-      SoundEngine.playSuccess();
-      if (heroApplySpinIcon) {
-        heroApplySpinIcon.style.animation = 'spin 0.6s linear';
-        setTimeout(() => { heroApplySpinIcon.style.animation = ''; }, 600);
-      }
-      renderAllStages(1);
-    });
-  }
-
-  if (heroRotateBtn) {
-    heroRotateBtn.addEventListener('click', () => {
-      SoundEngine.playClick();
-      isHeroRotating = !isHeroRotating;
-      if (isHeroRotating) {
-        heroRotateBtn.classList.remove('btn-secondary');
-        heroRotateBtn.classList.add('btn-destructive');
-        heroRotateBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></svg>
-          <span>Stop rotation</span>
-        `;
-      } else {
-        heroRotateBtn.classList.remove('btn-destructive');
-        heroRotateBtn.classList.add('btn-secondary');
-        heroRotateBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          <span>Start rotation</span>
-        `;
-      }
-    });
-  }
-
-  // ─── 9b. SECTION PREVIEW TAB CONTROLS (#tab-monitors) ───
+  // ─── 8. PREVIEW STAGE CONTROLS (#tab-monitors) ───
   const previewTabCounts = document.querySelectorAll('.preview-tab-count');
   const previewTabCountBadge = document.getElementById('previewTabCountBadge');
   const previewTabFitBtns = document.querySelectorAll('.preview-tab-fit');
@@ -725,145 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ─── 10. GALLERY TAB CONTROLS (desktop/src/components/gallery-tab.tsx) ───
-  const mockGalleryApplies = document.querySelectorAll('.mock-gallery-apply');
-  mockGalleryApplies.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      SoundEngine.playSuccess();
-      const card = btn.closest('.mockup-gallery-card');
-      const thumb = card ? card.querySelector('.mockup-gallery-thumb') : null;
-      if (thumb && thumb.src) {
-        let imgIdx = sampleImages.indexOf(thumb.getAttribute('src'));
-        if (imgIdx === -1) imgIdx = 0;
-        currentImageIndex = imgIdx;
-        heroCollageCount = 1;
-        previewTabCollageCount = 1;
-        heroCollageCounts.forEach((b) => b.classList.toggle('active', b.dataset.count === '1'));
-        previewTabCounts.forEach((b) => b.classList.toggle('active', b.dataset.count === '1'));
-        if (heroCollageCountBadge) heroCollageCountBadge.textContent = '1 image';
-        if (previewTabCountBadge) previewTabCountBadge.textContent = '1 image';
-        renderAllStages(0);
-      }
-      const orig = btn.innerHTML;
-      btn.innerHTML = `✓ Applied!`;
-      setTimeout(() => {
-        btn.innerHTML = orig;
-      }, 1500);
-    });
-  });
-
-  // ─── 11. VIDEO TAB PLAYBACK CONTROLS (desktop/src/components/video-tab.tsx) ───
-  const mockVideoStatusBadge = document.getElementById('mockVideoStatusBadge');
-  const mockVideoLocalPlay = document.getElementById('mockVideoLocalPlay');
-  const mockVideoPlayBtn = document.getElementById('mockVideoPlayBtn');
-  const mockVideoPlayToggle = document.getElementById('mockVideoPlayToggle');
-  const mockVideoLocalPrev = document.getElementById('mockVideoLocalPrev');
-  const mockVideoLocalNext = document.getElementById('mockVideoLocalNext');
-  const mockVideoPrevBtn = document.getElementById('mockVideoPrevBtn');
-  const mockVideoNextBtn = document.getElementById('mockVideoNextBtn');
-  let isVideoPlaying = true;
-
-  function toggleVideoPlay() {
-    SoundEngine.playClick();
-    isVideoPlaying = !isVideoPlaying;
-    if (isVideoPlaying) {
-      if (mockVideoStatusBadge) {
-        mockVideoStatusBadge.textContent = '● Playing';
-        mockVideoStatusBadge.className = 'badge badge-success';
-      }
-      if (mockVideoLocalPlay) mockVideoLocalPlay.textContent = '■ Stop';
-      if (mockVideoPlayToggle) mockVideoPlayToggle.textContent = '■';
-    } else {
-      if (mockVideoStatusBadge) {
-        mockVideoStatusBadge.textContent = '■ Stopped';
-        mockVideoStatusBadge.className = 'badge badge-secondary';
-      }
-      if (mockVideoLocalPlay) mockVideoLocalPlay.textContent = '▶ Play';
-      if (mockVideoPlayToggle) mockVideoPlayToggle.textContent = '▶';
-    }
-  }
-
-  if (mockVideoLocalPlay) mockVideoLocalPlay.addEventListener('click', toggleVideoPlay);
-  if (mockVideoPlayBtn) mockVideoPlayBtn.addEventListener('click', toggleVideoPlay);
-  if (mockVideoPlayToggle) mockVideoPlayToggle.addEventListener('click', toggleVideoPlay);
-
-  function cycleVideo() {
-    SoundEngine.playClick();
-    const demoBoxImg = document.querySelector('.video-demo-box img');
-    if (demoBoxImg) {
-      currentImageIndex = (currentImageIndex + 1) % sampleImages.length;
-      demoBoxImg.src = sampleImages[currentImageIndex];
-    }
-  }
-
-  if (mockVideoLocalPrev) mockVideoLocalPrev.addEventListener('click', cycleVideo);
-  if (mockVideoLocalNext) mockVideoLocalNext.addEventListener('click', cycleVideo);
-  if (mockVideoPrevBtn) mockVideoPrevBtn.addEventListener('click', cycleVideo);
-  if (mockVideoNextBtn) mockVideoNextBtn.addEventListener('click', cycleVideo);
-
-  // ─── 12. TRANSPARENCY TAB CONTROLS (desktop/src/components/transparency-tab.tsx) ───
-  const opacitySlider = document.getElementById('mockOpacitySlider');
-  const opacityVal = document.getElementById('mockOpacityVal');
-  const mockTransPreview = document.getElementById('mockTransPreview');
-  const windowItems = document.querySelectorAll('.mockup-window-item');
-
-  if (opacitySlider && opacityVal) {
-    opacitySlider.addEventListener('input', (e) => {
-      const val = e.target.value;
-      opacityVal.textContent = `${val}%`;
-      if (mockTransPreview) {
-        mockTransPreview.style.opacity = (val / 100).toString();
-        mockTransPreview.textContent = `Layered Window Preview (Opacity: ${val}%)`;
-      }
-      // Update badge of active window item
-      const activeWin = document.querySelector('.mockup-window-item.active');
-      if (activeWin) {
-        const badge = activeWin.querySelector('.badge');
-        if (badge) badge.textContent = `${val}%`;
-      }
-      markUnsaved();
-    });
-  }
-
-  windowItems.forEach((item) => {
-    item.addEventListener('click', () => {
-      SoundEngine.playClick();
-      windowItems.forEach((w) => w.classList.remove('active'));
-      item.classList.add('active');
-      const alpha = item.dataset.alpha || '85';
-      if (opacitySlider) opacitySlider.value = alpha;
-      if (opacityVal) opacityVal.textContent = `${alpha}%`;
-      if (mockTransPreview) {
-        mockTransPreview.style.opacity = (parseInt(alpha, 10) / 100).toString();
-        mockTransPreview.textContent = `Layered Window Preview (Opacity: ${alpha}%)`;
-      }
-    });
-  });
-
-  // ─── 13. HOTKEYS TAB CONTROLS (desktop/src/components/hotkeys-tab.tsx) ───
-  const mockShortcutBtns = document.querySelectorAll('.mock-shortcut-btn');
-  mockShortcutBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      SoundEngine.playClick();
-      if (btn.classList.contains('recording')) {
-        btn.classList.remove('recording');
-        btn.textContent = 'Edit';
-      } else {
-        btn.classList.add('recording');
-        btn.textContent = 'Press keys...';
-        setTimeout(() => {
-          btn.classList.remove('recording');
-          btn.textContent = 'Saved!';
-          SoundEngine.playSuccess();
-          setTimeout(() => {
-            btn.textContent = 'Edit';
-          }, 1200);
-        }, 1500);
-      }
-    });
-  });
-
-  // ─── 14. PREVIEW SECTION COLLAGE CONTROLS ───
+  // ─── 9. COLLAGE TAB CONTROLS ───
   const collageNumBtns = document.querySelectorAll('.collage-num-btn');
   const collageGrid = document.getElementById('collageDemoGrid');
   const tabFitBtns = document.querySelectorAll('.tab-fit-btn');
@@ -925,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ─── 15. PICTURE ADJUSTMENTS (desktop/src/components/wallpaper-tab.tsx) ───
+  // ─── 10. PICTURE ADJUSTMENTS (desktop/src/components/wallpaper-tab.tsx) ───
   // Each Adjustments card names the stage it drives. The sliders become three
   // custom properties on that stage; style.css turns them into a filter on the
   // collage, a warm/cool tint and a vignette over each monitor.
@@ -965,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     ranges.forEach((r) => {
-      r.addEventListener('input', () => { update(); markUnsaved(); });
+      r.addEventListener('input', update);
       // Double-clicking the label resets that one slider, as in the app.
       const head = r.closest('.mockup-adjust-row')?.querySelector('.mockup-adjust-head');
       if (head) {
@@ -988,34 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     update();
   });
 
-  // ─── 16. ALL-WINDOWS OPACITY (desktop/src/components/transparency-tab.tsx) ───
-  const allWinSwitch = document.getElementById('mockAllWinSwitch');
-  const allWinSlider = document.getElementById('mockAllWinSlider');
-  const allWinVal = document.getElementById('mockAllWinVal');
-  const allWinPreview = document.getElementById('mockAllWinPreview');
-
-  function updateAllWindows() {
-    if (!allWinSlider || !allWinPreview) return;
-    const on = allWinSwitch ? allWinSwitch.checked : true;
-    const pct = parseInt(allWinSlider.value, 10) || 100;
-    if (allWinVal) allWinVal.textContent = `${pct}%`;
-    allWinSlider.disabled = !on;
-    allWinPreview.querySelectorAll('.fake-win').forEach((w) => {
-      w.style.opacity = on ? String(pct / 100) : '1';
-    });
-  }
-
-  if (allWinSlider) allWinSlider.addEventListener('input', () => { updateAllWindows(); markUnsaved(); });
-  if (allWinSwitch) {
-    allWinSwitch.addEventListener('change', () => {
-      SoundEngine.playToggle(allWinSwitch.checked);
-      updateAllWindows();
-      markUnsaved();
-    });
-  }
-  updateAllWindows();
-
-  // ─── 12. INSTALLATION TABS ───
+  // ─── 11. INSTALLATION TABS ───
   const installTabs = document.querySelectorAll('.install-tab-btn');
   const installPanels = document.querySelectorAll('.install-panel');
 
@@ -1034,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ─── 13. COPY BUTTONS WITH AUDIO FEEDBACK ───
+  // ─── 12. COPY BUTTONS WITH AUDIO FEEDBACK ───
   const copyButtons = document.querySelectorAll('.copy-btn');
 
   copyButtons.forEach((btn) => {
@@ -1068,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ─── 14. CLICK SOUNDS FOR INTERACTIVE BUTTONS (NO HOVER SOUNDS) ───
+  // ─── 13. CLICK SOUNDS FOR INTERACTIVE BUTTONS (NO HOVER SOUNDS) ───
   const interactiveButtons = document.querySelectorAll('button:not(#soundToggle):not(#themeToggle):not(.copy-btn), a.btn');
   interactiveButtons.forEach((btn) => {
     btn.addEventListener('click', () => {

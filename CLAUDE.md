@@ -157,6 +157,12 @@ Effect and fit-mode choices are string literals; adding one means updating
 lives in three lists: `RANGES` in `adjust.rs`, `ADJUSTMENTS` in `desktop/src/lib/engine.ts`
 (which also feeds the preview's re-render signature), and the flags in `cli.rs`.
 
+**The website runs a copy of the engine.** The hero of `docs/` is a working Wallpaper
+Studio, and `docs/js/studio/engine.js` is a JavaScript port of `collage.rs` (grid, plan,
+fit), `effects.rs` and `adjust.rs`, so a wallpaper saved from the site matches the app's.
+A change to the grid, a fit mode, an effect or an adjustment must be made there as well —
+nothing tests the two against each other.
+
 ## Build notes
 
 The engine compiles into the app, so there is no sidecar to stage and

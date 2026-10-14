@@ -126,6 +126,19 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* The page scrolls without showing a scrollbar. Only the page: scroll areas inside
+   it (the picture tray, code blocks) keep theirs, since nothing else says they scroll. */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--background);
@@ -558,32 +571,66 @@ section {
   background-color: var(--accent);
 }
 
-/* ─── 2-COLUMN HERO SECTION ─── */
+/* ─── HERO: intro beside the Wallpaper Studio ─── */
 #hero {
-  padding-top: 4.5rem;
-  padding-bottom: 5rem;
+  padding-top: 4rem;
+  padding-bottom: 4.5rem;
   background: radial-gradient(circle at 50% 10%, var(--glow-bg) 0%, transparent 70%);
 }
 
-.hero-layout-2col {
+.hero-layout {
   display: grid;
-  grid-template-columns: 0.95fr 1.35fr;
-  gap: 2.75rem;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.55fr);
+  gap: 2.5rem;
   align-items: center;
-  width: 100%;
-  text-align: left;
 }
 
-.hero-content-col {
+.hero-intro {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  text-align: left;
+  min-width: 0;
 }
 
-.hero-visual-col {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
+.hero-intro .hero-tech-badges {
+  margin-bottom: 0;
+}
+
+/* Beside the studio the column is narrow; a smaller title keeps it to three lines. */
+@media (min-width: 1121px) {
+  .hero-intro .hero-title {
+    font-size: 2.625rem;
+  }
+  .hero-intro .hero-actions .btn-lg {
+    padding: 0.625rem 1.05rem;
+    font-size: 0.9375rem;
+  }
+  /* Three cards do not fit the narrow column; the studio beside it says the same. */
+  .hero-intro .hero-highlights-row {
+    display: none;
+  }
+}
+
+/* Stacked: the intro centres over the studio. */
+@media (max-width: 1120px) {
+  .hero-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+  .hero-intro {
+    align-items: center;
+    text-align: center;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .hero-highlights-row {
+    text-align: center;
+  }
+  .hero-intro .hero-actions,
+  .hero-intro .hero-tech-badges {
+    justify-content: center;
+  }
 }
 
 .hero-badge-link {
@@ -662,6 +709,7 @@ section {
   grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
   width: 100%;
+  margin-top: 1.75rem;
 }
 
 .hero-highlight-card {
@@ -758,128 +806,6 @@ section {
   background-color: var(--background);
 }
 
-/* Mockup Sidebar */
-.mockup-sidebar {
-  background-color: var(--sidebar);
-  border-right: 1px solid var(--sidebar-border);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0.875rem 0.625rem;
-}
-
-.mockup-sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.5rem;
-  margin-bottom: 0.625rem;
-}
-
-.mockup-sidebar-header img {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-sm);
-}
-
-.mockup-sidebar-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.mockup-sidebar-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--sidebar-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mockup-sidebar-subtitle {
-  font-size: 0.6875rem;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-
-.mockup-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mockup-nav-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4375rem 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  color: var(--sidebar-foreground);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.mockup-nav-btn svg {
-  width: 1rem;
-  height: 1rem;
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-
-.mockup-nav-btn:hover {
-  background-color: var(--sidebar-accent);
-}
-
-.mockup-nav-btn.active {
-  background-color: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
-  font-weight: 600;
-}
-
-.mockup-nav-btn.active svg {
-  color: var(--foreground);
-}
-
-.mockup-sidebar-footer {
-  border-top: 1px solid var(--sidebar-border);
-  padding-top: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mockup-footer-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-  border-radius: var(--radius-sm);
-  transition: color 0.15s ease;
-}
-
-.mockup-footer-btn:hover {
-  color: var(--foreground);
-}
-
-.mockup-footer-btn.heart-btn {
-  color: #f43f5e;
-}
-
-.mockup-footer-meta {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.6875rem;
-  color: var(--muted-foreground);
-}
-
 /* Mockup Main View (Mirrors desktop/src/App.tsx SidebarInset) */
 .mockup-main {
   display: flex;
@@ -902,63 +828,10 @@ section {
   user-select: none;
 }
 
-.mockup-header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.mockup-sidebar-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.mockup-sidebar-trigger:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
 .mockup-header-title {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--foreground);
-}
-
-.mockup-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.mockup-screen-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
-  padding: 0.875rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.mockup-tab-panel {
-  display: none;
-  flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
-}
-
-.mockup-tab-panel.active {
-  display: flex;
-  animation: screen-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* ─── SHADCN CARDS INSIDE MOCKUP ─── */
@@ -1018,30 +891,6 @@ section {
   }
 }
 
-.mockup-input-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.mockup-input {
-  flex: 1;
-  height: 2rem;
-  padding: 0 0.625rem;
-  font-size: 0.75rem;
-  font-family: var(--font-mono);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--muted);
-  color: var(--foreground);
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.mockup-input:focus {
-  border-color: var(--ring);
-}
-
 .mockup-switch-row {
   display: flex;
   justify-content: space-between;
@@ -1093,167 +942,6 @@ section {
 
 .mockup-switch input:checked + .mockup-slider::before {
   transform: translateX(0.875rem);
-}
-
-/* ─── GALLERY TAB SPECIFIC STYLES ─── */
-.mockup-gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.625rem;
-}
-
-@media (max-width: 580px) {
-  .mockup-gallery-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.mockup-gallery-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--card);
-  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
-  display: flex;
-  flex-direction: column;
-}
-
-.mockup-gallery-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-  border-color: var(--ring);
-}
-
-.mockup-gallery-thumb {
-  width: 100%;
-  height: 72px;
-  object-fit: cover;
-  display: block;
-}
-
-.mockup-gallery-body {
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mockup-gallery-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--foreground);
-}
-
-.mockup-gallery-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.6875rem;
-  color: var(--muted-foreground);
-}
-
-.mockup-gallery-actions {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.375rem 0.5rem 0.5rem;
-  border-top: 1px solid var(--border);
-  background: var(--muted);
-}
-
-/* ─── TRANSPARENCY LIST STYLES ─── */
-.mockup-window-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  max-height: 130px;
-  overflow-y: auto;
-}
-
-.mockup-window-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.375rem 0.625rem;
-  border-radius: var(--radius-sm);
-  background: var(--muted);
-  border: 1px solid transparent;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.mockup-window-item:hover {
-  background: var(--accent);
-}
-
-.mockup-window-item.active {
-  background: var(--card);
-  border-color: var(--ring);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
-}
-
-.mockup-window-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.mockup-transparency-preview {
-  padding: 0.75rem;
-  border-radius: var(--radius-sm);
-  background: #3b82f6;
-  color: #ffffff;
-  font-size: 0.75rem;
-  text-align: center;
-  font-weight: 500;
-  transition: opacity 0.1s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* ─── HOTKEYS TABLE STYLES ─── */
-.mockup-hotkey-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.mockup-hotkey-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.375rem 0.625rem;
-  font-size: 0.75rem;
-  border-radius: var(--radius-sm);
-  background: var(--muted);
-  border: 1px solid var(--border);
-  gap: 0.5rem;
-}
-
-.mockup-hotkey-row kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0.1rem 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.mock-shortcut-btn {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  padding: 0.15rem 0.5rem;
-  height: 1.5rem;
 }
 
 /* Stage Thumbnail strip */
@@ -2453,14 +2141,6 @@ footer {
 
 /* ─── RESPONSIVE BREAKPOINTS ─── */
 @media (max-width: 1120px) {
-  .hero-layout-2col {
-    grid-template-columns: 1fr;
-    text-align: center;
-    gap: 3rem;
-  }
-  .hero-content-col {
-    align-items: center;
-  }
   .hero-title {
     font-size: 2.75rem;
   }
@@ -2469,11 +2149,6 @@ footer {
   }
   .hero-tech-badges {
     justify-content: center;
-  }
-  .hero-highlights-row {
-    max-width: 500px;
-    margin-left: auto;
-    margin-right: auto;
   }
   .why-grid-2col {
     grid-template-columns: 1fr;
@@ -2519,9 +2194,7 @@ footer {
   .mockup-shell {
     grid-template-columns: 1fr;
   }
-  .mockup-sidebar {
-    display: none;
-  }
+
   .hero-highlights-row {
     grid-template-columns: 1fr;
   }
@@ -2617,15 +2290,8 @@ footer {
   font-weight: 700;
 }
 
-/* All-windows opacity preview: three fake windows over a wallpaper */
-.mockup-allwin-preview {
-  position: relative;
-  height: 118px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: #000 center / cover no-repeat;
-  border: 1px solid var(--border);
-}
+/* Fake application windows, drawn over the desk scene */
+
 .fake-win {
   position: absolute;
   border-radius: 5px;
@@ -2637,11 +2303,7 @@ footer {
   overflow: hidden;
   transition: opacity 0.12s ease;
 }
-.dark .mockup-allwin-preview .fake-win {
-  background: #18181b;
-  color: #e4e4e7;
-  border-color: rgba(255, 255, 255, 0.14);
-}
+
 .fake-win-bar {
   height: 0.9rem;
   display: flex;
@@ -2801,7 +2463,6 @@ footer {
    whole column past the screen instead of scrolling inside its card. */
 .cli-grid > *,
 .why-grid-2col > *,
-.hero-layout-2col > *,
 .stack-grid > *,
 .features-grid > * {
   min-width: 0;
@@ -2809,10 +2470,7 @@ footer {
 .code-body pre {
   overflow-x: auto;
 }
-.mockup-sidebar-subtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
 .stage-monitor-label {
   max-width: calc(100% - 0.75rem);
   white-space: nowrap;
@@ -2837,8 +2495,7 @@ footer {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mockup-titlebar-left,
-.mockup-input {
+.mockup-titlebar-left {
   min-width: 0;
 }
 
@@ -2906,17 +2563,6 @@ footer {
   }
 }
 
-/* The hero window keeps a window's height and scrolls inside, as the app does,
-   instead of growing with every card added to the Wallpaper screen. */
-.hero-visual-col .mockup-screen-container {
-  max-height: 760px;
-}
-/* On a phone, a scroll area inside the page scroll only traps the thumb. */
-@media (max-width: 768px) {
-  .hero-visual-col .mockup-screen-container {
-    max-height: none;
-  }
-}
 @media (min-width: 641px) {
   .stage-monitor-label {
     font-size: 0.625rem;
@@ -2929,5 +2575,692 @@ footer {
 @media (max-width: 480px) {
   .why-banner-header .badge {
     display: none;
+  }
+}
+
+/* ─── WALLPAPER STUDIO (hero) ─── */
+/* The working editor: js/studio/ composes real pixels with the engine's rules. A
+   sidebar picks one group of controls at a time; the preview stays in view.
+   Nothing here transforms on hover, so the drag ghost and the picker, which live
+   on <body>, are never clipped or offset by a card. */
+.studio {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background-color: var(--card);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  text-align: left;
+}
+
+/* Native scrollbars and the select menus follow the site theme. */
+.dark .studio {
+  color-scheme: dark;
+}
+
+.studio-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.75rem;
+  padding: 0 0.75rem 0 1rem;
+  background-color: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.studio-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.studio-size {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.studio-body {
+  display: grid;
+  grid-template-columns: 68px 212px minmax(0, 1fr);
+  grid-template-areas: "rail panel main";
+  height: 480px;
+}
+
+/* The sidebar: one button per group of controls. */
+.studio-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.375rem;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.studio-rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.25rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.studio-rail-btn svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.studio-rail-btn:hover {
+  background-color: var(--sidebar-accent);
+  color: var(--foreground);
+}
+
+.studio-rail-btn.active {
+  background-color: var(--sidebar-accent);
+  color: var(--foreground);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--foreground);
+}
+
+.studio-rail-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* The group the sidebar points at. */
+.studio-panel {
+  grid-area: panel;
+  min-width: 0;
+  padding: 0.875rem;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.studio-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  animation: studio-section-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.studio-section[hidden] {
+  display: none;
+}
+
+@keyframes studio-section-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.studio-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.studio-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--card-foreground);
+  letter-spacing: -0.01em;
+}
+
+.studio-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.studio-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.studio-label-val {
+  font-family: var(--font-mono);
+  color: var(--foreground);
+}
+
+.mockup-chip-group.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-screen-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.studio-select,
+.studio-number {
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--card);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.studio-select {
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.studio-select:focus-visible,
+.studio-number:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.studio-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.studio-custom[hidden] {
+  display: none;
+}
+
+.studio-number {
+  width: 0;
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+.studio-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.studio-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.studio-option strong {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.studio-option span {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+.studio-option:hover {
+  background-color: var(--accent);
+}
+
+.studio-option.active {
+  border-color: var(--foreground);
+  background-color: var(--muted);
+}
+
+.studio-adjust-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.studio-wide-btn {
+  width: 100%;
+}
+
+.studio-btn-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.btn-xs {
+  height: 1.75rem;
+  padding: 0 0.6rem;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+/* The preview and the pictures in use. */
+.studio-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(139, 92, 246, 0.22), transparent 60%),
+    linear-gradient(180deg, #17151f 0%, #0b0b0f 100%);
+  overflow: hidden;
+}
+
+.studio-canvas-box {
+  position: relative;
+  flex: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: #000;
+}
+
+.studio-canvas-box canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.studio-hits {
+  position: absolute;
+  inset: 0;
+}
+
+.studio-hit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: pan-y;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.studio-hit:hover,
+.studio-hit:focus-visible {
+  outline: none;
+  background-color: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.studio-hit-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  color: #fafafa;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.studio-hit:hover .studio-hit-badge,
+.studio-hit:focus-visible .studio-hit-badge,
+.studio.is-dragging .studio-hit-badge {
+  opacity: 1;
+}
+
+.studio.is-dragging .studio-hit {
+  cursor: grabbing;
+}
+
+.studio-hit.is-source {
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+.studio-hit.is-target {
+  background-color: rgba(139, 92, 246, 0.2);
+  box-shadow: inset 0 0 0 3px #a78bfa;
+}
+
+.studio-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 88px;
+  height: 56px;
+  margin: -28px 0 0 -44px;
+  object-fit: cover;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0.92;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.studio-busy {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fafafa;
+  font-size: 0.75rem;
+  font-weight: 500;
+  z-index: 4;
+}
+
+.studio-busy[hidden] {
+  display: none;
+}
+
+.studio-spinner {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: studio-spin 0.7s linear infinite;
+}
+
+@keyframes studio-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.studio-drop {
+  position: absolute;
+  inset: 0.5rem;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px dashed rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-lg);
+  background: rgba(9, 9, 11, 0.72);
+  color: #fafafa;
+  font-size: 0.875rem;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.studio.is-dropping .studio-drop {
+  display: flex;
+}
+
+.studio.is-empty .studio-stage::after {
+  content: "Add pictures to start";
+  position: absolute;
+  color: #a1a1aa;
+  font-size: 0.875rem;
+}
+
+.studio-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.625rem 0.75rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.studio-tray-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.studio-tray-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.studio-tip {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-pool {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 3px 3px 0.3rem;
+  scrollbar-width: thin;
+}
+
+.studio-pool-item {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 40px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-x;
+  user-select: none;
+  transition: opacity 0.15s ease;
+}
+
+.studio-pool-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.studio-pool-item.in-use {
+  outline: 2px solid var(--foreground);
+  outline-offset: 1px;
+}
+
+.studio-pool-item.is-source {
+  opacity: 0.4;
+}
+
+.studio-pool-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 0.6875rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.studio-pool-item:hover .studio-pool-remove,
+.studio-pool-remove:focus-visible {
+  opacity: 1;
+}
+
+.studio-warn {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-sm);
+  background: var(--warning-light);
+  color: var(--foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.studio-picker {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 80vh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-xl);
+}
+
+.studio-picker::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.studio-picker-head,
+.studio-picker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.studio-picker-head {
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.studio-picker-foot {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+.studio-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+  max-height: 60vh;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.studio-picker-item {
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-color: var(--muted);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.studio-picker-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-picker-item:hover {
+  border-color: var(--muted-foreground);
+}
+
+.studio-picker-item.active {
+  border-color: var(--foreground);
+}
+
+/* Stacked hero: the studio has the full width, so the preview gets more height. */
+@media (max-width: 1120px) {
+  .studio-body {
+    height: clamp(440px, 50vw, 540px);
+  }
+}
+
+/* Phone: preview first, then the sidebar as a row of tabs, then the open group. */
+@media (max-width: 640px) {
+  .studio-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "main" "rail" "panel";
+    height: auto;
+  }
+  .studio-stage {
+    flex: none;
+    height: clamp(220px, 70vw, 400px);
+    padding: 0.5rem;
+  }
+  .studio-rail {
+    flex-direction: row;
+    gap: 0.125rem;
+    padding: 0.375rem;
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .studio-rail-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 0.45rem 0.125rem;
+  }
+  .studio-rail-btn.active {
+    box-shadow: inset 0 -2px 0 var(--foreground);
+  }
+  .studio-panel {
+    border-right: 0;
+    overflow: visible;
+  }
+  .studio-quick-save {
+    display: none;
+  }
+}
+
+@media (hover: none) {
+  .studio-pool-remove,
+  .studio-hit-badge {
+    opacity: 1;
   }
 }
